@@ -56,6 +56,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.webkit:webkit:1.12.1")
 
+    // SM2 国密加密（学校登录用）
+    implementation("com.tencent.kona:kona-crypto:1.0.14")
+    implementation("com.tencent.kona:kona-provider:1.0.14")
+
     // 本地数据库（缓存课表）
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

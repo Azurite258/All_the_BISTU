@@ -1,0 +1,214 @@
+package com.example.study1.data.auth
+
+import android.util.Log
+import com.example.study1.data.ScheduleData
+import com.example.study1.data.ScheduleParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+
+/**
+ * 教务系统接口调用（用登录后的 Cookie）。
+ *
+ * 所有接口都在 https://jwxt.bistu.edu.cn 下。
+ */
+class JwxtApi(
+    private val auth: BistuAuth,
+    private val logger: (String) -> Unit = { Log.d(TAG, it) }
+) {
+
+    companion object {
+        private const val TAG = "JwxtApi"
+        private const val BASE = "https://jwxt.bistu.edu.cn"
+
+        /** 当前学期 */
+        const val API_CURRENT_TERM = "$BASE/jwapp/sys/jwpubapp/modules/gg/cxmrxnxq.do"
+
+        /** 学期列表 */
+        const val API_TERM_LIST = "$BASE/jwapp/sys/homeapp/api/home/kb/xnxq.do"
+
+        /** 教学周日期 */
+        const val API_TERM_WEEKS = "$BASE/jwapp/sys/kbbpapp/api/schoolCalendar/getTermWeeks.do"
+
+        /** 校区列表 */
+        const val API_CAMPUS = "$BASE/jwapp/sys/homeapp/api/home/student/getMyScheduledCampus.do"
+
+        /** 课表详情 */
+        const val API_SCHEDULE = "$BASE/jwapp/sys/kbapp/api/wdkbcx/getMyScheduleDetail.do"
+
+        /** 考试安排 */
+        const val API_EXAM = "$BASE/jwapp/sys/wdkwapp/api/wdks/queryMyExamArrangeMent.do"
+
+        /** 课表模块入口（建立 session 用） */
+        const val ENTRY_SCHEDULE =
+            "$BASE/jwapp/sys/kbapp/*default/index.do?THEME=indigo&EMAP_LANG=zh&forceApp=kbapp"
+
+        /** 移动端 UA */
+        const val UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36"
+    }
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    /** 构造带 Cookie 的请求 */
+    private fun requestBuilder(url: String): Request.Builder {
+        val cookie = auth.getAllCookiesHeader()
+        return Request.Builder()
+            .url(url)
+            .addHeader("Cookie", cookie)
+            .addHeader("User-Agent", UA)
+            .addHeader("Referer", "$BASE/jwapp/sys/kbapp/*default/index.do")
+            .addHeader("X-Requested-With", "XMLHttpRequest")
+    }
+
+    /** GET 请求 */
+    private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
+        logger("GET $url")
+        client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            logger("GET 响应: HTTP ${resp.code}, 长度 ${body.length}")
+            if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${body.take(200)}")
+            body
+        }
+    }
+
+    /** POST 请求（form 格式） */
+    private suspend fun post(url: String, params: Map<String, String>): String =
+        withContext(Dispatchers.IO) {
+            logger("POST $url params=$params")
+            val body = FormBody.Builder().apply {
+                params.forEach { (k, v) -> add(k, v) }
+            }.build()
+
+            client.newCall(requestBuilder(url).post(body).build()).execute().use { resp ->
+                val text = resp.body?.string() ?: ""
+                logger("POST 响应: HTTP ${resp.code}, 长度 ${text.length}")
+                if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
+                text
+            }
+        }
+
+    /**
+     * 建立课表模块的 session。
+     * 有些接口需要先访问模块入口页，否则返回 401。
+     */
+    suspend fun ensureSession() = withContext(Dispatchers.IO) {
+        logger("ensureSession: 访问课表模块入口")
+        runCatching {
+            client.newCall(
+                Request.Builder()
+                    .url(ENTRY_SCHEDULE)
+                    .addHeader("Cookie", auth.getAllCookiesHeader())
+                    .addHeader("User-Agent", UA)
+                    .get()
+                    .build()
+            ).execute().close()
+        }
+    }
+
+    /** 获取当前学期代码 */
+    suspend fun getCurrentTerm(): Pair<String, String> {
+        val json = post(API_CURRENT_TERM, mapOf(
+            "CSDM" to "SYS",
+            "ZCSDM" to "DQXNXQDM",
+            "SFSY" to "1"
+        ))
+
+        val obj = org.json.JSONObject(json)
+        val rows = obj.getJSONObject("datas")
+            .getJSONObject("cxmrxnxq")
+            .getJSONArray("rows")
+
+        if (rows.length() == 0) throw AuthException("没有当前学期数据")
+
+        val term = rows.getJSONObject(0)
+        return term.getString("XNXQDM") to term.getString("XNXQMC")
+    }
+
+    /** 获取校区列表 */
+    suspend fun getCampusCodes(termCode: String): List<String> {
+        val json = get("$API_CAMPUS?termCode=$termCode")
+        val obj = org.json.JSONObject(json)
+        val datas = obj.optJSONArray("datas") ?: return listOf("10")
+
+        return (0 until datas.length()).mapNotNull { i ->
+            datas.getJSONObject(i).optString("id").takeIf { it.isNotBlank() }
+        }.ifEmpty { listOf("10") }
+    }
+
+    /**
+     * 获取完整课表。
+     *
+     * @param termCode 学期代码，null 表示自动获取当前学期
+     */
+    suspend fun fetchSchedule(termCode: String? = null): ScheduleData {
+        ensureSession()
+
+        // ① 确定学期
+        val (actualTermCode, termName) = if (termCode != null) {
+            termCode to termCode
+        } else {
+            getCurrentTerm()
+        }
+        logger("学期: $actualTermCode ($termName)")
+
+        // ② 拿校区列表
+        val campusCodes = getCampusCodes(actualTermCode)
+        logger("校区: $campusCodes")
+
+        // ③ 每个校区拉课表，合并原始 JSON
+        val mergedCourses = mutableListOf<org.json.JSONObject>()
+        var subTitles: org.json.JSONArray? = null
+
+        campusCodes.forEach { campusCode ->
+            val json = post(API_SCHEDULE, mapOf(
+                "XNXQDM" to actualTermCode,
+                "XQDM" to campusCode
+            ))
+
+            val obj = org.json.JSONObject(json)
+            val code = obj.optString("code")
+            if (code != "0") {
+                logger("校区 $campusCode 返回失败: code=$code")
+                return@forEach
+            }
+
+            val detail = obj.getJSONObject("datas").getJSONObject("getMyScheduleDetail")
+            if (subTitles == null) {
+                subTitles = detail.optJSONArray("subTitles")
+            }
+
+            val list = detail.optJSONArray("arrangedList") ?: return@forEach
+            (0 until list.length()).forEach { i ->
+                mergedCourses.add(list.getJSONObject(i))
+            }
+        }
+
+        logger("总共拉取 ${mergedCourses.size} 条原始课程")
+
+        if (mergedCourses.isEmpty()) {
+            throw AuthException("没有获取到课程数据（可能登录已过期）")
+        }
+
+        // ④ 重新组装成完整 JSON，交给已有的 ScheduleParser 解析
+        val rebuilt = org.json.JSONObject().apply {
+            put("code", "0")
+            put("datas", org.json.JSONObject().apply {
+                put("getMyScheduleDetail", org.json.JSONObject().apply {
+                    put("subTitles", subTitles ?: org.json.JSONArray())
+                    put("arrangedList", org.json.JSONArray(mergedCourses))
+                    put("mergeArrangedList", org.json.JSONArray())
+                    put("termName", termName)
+                })
+            })
+        }
+
+        return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
+    }
+}
