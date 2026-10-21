@@ -36,6 +36,13 @@
             android:exported="false"
             android:label="登录"
             android:theme="@style/Theme.Study1" />
+
+        <!-- 动画演示页（验证用） -->
+        <activity
+            android:name=".ui.animation.AnimationDemoActivity"
+            android:exported="false"
+            android:label="动画验证"
+            android:theme="@style/Theme.Study1" />
     </application>
 
 </manifest>
