@@ -39,6 +39,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * 学期第 1 周周一的日期。
+ *
+ * 当前值根据「2026-10-21 是第 7 周周三」反推得出：
+ * 第1周周一 = 2026-10-21 - (6周 × 7天 + 2天) = 2026-09-07
+ *
+ * 接入登录后，这个值应该从教务系统的 getTermWeeks.do 接口获取，
+ * 或者由用户在设置里手动指定。
+ */
+private const val TERM_START_DATE = "2026-09-07"
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,7 +153,16 @@ private fun ScheduleScreen(
     onOpenSettings: () -> Unit
 ) {
     val weekRange = data.weekRange
-    var currentWeek by remember(data.termCode) { mutableIntStateOf(weekRange.first) }
+
+    // 默认显示「今天所在周」；如果算不出来或超出范围，回退到第 1 周
+    var currentWeek by remember(data.termCode) {
+        mutableIntStateOf(
+            com.example.study1.ui.schedule.DateUtils
+                .currentWeekOf(TERM_START_DATE)
+                ?.takeIf { it in weekRange }
+                ?: weekRange.first
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -184,6 +204,7 @@ private fun ScheduleScreen(
                 currentWeek = currentWeek,
                 weekRange = weekRange,
                 courseCount = data.coursesInWeek(currentWeek).size,
+                termStartDate = TERM_START_DATE,
                 onWeekChange = { currentWeek = it }
             )
 
@@ -204,7 +225,8 @@ private fun ScheduleScreen(
                     weekNumber = currentWeek,
                     todayDayOfWeek = todayDayOfWeek(),
                     colorScheme = settings.colorScheme,
-                    isDark = isDark
+                    isDark = isDark,
+                    termStartDate = TERM_START_DATE
                 )
             }
         }
@@ -216,8 +238,21 @@ private fun WeekSelector(
     currentWeek: Int,
     weekRange: IntRange,
     courseCount: Int,
+    termStartDate: String?,
     onWeekChange: (Int) -> Unit
 ) {
+    // 计算本周的日期范围（周一 ～ 周日）
+    val weekDateRange = remember(currentWeek, termStartDate) {
+        if (termStartDate.isNullOrBlank()) null
+        else runCatching {
+            val dates = com.example.study1.ui.schedule.DateUtils
+                .weekDates(termStartDate, currentWeek)
+            if (dates.size == 7) {
+                "${dates[0].substring(5)} ~ ${dates[6].substring(5)}"
+            } else null
+        }.getOrNull()
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -238,11 +273,20 @@ private fun WeekSelector(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "$courseCount 节课",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$courseCount 节课",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (weekDateRange != null) {
+                    Text(
+                        text = " · $weekDateRange",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
         IconButton(
