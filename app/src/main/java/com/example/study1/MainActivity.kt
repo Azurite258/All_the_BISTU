@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,10 +23,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.study1.data.LoadResult
 import com.example.study1.data.ScheduleData
-import com.example.study1.data.ScheduleParser
+import com.example.study1.data.ScheduleRepository
+import com.example.study1.data.Source
 import com.example.study1.ui.schedule.ScheduleGrid
 import com.example.study1.ui.theme.Study1Theme
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,30 +52,65 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { ScheduleRepository(context) }
 
-    // 解析数据（只做一次）
-    val result by remember {
-        mutableStateOf(
-            runCatching {
-                val rawJson = context.assets.open("schedule_sample.json")
-                    .bufferedReader().use { it.readText() }
-                ScheduleParser.parse(rawJson, termCode = "2026-2027-1")
+    // 加载状态
+    var loadResult by remember { mutableStateOf<LoadResult?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    fun reload(forceRefresh: Boolean = false) {
+        scope.launch {
+            isLoading = true
+            if (forceRefresh) {
+                // 强制刷新：清缓存后重新从 assets 解析
+                repository.clearCache()
             }
-        )
+            loadResult = repository.loadSchedule()
+            isLoading = false
+        }
     }
 
-    result.fold(
-        onSuccess = { data -> ScheduleScreen(data) },
-        onFailure = { error -> ErrorScreen(error) }
-    )
+    // 首次加载
+    LaunchedEffect(Unit) { reload() }
+
+    val result = loadResult
+    when {
+        isLoading && result == null -> LoadingScreen()
+        result?.data != null -> ScheduleScreen(
+            data = result.data,
+            source = result.source,
+            timestamp = result.timestamp,
+            onRefresh = { reload(forceRefresh = true) }
+        )
+        else -> ErrorScreen(result?.error)
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(16.dp))
+            Text("正在加载课表…", fontSize = 14.sp)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScheduleScreen(data: ScheduleData) {
+private fun ScheduleScreen(
+    data: ScheduleData,
+    source: Source,
+    timestamp: Long,
+    onRefresh: () -> Unit
+) {
     val weekRange = data.weekRange
-    // 默认显示"今天所在周"或第 1 周
-    var currentWeek by remember { mutableIntStateOf(weekRange.first) }
+    var currentWeek by remember(data.termCode) { mutableIntStateOf(weekRange.first) }
 
     Scaffold(
         topBar = {
@@ -81,10 +123,15 @@ private fun ScheduleScreen(data: ScheduleData) {
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "${data.major} · ${data.campus}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = sourceLabel(source, timestamp),
+                            fontSize = 10.sp,
+                            color = sourceColor(source)
                         )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Default.Refresh, contentDescription = "重新加载")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -98,7 +145,6 @@ private fun ScheduleScreen(data: ScheduleData) {
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            // ── 周次切换条 ──
             WeekSelector(
                 currentWeek = currentWeek,
                 weekRange = weekRange,
@@ -106,9 +152,8 @@ private fun ScheduleScreen(data: ScheduleData) {
                 onWeekChange = { currentWeek = it }
             )
 
-            Divider()
+            HorizontalDivider()
 
-            // ── 课表网格（可滚动）──
             val vScroll = rememberScrollState()
             val hScroll = rememberScrollState()
 
@@ -122,19 +167,13 @@ private fun ScheduleScreen(data: ScheduleData) {
                 ScheduleGrid(
                     data = data,
                     weekNumber = currentWeek,
-                    todayDayOfWeek = java.util.Calendar.getInstance()
-                        .get(java.util.Calendar.DAY_OF_WEEK)
-                        .let { if (it == 1) 7 else it - 1 }
+                    todayDayOfWeek = todayDayOfWeek()
                 )
             }
         }
     }
 }
 
-/**
- * 周次切换器
- *  [<]  第 6 周 (15 节)  [>]
- */
 @Composable
 private fun WeekSelector(
     currentWeek: Int,
@@ -179,7 +218,7 @@ private fun WeekSelector(
 }
 
 @Composable
-private fun ErrorScreen(error: Throwable) {
+private fun ErrorScreen(error: Throwable?) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -187,18 +226,46 @@ private fun ErrorScreen(error: Throwable) {
             .padding(16.dp)
     ) {
         Text(
-            text = "解析失败",
+            text = "加载失败",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFC62828)
         )
         Spacer(Modifier.height(12.dp))
-        Text(text = error.message ?: "未知错误", fontSize = 14.sp)
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = error.stackTraceToString().take(2000),
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace
-        )
+        Text(text = error?.message ?: "未知错误", fontSize = 14.sp)
+        if (error != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = error.stackTraceToString().take(2000),
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
     }
+}
+
+// ── 工具函数 ──
+
+private fun todayDayOfWeek(): Int {
+    val cal = java.util.Calendar.getInstance()
+    val d = cal.get(java.util.Calendar.DAY_OF_WEEK)
+    return if (d == 1) 7 else d - 1   // Calendar: 周日=1 → 转成 7
+}
+
+private fun sourceLabel(source: Source, timestamp: Long): String {
+    val timeStr = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+    return when (source) {
+        Source.CACHE -> "本地缓存 · $timeStr"
+        Source.ASSETS -> "示例数据 · $timeStr"
+        Source.NETWORK -> "已同步 · $timeStr"
+        Source.ERROR -> "加载出错"
+    }
+}
+
+@Composable
+private fun sourceColor(source: Source): Color = when (source) {
+    Source.CACHE -> Color(0xFF2E7D32)      // 绿：缓存
+    Source.ASSETS -> Color(0xFFE65100)     // 橙：示例数据
+    Source.NETWORK -> Color(0xFF1565C0)    // 蓝：已同步
+    Source.ERROR -> Color(0xFFC62828)      // 红：错误
 }
