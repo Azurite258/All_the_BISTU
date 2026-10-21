@@ -1,0 +1,1583 @@
+{
+ "code": "0",
+ "datas": {
+  "getMyScheduleDetail": {
+   "subTitles": [],
+   "mergeArrangedList": [],
+   "termName": null,
+   "arrangedList": [
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-12周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-12周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "001111111111",
+     "color": "#FFF0CC",
+     "endTime": "21:45",
+     "courseName": "管理学原理",
+     "credit": "3.0",
+     "courseCode": "MGT101",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 14,
+     "courseSerialNo": "02",
+     "weeksAndTeachers": "3-12周[讲授]/教师K[主讲]",
+     "placeName": "教室11",
+     "teachClassId": "202620271MGT10102",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "管理学原理[MGT101]"
+      },
+      {
+       "color": null,
+       "text": "3-12周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "管理学原理[MGT101]",
+      "3-12周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "管理学原理[MGT101]-02",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "4-13周 <a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a> <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "4-13周<a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a>  第11节-第13节 <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "0001111111111",
+     "color": "#FFDDD3",
+     "endTime": "12:15",
+     "courseName": "现代音乐赏析",
+     "credit": "2.0",
+     "courseCode": "JC124",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 5,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "4-13周[讲授]/教师H[主讲]",
+     "placeName": "教室4",
+     "teachClassId": "202620271JC12401",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "现代音乐赏析[JC124]"
+      },
+      {
+       "color": null,
+       "text": "4-13周<a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a>  第11节-第13节 <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "现代音乐赏析[JC124]",
+      "4-13周 <a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a> <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "现代音乐赏析[JC124]-01",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "17周 <a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "17周<a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "08:00",
+     "week": "00000000000000001",
+     "color": "#D3EAFD",
+     "endTime": "09:35",
+     "courseName": "思想道德与法治",
+     "credit": "3.0",
+     "courseCode": "MARX101",
+     "byCode": "0",
+     "beginSection": 1,
+     "endSection": 2,
+     "courseSerialNo": "02",
+     "weeksAndTeachers": "17周[讲授]/教师D[主讲]",
+     "placeName": "教室5",
+     "teachClassId": "202620271MARX10102",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "思想道德与法治[MARX101]"
+      },
+      {
+       "color": null,
+       "text": "17周<a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "思想道德与法治[MARX101]",
+      "17周 <a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "思想道德与法治[MARX101]-02",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "11-16周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "11-16周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "08:00",
+     "week": "0000000000111111",
+     "color": "#D3F4F8",
+     "endTime": "09:35",
+     "courseName": "高等数学(2)",
+     "credit": "2.0",
+     "courseCode": "MATH132",
+     "byCode": "0",
+     "beginSection": 1,
+     "endSection": 2,
+     "courseSerialNo": "13",
+     "weeksAndTeachers": "11-16周[讲授]/教师B[主讲]",
+     "placeName": "教室6",
+     "teachClassId": "202620271MATH13213",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "高等数学(2)[MATH132]"
+      },
+      {
+       "color": null,
+       "text": "11-16周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "高等数学(2)[MATH132]",
+      "11-16周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "高等数学(2)[MATH132]-13",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-6周 <a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-6周<a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a>  第11节-第13节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "001111",
+     "color": "#E8F3DB",
+     "endTime": "15:05",
+     "courseName": "国家安全教育",
+     "credit": "1.0",
+     "courseCode": "MARX104",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "10",
+     "weeksAndTeachers": "3-6周[讲授]/教师F[主讲]",
+     "placeName": "教室5",
+     "teachClassId": "202620271MARX10410",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "国家安全教育[MARX104]"
+      },
+      {
+       "color": null,
+       "text": "3-6周<a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a>  第11节-第13节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "国家安全教育[MARX104]",
+      "3-6周 <a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "国家安全教育[MARX104]-10",
+     "dayOfWeek": 4
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-10周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-10周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "0011111111",
+     "color": "#DDE4FE",
+     "endTime": "11:25",
+     "courseName": "高等数学(1)",
+     "credit": "3.0",
+     "courseCode": "MATH131",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 4,
+     "courseSerialNo": "15",
+     "weeksAndTeachers": "3-10周[讲授]/教师B[主讲]",
+     "placeName": "教室6",
+     "teachClassId": "202620271MATH13115",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "高等数学(1)[MATH131]"
+      },
+      {
+       "color": null,
+       "text": "3-10周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "高等数学(1)[MATH131]",
+      "3-10周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "高等数学(1)[MATH131]-15",
+     "dayOfWeek": 2
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "08:00",
+     "week": "1",
+     "color": "#FCE0EA",
+     "endTime": "09:35",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 1,
+     "endSection": 2,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "1周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 1
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-7周 <a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a> <a data-kblx=\"01\" data-code=\"050145\" data-auth=\"1\">教室2</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-7周<a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050145\" data-auth=\"1\">教室2</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "0011111",
+     "color": "#CCEAE7",
+     "endTime": "15:05",
+     "courseName": "人工智能导论",
+     "credit": "2.0",
+     "courseCode": "CS117",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "30",
+     "weeksAndTeachers": "3-7周[讲授]/教师L[主讲]",
+     "placeName": "教室2",
+     "teachClassId": "202620271CS11730",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "人工智能导论[CS117]"
+      },
+      {
+       "color": null,
+       "text": "3-7周<a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050145\" data-auth=\"1\">教室2</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "人工智能导论[CS117]",
+      "3-7周 <a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a> <a data-kblx=\"01\" data-code=\"050145\" data-auth=\"1\">教室2</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "人工智能导论[CS117]-30",
+     "dayOfWeek": 2
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "2周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "2周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "01",
+     "color": "#FCE0EA",
+     "endTime": "15:05",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "2周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "2周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "2周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 1
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "17周 <a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a> <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "17周<a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a>  第6节-第9节 <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "00000000000000001",
+     "color": "#FFEACC",
+     "endTime": "20:05",
+     "courseName": "C语言编程实战A",
+     "credit": "2.0",
+     "courseCode": "IMS171a",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 12,
+     "courseSerialNo": "07",
+     "weeksAndTeachers": "17周[实验]/教师A[主讲]",
+     "placeName": "教室12",
+     "teachClassId": "202620271IMS171a07",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "C语言编程实战A[IMS171a]"
+      },
+      {
+       "color": null,
+       "text": "17周<a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a>  第6节-第9节 <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "C语言编程实战A[IMS171a]",
+      "17周 <a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a> <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "C语言编程实战A[IMS171a]-07",
+     "dayOfWeek": 4
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-17周 <a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a> <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a>  第11节-第14节 <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "00111111111111111",
+     "color": "#FFEACC",
+     "endTime": "16:55",
+     "courseName": "C语言编程实战A",
+     "credit": "2.0",
+     "courseCode": "IMS171a",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 9,
+     "courseSerialNo": "07",
+     "weeksAndTeachers": "3-17周[实验]/教师A[主讲]",
+     "placeName": "教室12",
+     "teachClassId": "202620271IMS171a07",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "C语言编程实战A[IMS171a]"
+      },
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a>  第11节-第14节 <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "C语言编程实战A[IMS171a]",
+      "3-17周 <a data-kblx=\"02\" data-code=\"20040478\" data-auth=\"1\">教师A</a> <a data-kblx=\"01\" data-code=\"050261\" data-auth=\"1\">教室12</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "C语言编程实战A[IMS171a]-07",
+     "dayOfWeek": 1
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "1",
+     "color": "#FCE0EA",
+     "endTime": "21:45",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 14,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "1周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 2
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-7周 <a data-kblx=\"02\" data-code=\"20151930\" data-auth=\"1\">教师J</a> <a data-kblx=\"01\" data-code=\"050297\" data-auth=\"1\">教室3</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-7周<a data-kblx=\"02\" data-code=\"20151930\" data-auth=\"1\">教师J</a>  第8节-第9节 <a data-kblx=\"01\" data-code=\"050297\" data-auth=\"1\">教室3</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "0011111",
+     "color": "#D8DCF0",
+     "endTime": "15:05",
+     "courseName": "大学生心理健康",
+     "credit": "2.0",
+     "courseCode": "UNIV102",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "04",
+     "weeksAndTeachers": "3-7周[讲授]/教师J[主讲]",
+     "placeName": "教室3",
+     "teachClassId": "202620271UNIV10204",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "大学生心理健康[UNIV102]"
+      },
+      {
+       "color": null,
+       "text": "3-7周<a data-kblx=\"02\" data-code=\"20151930\" data-auth=\"1\">教师J</a>  第8节-第9节 <a data-kblx=\"01\" data-code=\"050297\" data-auth=\"1\">教室3</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "大学生心理健康[UNIV102]",
+      "3-7周 <a data-kblx=\"02\" data-code=\"20151930\" data-auth=\"1\">教师J</a> <a data-kblx=\"01\" data-code=\"050297\" data-auth=\"1\">教室3</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "大学生心理健康[UNIV102]-04",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "08:00",
+     "week": "1",
+     "color": "#FCE0EA",
+     "endTime": "09:35",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 1,
+     "endSection": 2,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "1周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "13周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "13周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "0000000000001",
+     "color": "#FFF0CC",
+     "endTime": "12:15",
+     "courseName": "管理学原理",
+     "credit": "3.0",
+     "courseCode": "MGT101",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 5,
+     "courseSerialNo": "02",
+     "weeksAndTeachers": "13周[讲授]/教师K[主讲]",
+     "placeName": "教室11",
+     "teachClassId": "202620271MGT10102",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "管理学原理[MGT101]"
+      },
+      {
+       "color": null,
+       "text": "13周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "管理学原理[MGT101]",
+      "13周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "管理学原理[MGT101]-02",
+     "dayOfWeek": 4
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "13周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>",
+      "3-12周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "13周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      },
+      {
+       "color": null,
+       "text": "3-12周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "0011111111111",
+     "color": "#FFF0CC",
+     "endTime": "15:05",
+     "courseName": "管理学原理",
+     "credit": "3.0",
+     "courseCode": "MGT101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "02",
+     "weeksAndTeachers": "13周[讲授]/教师K[主讲]; 3-12周[讲授]/教师K[主讲]",
+     "placeName": "教室11; 教室11",
+     "teachClassId": "202620271MGT10102",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "管理学原理[MGT101]"
+      },
+      {
+       "color": null,
+       "text": "13周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      },
+      {
+       "color": null,
+       "text": "3-12周<a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a>  第3节-第4节 <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "管理学原理[MGT101]",
+      "13周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>",
+      "3-12周 <a data-kblx=\"02\" data-code=\"20192254\" data-auth=\"1\">教师K</a> <a data-kblx=\"01\" data-code=\"050329\" data-auth=\"1\">教室11</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "管理学原理[MGT101]-02",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "8-9周 <a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a> <a data-kblx=\"01\" data-code=\"050272\" data-auth=\"1\">教室9</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "8-9周<a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a>  第11节-第14节 <a data-kblx=\"01\" data-code=\"050272\" data-auth=\"1\">教室9</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "000000011",
+     "color": "#CCEAE7",
+     "endTime": "12:15",
+     "courseName": "人工智能导论",
+     "credit": "2.0",
+     "courseCode": "CS117",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 5,
+     "courseSerialNo": "30S01",
+     "weeksAndTeachers": "8-9周[实验]/教师L[主讲]",
+     "placeName": "教室9",
+     "teachClassId": "202620271CS11730S01",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "人工智能导论[CS117]"
+      },
+      {
+       "color": null,
+       "text": "8-9周<a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a>  第11节-第14节 <a data-kblx=\"01\" data-code=\"050272\" data-auth=\"1\">教室9</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "人工智能导论[CS117]",
+      "8-9周 <a data-kblx=\"02\" data-code=\"20242741\" data-auth=\"1\">教师L</a> <a data-kblx=\"01\" data-code=\"050272\" data-auth=\"1\">教室9</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "人工智能导论[CS117]-30S01",
+     "dayOfWeek": 2
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "14周 <a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a> <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "14周<a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a>  第11节-第12节 <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "00000000000001",
+     "color": "#FFDDD3",
+     "endTime": "20:55",
+     "courseName": "现代音乐赏析",
+     "credit": "2.0",
+     "courseCode": "JC124",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 13,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "14周[讲授]/教师H[主讲]",
+     "placeName": "教室4",
+     "teachClassId": "202620271JC12401",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "现代音乐赏析[JC124]"
+      },
+      {
+       "color": null,
+       "text": "14周<a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a>  第11节-第12节 <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "现代音乐赏析[JC124]",
+      "14周 <a data-kblx=\"02\" data-code=\"19990312\" data-auth=\"1\">教师H</a> <a data-kblx=\"01\" data-code=\"050152\" data-auth=\"1\">教室4</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "现代音乐赏析[JC124]-01",
+     "dayOfWeek": 4
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-17周 <a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "15:20",
+     "week": "00111111111111111",
+     "color": "#D3EAFD",
+     "endTime": "16:55",
+     "courseName": "思想道德与法治",
+     "credit": "3.0",
+     "courseCode": "MARX101",
+     "byCode": "0",
+     "beginSection": 8,
+     "endSection": 9,
+     "courseSerialNo": "02",
+     "weeksAndTeachers": "3-17周[讲授]/教师D[主讲]",
+     "placeName": "教室5",
+     "teachClassId": "202620271MARX10102",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "思想道德与法治[MARX101]"
+      },
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "思想道德与法治[MARX101]",
+      "3-17周 <a data-kblx=\"02\" data-code=\"20030879\" data-auth=\"1\">教师D</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "思想道德与法治[MARX101]-02",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3周,6-8周(双),14周 <a data-kblx=\"02\" data-code=\"20232658\" data-auth=\"1\">教师G</a> <a data-kblx=\"01\" data-code=\"050311\" data-auth=\"1\">教室10</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3周,6-8周(双),14周<a data-kblx=\"02\" data-code=\"20232658\" data-auth=\"1\">教师G</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050311\" data-auth=\"1\">教室10</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "00100101000001",
+     "color": "#D9F2D9",
+     "endTime": "15:05",
+     "courseName": "形势与政策(1)",
+     "credit": "0.25",
+     "courseCode": "MARX111",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "29",
+     "weeksAndTeachers": "3周,6-8周(双),14周[讲授]/教师G[主讲]",
+     "placeName": "教室10",
+     "teachClassId": "202620271MARX11129",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "形势与政策(1)[MARX111]"
+      },
+      {
+       "color": null,
+       "text": "3周,6-8周(双),14周<a data-kblx=\"02\" data-code=\"20232658\" data-auth=\"1\">教师G</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050311\" data-auth=\"1\">教室10</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "形势与政策(1)[MARX111]",
+      "3周,6-8周(双),14周 <a data-kblx=\"02\" data-code=\"20232658\" data-auth=\"1\">教师G</a> <a data-kblx=\"01\" data-code=\"050311\" data-auth=\"1\">教室10</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "形势与政策(1)[MARX111]-29",
+     "dayOfWeek": 2
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "5-11周 <a data-kblx=\"02\" data-code=\"20192382\" data-auth=\"1\">教师M</a> <a data-kblx=\"01\" data-code=\"050407\" data-auth=\"1\">教室1</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "5-11周<a data-kblx=\"02\" data-code=\"20192382\" data-auth=\"1\">教师M</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050407\" data-auth=\"1\">教室1</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "00001111111",
+     "color": "#F9D9D6",
+     "endTime": "11:25",
+     "courseName": "现代前沿传感技术",
+     "credit": "1.0",
+     "courseCode": "IS110",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 4,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "5-11周[讲授]/教师M[主讲]",
+     "placeName": "教室1",
+     "teachClassId": "202620271IS11001",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "现代前沿传感技术[IS110]"
+      },
+      {
+       "color": null,
+       "text": "5-11周<a data-kblx=\"02\" data-code=\"20192382\" data-auth=\"1\">教师M</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050407\" data-auth=\"1\">教室1</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "现代前沿传感技术[IS110]",
+      "5-11周 <a data-kblx=\"02\" data-code=\"20192382\" data-auth=\"1\">教师M</a> <a data-kblx=\"01\" data-code=\"050407\" data-auth=\"1\">教室1</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "新生研讨课",
+     "dayOfWeek": 5
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "11-16周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "11-16周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "0000000000111111",
+     "color": "#D3F4F8",
+     "endTime": "12:15",
+     "courseName": "高等数学(2)",
+     "credit": "2.0",
+     "courseCode": "MATH132",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 5,
+     "courseSerialNo": "13",
+     "weeksAndTeachers": "11-16周[讲授]/教师B[主讲]",
+     "placeName": "教室6",
+     "teachClassId": "202620271MATH13213",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "高等数学(2)[MATH132]"
+      },
+      {
+       "color": null,
+       "text": "11-16周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "高等数学(2)[MATH132]",
+      "11-16周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "高等数学(2)[MATH132]-13",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "7-8周 <a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "7-8周<a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a>  第11节-第12节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "00000011",
+     "color": "#E8F3DB",
+     "endTime": "11:25",
+     "courseName": "国家安全教育",
+     "credit": "1.0",
+     "courseCode": "MARX104",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 4,
+     "courseSerialNo": "10",
+     "weeksAndTeachers": "7-8周[讲授]/教师F[主讲]",
+     "placeName": "教室5",
+     "teachClassId": "202620271MARX10410",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "国家安全教育[MARX104]"
+      },
+      {
+       "color": null,
+       "text": "7-8周<a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a>  第11节-第12节 <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "国家安全教育[MARX104]",
+      "7-8周 <a data-kblx=\"02\" data-code=\"20242743\" data-auth=\"1\">教师F</a> <a data-kblx=\"01\" data-code=\"050148\" data-auth=\"1\">教室5</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "国家安全教育[MARX104]-10",
+     "dayOfWeek": 1
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-10周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-10周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "09:50",
+     "week": "0011111111",
+     "color": "#DDE4FE",
+     "endTime": "12:15",
+     "courseName": "高等数学(1)",
+     "credit": "3.0",
+     "courseCode": "MATH131",
+     "byCode": "0",
+     "beginSection": 3,
+     "endSection": 5,
+     "courseSerialNo": "15",
+     "weeksAndTeachers": "3-10周[讲授]/教师B[主讲]",
+     "placeName": "教室6",
+     "teachClassId": "202620271MATH13115",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "高等数学(1)[MATH131]"
+      },
+      {
+       "color": null,
+       "text": "3-10周<a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a>  第3节-第5节 <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "高等数学(1)[MATH131]",
+      "3-10周 <a data-kblx=\"02\" data-code=\"20051519\" data-auth=\"1\">教师B</a> <a data-kblx=\"01\" data-code=\"050149\" data-auth=\"1\">教室6</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "高等数学(1)[MATH131]-15",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "2周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "2周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "11",
+     "color": "#FCE0EA",
+     "endTime": "15:05",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "2周[讲授]/教师I[主讲]; 1周[讲授]/教师I[主讲]",
+     "placeName": "教室13; 教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "2周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "2周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 6
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-17周 <a data-kblx=\"02\" data-code=\"20141895\" data-auth=\"1\">教师E</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20141895\" data-auth=\"1\">教师E</a>  第6节-第7节"
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "00111111111111111",
+     "color": "#FFF5D7",
+     "endTime": "15:05",
+     "courseName": "大学体育(1)",
+     "credit": "1.0",
+     "courseCode": "PE101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "87",
+     "weeksAndTeachers": "3-17周[讲授]/教师E[主讲]",
+     "placeName": null,
+     "teachClassId": "202620271PE10187",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "大学体育(1)[PE101]"
+      },
+      {
+       "color": null,
+       "text": "3-17周<a data-kblx=\"02\" data-code=\"20141895\" data-auth=\"1\">教师E</a>  第6节-第7节"
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "大学体育(1)[PE101]",
+      "3-17周 <a data-kblx=\"02\" data-code=\"20141895\" data-auth=\"1\">教师E</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "大学体育(1)[PE101]-87",
+     "dayOfWeek": 4
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-5周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a>",
+      "6-13周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-5周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a> "
+      },
+      {
+       "color": null,
+       "text": "6-13周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "0011111111111",
+     "color": "#DBEEFD",
+     "endTime": "15:05",
+     "courseName": "基础英语",
+     "credit": "3.0",
+     "courseCode": "ENGL101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "3-5周[讲授]/教师C[主讲]; 6-13周[讲授]/教师C[主讲]",
+     "placeName": "教室8; 教室7",
+     "teachClassId": "202620271ENGL10101",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "基础英语[ENGL101]"
+      },
+      {
+       "color": null,
+       "text": "3-5周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a> "
+      },
+      {
+       "color": null,
+       "text": "6-13周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "基础英语[ENGL101]",
+      "3-5周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a>",
+      "6-13周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "管科E1",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "6-13周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a>",
+      "3-5周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "6-13周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a> "
+      },
+      {
+       "color": null,
+       "text": "3-5周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "0011111111111",
+     "color": "#DBEEFD",
+     "endTime": "20:55",
+     "courseName": "基础英语",
+     "credit": "3.0",
+     "courseCode": "ENGL101",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 13,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "6-13周[讲授]/教师C[主讲]; 3-5周[讲授]/教师C[主讲]",
+     "placeName": "教室7; 教室8",
+     "teachClassId": "202620271ENGL10101",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "基础英语[ENGL101]"
+      },
+      {
+       "color": null,
+       "text": "6-13周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a> "
+      },
+      {
+       "color": null,
+       "text": "3-5周<a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a>  第1节-第2节 <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "基础英语[ENGL101]",
+      "6-13周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050349\" data-auth=\"1\">教室7</a>",
+      "3-5周 <a data-kblx=\"02\" data-code=\"19990367\" data-auth=\"1\">教师C</a> <a data-kblx=\"01\" data-code=\"050189\" data-auth=\"1\">教室8</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "管科E1",
+     "dayOfWeek": 3
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "13:30",
+     "week": "1",
+     "color": "#FCE0EA",
+     "endTime": "15:05",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 6,
+     "endSection": 7,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "1周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 7
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "18:30",
+     "week": "1",
+     "color": "#FCE0EA",
+     "endTime": "20:05",
+     "courseName": "军事理论",
+     "credit": "2.0",
+     "courseCode": "UNIV101",
+     "byCode": "0",
+     "beginSection": 11,
+     "endSection": 12,
+     "courseSerialNo": "17",
+     "weeksAndTeachers": "1周[讲授]/教师I[主讲]",
+     "placeName": "教室13",
+     "teachClassId": "202620271UNIV10117",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军事理论[UNIV101]"
+      },
+      {
+       "color": null,
+       "text": "1周<a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a>  第6节-第7节 <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军事理论[UNIV101]",
+      "1周 <a data-kblx=\"02\" data-code=\"20202513\" data-auth=\"1\">教师I</a> <a data-kblx=\"01\" data-code=\"050341\" data-auth=\"1\">教室13</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军事理论[UNIV101]-17",
+     "dayOfWeek": 3
+    }
+   ],
+   "practiceList": [],
+   "notArrangeList": [
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1-7周 <a data-kblx=\"02\" data-code=\"20111748\" data-auth=\"1\">郑珊珊</a>",
+      "1-7周 <a data-kblx=\"02\" data-code=\"20252753\" data-auth=\"1\">李思蔚</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1-7周<a data-kblx=\"02\" data-code=\"20111748\" data-auth=\"1\">郑珊珊</a> "
+      },
+      {
+       "color": null,
+       "text": "1-7周<a data-kblx=\"02\" data-code=\"20252753\" data-auth=\"1\">李思蔚</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "",
+     "week": "1111111",
+     "color": null,
+     "endTime": "",
+     "courseName": "大学生安全知识教育",
+     "credit": "1.0",
+     "courseCode": "UNIV100",
+     "byCode": "0",
+     "beginSection": null,
+     "endSection": null,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "1-7周[讲授]/郑珊珊[主讲]; 1-7周[讲授]/李思蔚[主讲]",
+     "placeName": "",
+     "teachClassId": "202620271UNIV10001",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "大学生安全知识教育[UNIV100]"
+      },
+      {
+       "color": null,
+       "text": "1-7周<a data-kblx=\"02\" data-code=\"20111748\" data-auth=\"1\">郑珊珊</a> "
+      },
+      {
+       "color": null,
+       "text": "1-7周<a data-kblx=\"02\" data-code=\"20252753\" data-auth=\"1\">李思蔚</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "大学生安全知识教育[UNIV100]",
+      "1-7周 <a data-kblx=\"02\" data-code=\"20111748\" data-auth=\"1\">郑珊珊</a>",
+      "1-7周 <a data-kblx=\"02\" data-code=\"20252753\" data-auth=\"1\">李思蔚</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "大学生安全知识教育[UNIV100]-01",
+     "dayOfWeek": null
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "3-14周 <a data-kblx=\"02\" data-code=\"20131857\" data-auth=\"1\">韩聪钰</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "3-14周<a data-kblx=\"02\" data-code=\"20131857\" data-auth=\"1\">韩聪钰</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "",
+     "week": "0011111111111100000",
+     "color": null,
+     "endTime": "",
+     "courseName": "大学生职业规划",
+     "credit": "1.0",
+     "courseCode": "UNIV103",
+     "byCode": "0",
+     "beginSection": null,
+     "endSection": null,
+     "courseSerialNo": "20",
+     "weeksAndTeachers": "3-14周[数字化]/韩聪钰[主讲]",
+     "placeName": null,
+     "teachClassId": "202620271UNIV10320",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "大学生职业规划[UNIV103]"
+      },
+      {
+       "color": null,
+       "text": "3-14周<a data-kblx=\"02\" data-code=\"20131857\" data-auth=\"1\">韩聪钰</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "大学生职业规划[UNIV103]",
+      "3-14周 <a data-kblx=\"02\" data-code=\"20131857\" data-auth=\"1\">韩聪钰</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "大学生职业规划[UNIV103]-20",
+     "dayOfWeek": null
+    },
+    {
+     "titleWeekTeacherClassroomDetail": [
+      "1-2周 <a data-kblx=\"02\" data-code=\"20051531\" data-auth=\"1\">马骏</a>"
+     ],
+     "cellWeekTeacherClassroomDetail": [
+      {
+       "color": null,
+       "text": "1-2周<a data-kblx=\"02\" data-code=\"20051531\" data-auth=\"1\">马骏</a> "
+      }
+     ],
+     "multiCourseTitleDetail": [],
+     "beginTime": "",
+     "week": "1100000000000000000",
+     "color": null,
+     "endTime": "",
+     "courseName": "军训",
+     "credit": "2.0",
+     "courseCode": "UNIV161",
+     "byCode": "0",
+     "beginSection": null,
+     "endSection": null,
+     "courseSerialNo": "01",
+     "weeksAndTeachers": "1-2周[实验]/马骏[主讲]",
+     "placeName": null,
+     "teachClassId": "202620271UNIV16101",
+     "cellDetail": [
+      {
+       "color": null,
+       "text": "军训[UNIV161]"
+      },
+      {
+       "color": null,
+       "text": "1-2周<a data-kblx=\"02\" data-code=\"20051531\" data-auth=\"1\">马骏</a> "
+      }
+     ],
+     "teachingTarget": null,
+     "campusName": "",
+     "titleDetail": [
+      "军训[UNIV161]",
+      "1-2周 <a data-kblx=\"02\" data-code=\"20051531\" data-auth=\"1\">马骏</a>"
+     ],
+     "tags": [],
+     "multiCourse": null,
+     "teachClassName": "军训[UNIV161]-01",
+     "dayOfWeek": null
+    }
+   ]
+  }
+ }
+}
