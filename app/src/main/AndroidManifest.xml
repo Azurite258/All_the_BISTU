@@ -43,6 +43,18 @@
             android:exported="false"
             android:label="动画验证"
             android:theme="@style/Theme.Study1" />
+
+        <!-- Cookie 接口验证页（验证用） -->
+        <activity
+            android:name=".ui.login.CookieTestActivity"
+            android:exported="true"
+            android:label="Cookie验证"
+            android:theme="@style/Theme.Study1">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

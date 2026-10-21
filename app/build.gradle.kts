@@ -52,6 +52,10 @@ dependencies {
     // JSON 解析
     implementation(libs.kotlinx.serialization.json)
 
+    // 网络请求（用 Cookie 调教务系统接口）
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.webkit:webkit:1.12.1")
+
     // 本地数据库（缓存课表）
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

@@ -108,6 +108,51 @@ class WebViewLoginActivity : ComponentActivity() {
                 }
             })();
         """.trimIndent()
+
+        /**
+         * 修复白屏的 CSS 补丁。
+         *
+         * 问题：登录页把表单放在 iframe 里，而 iframe 高度是 100%，
+         * 父容器 #app 的高度却是 0 —— 结果 iframe 高度 0，内容不可见。
+         *
+         * 修复：强制给 html/body/#app/iframe 设置 100% 高度。
+         */
+        private val FIX_HEIGHT_CSS = """
+            (function() {
+                try {
+                    var style = document.createElement('style');
+                    style.id = 'dsh-height-fix';
+                    style.textContent = [
+                        'html, body { height: 100% !important; min-height: 100% !important; overflow: auto !important; }',
+                        '#app { height: 100% !important; min-height: 100vh !important; }',
+                        '.app-box, .main-warp, .main { height: 100% !important; min-height: 100vh !important; }',
+                        '#iframeObj { height: 100% !important; min-height: calc(100vh - 0px) !important; display: block !important; }',
+                        'iframe { min-height: 100vh !important; display: block !important; }'
+                    ].join('\n');
+                    (document.head || document.documentElement).appendChild(style);
+                    console.log('[DSH] 高度修复已注入');
+
+                    // 如果 #app 还是 0 高度，直接设内联样式
+                    var app = document.getElementById('app');
+                    if (app) {
+                        app.style.height = '100vh';
+                        app.style.minHeight = '100vh';
+                        console.log('[DSH] #app 高度已强制设置');
+                    }
+
+                    // 修正 iframe
+                    var iframe = document.getElementById('iframeObj');
+                    if (iframe) {
+                        iframe.style.height = '100vh';
+                        iframe.style.minHeight = '100vh';
+                        iframe.style.display = 'block';
+                        console.log('[DSH] iframe 高度已强制设置');
+                    }
+                } catch(e) {
+                    console.log('[DSH] 高度修复失败: ' + e);
+                }
+            })();
+        """.trimIndent()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -229,6 +274,13 @@ class WebViewLoginActivity : ComponentActivity() {
                                             super.onPageFinished(view, url)
                                             Log.d(TAG, "页面加载完成: $url")
                                             statusText = "当前页面: $url"
+
+                                            // ── 关键：注入高度修复 CSS ──
+                                            // 学校登录页把表单放在 iframe 里，
+                                            // 但 #app 父容器高度为 0，导致 iframe 不可见（白屏）
+                                            view.evaluateJavascript(FIX_HEIGHT_CSS) { r ->
+                                                Log.d(TAG, "高度修复结果: $r")
+                                            }
 
                                             // ── 诊断：检查 DOM 是否渲染出内容 ──
                                             view.evaluateJavascript(
