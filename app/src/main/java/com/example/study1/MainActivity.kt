@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
@@ -127,7 +128,13 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             isDark = isDark,
             settings = settings,
             onRefresh = { reload(forceRefresh = true) },
-            onOpenSettings = { showSettings = true }
+            onOpenSettings = { showSettings = true },
+            onOpenLogin = {
+                // 启动 WebView 登录页（验证版）
+                context.startActivity(
+                    android.content.Intent(context, com.example.study1.ui.login.WebViewLoginActivity::class.java)
+                )
+            }
         )
         else -> ErrorScreen(result?.error)
     }
@@ -156,7 +163,8 @@ private fun ScheduleScreen(
     isDark: Boolean,
     settings: AppSettings,
     onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenLogin: () -> Unit
 ) {
     val weekRange = data.weekRange
 
@@ -212,6 +220,12 @@ private fun ScheduleScreen(
                     icon = Icons.Default.Settings,
                     contentDescription = "设置",
                     onClick = onOpenSettings
+                )
+                Spacer(Modifier.width(8.dp))
+                HyperIconButton(
+                    icon = Icons.Default.AccountCircle,
+                    contentDescription = "登录",
+                    onClick = onOpenLogin
                 )
             }
         }
