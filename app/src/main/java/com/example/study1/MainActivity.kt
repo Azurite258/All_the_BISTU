@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +28,11 @@ import com.example.study1.data.LoadResult
 import com.example.study1.data.ScheduleData
 import com.example.study1.data.ScheduleRepository
 import com.example.study1.data.Source
+import com.example.study1.data.prefs.AppSettings
+import com.example.study1.data.prefs.SettingsStore
+import com.example.study1.data.prefs.ThemeMode
 import com.example.study1.ui.schedule.ScheduleGrid
+import com.example.study1.ui.settings.SettingsScreen
 import com.example.study1.ui.theme.Study1Theme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -39,40 +44,61 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            Study1Theme {
+            val context = LocalContext.current
+            val settingsStore = remember { SettingsStore(context) }
+            val settings by settingsStore.settings.collectAsState(initial = AppSettings())
+
+            Study1Theme(themeMode = settings.themeMode) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MainScreen()
+                    MainScreen(settings = settings, settingsStore = settingsStore)
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { ScheduleRepository(context) }
 
-    // 加载状态
     var loadResult by remember { mutableStateOf<LoadResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var showSettings by remember { mutableStateOf(false) }
 
     fun reload(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            if (forceRefresh) {
-                // 强制刷新：清缓存后重新从 assets 解析
-                repository.clearCache()
-            }
+            if (forceRefresh) repository.clearCache()
             loadResult = repository.loadSchedule()
             isLoading = false
         }
     }
 
-    // 首次加载
     LaunchedEffect(Unit) { reload() }
+
+    // 计算当前是否深色
+    val systemDark = isSystemInDarkTheme()
+    val isDark = when (settings.themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        else -> systemDark
+    }
+
+    if (showSettings) {
+        SettingsScreen(
+            settings = settings,
+            onThemeModeChange = { mode ->
+                scope.launch { settingsStore.setThemeMode(mode) }
+            },
+            onColorSchemeChange = { scheme ->
+                scope.launch { settingsStore.setColorScheme(scheme) }
+            },
+            onBack = { showSettings = false }
+        )
+        return
+    }
 
     val result = loadResult
     when {
@@ -81,7 +107,10 @@ fun MainScreen() {
             data = result.data,
             source = result.source,
             timestamp = result.timestamp,
-            onRefresh = { reload(forceRefresh = true) }
+            isDark = isDark,
+            settings = settings,
+            onRefresh = { reload(forceRefresh = true) },
+            onOpenSettings = { showSettings = true }
         )
         else -> ErrorScreen(result?.error)
     }
@@ -107,7 +136,10 @@ private fun ScheduleScreen(
     data: ScheduleData,
     source: Source,
     timestamp: Long,
-    onRefresh: () -> Unit
+    isDark: Boolean,
+    settings: AppSettings,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val weekRange = data.weekRange
     var currentWeek by remember(data.termCode) { mutableIntStateOf(weekRange.first) }
@@ -132,6 +164,9 @@ private fun ScheduleScreen(
                 actions = {
                     IconButton(onClick = onRefresh) {
                         Icon(Icons.Default.Refresh, contentDescription = "重新加载")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -167,7 +202,9 @@ private fun ScheduleScreen(
                 ScheduleGrid(
                     data = data,
                     weekNumber = currentWeek,
-                    todayDayOfWeek = todayDayOfWeek()
+                    todayDayOfWeek = todayDayOfWeek(),
+                    colorScheme = settings.colorScheme,
+                    isDark = isDark
                 )
             }
         }
@@ -244,12 +281,10 @@ private fun ErrorScreen(error: Throwable?) {
     }
 }
 
-// ── 工具函数 ──
-
 private fun todayDayOfWeek(): Int {
     val cal = java.util.Calendar.getInstance()
     val d = cal.get(java.util.Calendar.DAY_OF_WEEK)
-    return if (d == 1) 7 else d - 1   // Calendar: 周日=1 → 转成 7
+    return if (d == 1) 7 else d - 1
 }
 
 private fun sourceLabel(source: Source, timestamp: Long): String {
@@ -264,8 +299,8 @@ private fun sourceLabel(source: Source, timestamp: Long): String {
 
 @Composable
 private fun sourceColor(source: Source): Color = when (source) {
-    Source.CACHE -> Color(0xFF2E7D32)      // 绿：缓存
-    Source.ASSETS -> Color(0xFFE65100)     // 橙：示例数据
-    Source.NETWORK -> Color(0xFF1565C0)    // 蓝：已同步
-    Source.ERROR -> Color(0xFFC62828)      // 红：错误
+    Source.CACHE -> Color(0xFF2E7D32)
+    Source.ASSETS -> Color(0xFFE65100)
+    Source.NETWORK -> Color(0xFF1565C0)
+    Source.ERROR -> Color(0xFFC62828)
 }

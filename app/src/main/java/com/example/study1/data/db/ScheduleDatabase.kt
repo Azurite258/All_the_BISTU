@@ -132,8 +132,9 @@ abstract class AppDatabase : RoomDatabase() {
 // ═══════════════════════════════════════════════════════════════
 
 fun Course.toEntity(termCode: String): CourseEntity {
-    // 主键：学期+课程代码+星期+节次+教室（同一门课不同时间段是不同记录）
-    val id = "${termCode}_${code}_${dayOfWeek}_${beginSection}_${room}"
+    // 主键包含课程码、星期、节次范围、教室
+    // 不含周次：同一时间段的多段周次已在 ScheduleParser 里合并
+    val id = "${termCode}_${code}_${dayOfWeek}_${beginSection}_${endSection}_${room}"
     return CourseEntity(
         id = id,
         termCode = termCode,
