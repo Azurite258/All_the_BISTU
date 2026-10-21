@@ -22,12 +22,11 @@ import com.example.study1.data.Course
 import com.example.study1.data.ScheduleData
 import com.example.study1.data.prefs.CourseColorScheme
 
-// ── 尺寸常量（加了时间后左列需要更宽）──
-private val TimeColumnWidth = 46.dp
-private val DayColumnWidth = 52.dp
+// ── 尺寸常量（HyperOS 风格：圆角更大、留白更足）──
+private val TimeColumnWidth = 42.dp
+private val DayColumnWidth = 44.dp
 private val PeriodRowHeight = 60.dp
 private val HeaderHeight = 46.dp
-private val BlockPadding = 1.dp
 
 private val LightBorder = Color(0xFFE5E5E5)
 private val DarkBorder = Color(0xFF333333)
@@ -250,8 +249,8 @@ private fun CourseBlock(
         modifier = Modifier
             .offset(x = x, y = y)
             .size(width = dayColumnWidth, height = blockHeight)
-            .padding(BlockPadding)
-            .clip(RoundedCornerShape(4.dp))
+            .padding(1.5.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
     ) {
         Column(

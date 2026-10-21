@@ -12,36 +12,75 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.study1.data.prefs.ThemeMode
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF90CAF9),
-    secondary = Color(0xFFB0BEC5),
-    tertiary = Color(0xFFF48FB1),
-    background = Color(0xFF121212),
-    surface = Color(0xFF1E1E1E),
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurface = Color(0xFFE8E8E8),
-    onSurfaceVariant = Color(0xFFAAAAAA)
+/**
+ * HyperOS 风格配色方案。
+ *
+ * 设计要点：
+ * - 浅色：浅灰底 + 纯白卡片，靠色差区分层次（不用阴影）
+ * - 深色：纯黑底 + 深灰卡片（OLED 省电）
+ * - 主色：HyperOS 蓝
+ */
+private val HyperLightColorScheme = lightColorScheme(
+    primary = HyperPrimary,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE3EFFF),
+    onPrimaryContainer = HyperPrimaryDark,
+
+    secondary = HyperPrimaryDark,
+    onSecondary = Color.White,
+
+    background = HyperBackground,
+    onBackground = HyperOnBackground,
+
+    surface = HyperSurface,
+    onSurface = HyperOnBackground,
+
+    surfaceVariant = HyperSurfaceVariant,
+    onSurfaceVariant = HyperOnSurfaceVariant,
+
+    outline = HyperOutline,
+    outlineVariant = HyperOutline,
+
+    error = HyperRed,
+    onError = Color.White
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
-    background = Color(0xFFFCFCFC),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1C1B1F)
+private val HyperDarkColorScheme = darkColorScheme(
+    primary = HyperPrimaryDarkMode,
+    onPrimary = Color(0xFF00325C),
+    primaryContainer = Color(0xFF1A3A5C),
+    onPrimaryContainer = Color(0xFFD6E4FF),
+
+    secondary = HyperPrimaryDarkMode,
+    onSecondary = Color(0xFF00325C),
+
+    background = HyperBackgroundDark,
+    onBackground = HyperOnBackgroundDark,
+
+    surface = HyperSurfaceDark,
+    onSurface = HyperOnBackgroundDark,
+
+    surfaceVariant = HyperSurfaceVariantDark,
+    onSurfaceVariant = HyperOnSurfaceVariantDark,
+
+    outline = HyperOutlineDark,
+    outlineVariant = HyperOutlineDark,
+
+    error = HyperRed,
+    onError = Color.White
 )
 
 /**
- * 应用主题。
+ * 应用主题（HyperOS 风格）。
  *
  * @param themeMode 0=跟随系统 1=浅色 2=深色
- * @param dynamicColor 是否使用 Material You 动态取色（Android 12+）
+ * @param useDynamicColor 是否用 Material You 动态取色
+ *        （默认关闭，因为动态取色会覆盖 HyperOS 配色，破坏风格统一）
  */
 @Composable
 fun Study1Theme(
     themeMode: Int = ThemeMode.SYSTEM,
-    dynamicColor: Boolean = true,
+    useDynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -52,18 +91,19 @@ fun Study1Theme(
     }
 
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> HyperDarkColorScheme
+        else -> HyperLightColorScheme
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = HyperShapes,
         content = content
     )
 }

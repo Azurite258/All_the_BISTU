@@ -4,10 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -18,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -33,6 +38,7 @@ import com.example.study1.data.prefs.SettingsStore
 import com.example.study1.data.prefs.ThemeMode
 import com.example.study1.ui.schedule.ScheduleGrid
 import com.example.study1.ui.settings.SettingsScreen
+import com.example.study1.ui.theme.HyperSpacing
 import com.example.study1.ui.theme.Study1Theme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -165,34 +171,49 @@ private fun ScheduleScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "${data.className} 课表",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = sourceLabel(source, timestamp),
-                            fontSize = 10.sp,
-                            color = sourceColor(source)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "重新加载")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "设置")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+            // HyperOS 风格：不用 TopAppBar，自己画一个
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = HyperSpacing.pageHorizontal,
+                        end = HyperSpacing.pageHorizontal,
+                        top = 16.dp,
+                        bottom = 8.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 超大标题
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "课表",
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${data.className} · ${sourceLabel(source, timestamp)}",
+                        fontSize = 12.sp,
+                        color = sourceColor(source)
+                    )
+                }
+
+                // 圆形图标按钮（HyperOS 风格）
+                HyperIconButton(
+                    icon = Icons.Default.Refresh,
+                    contentDescription = "重新加载",
+                    onClick = onRefresh
                 )
-            )
+                Spacer(Modifier.width(8.dp))
+                HyperIconButton(
+                    icon = Icons.Default.Settings,
+                    contentDescription = "设置",
+                    onClick = onOpenSettings
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -200,6 +221,7 @@ private fun ScheduleScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
+            // ── 周次切换卡片 ──
             WeekSelector(
                 currentWeek = currentWeek,
                 weekRange = weekRange,
@@ -208,17 +230,22 @@ private fun ScheduleScreen(
                 onWeekChange = { currentWeek = it }
             )
 
-            HorizontalDivider()
-
+            // ── 课表卡片 ──
             val vScroll = rememberScrollState()
             val hScroll = rememberScrollState()
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(
+                        start = HyperSpacing.pageHorizontal,
+                        end = HyperSpacing.pageHorizontal,
+                        bottom = HyperSpacing.cardGap
+                    )
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surface)
                     .verticalScroll(vScroll)
                     .horizontalScroll(hScroll)
-                    .padding(2.dp)
             ) {
                 ScheduleGrid(
                     data = data,
@@ -233,8 +260,143 @@ private fun ScheduleScreen(
     }
 }
 
+/**
+ * HyperOS 风格圆形图标按钮
+ */
+@Composable
+private fun HyperIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/**
+ * 周次切换（HyperOS 卡片风格）
+ */
 @Composable
 private fun WeekSelector(
+    currentWeek: Int,
+    weekRange: IntRange,
+    courseCount: Int,
+    termStartDate: String?,
+    onWeekChange: (Int) -> Unit
+) {
+    val weekDateRange = remember(currentWeek, termStartDate) {
+        if (termStartDate.isNullOrBlank()) null
+        else runCatching {
+            val dates = com.example.study1.ui.schedule.DateUtils
+                .weekDates(termStartDate, currentWeek)
+            if (dates.size == 7) {
+                "${dates[0].substring(5)} ~ ${dates[6].substring(5)}"
+            } else null
+        }.getOrNull()
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = HyperSpacing.pageHorizontal,
+                end = HyperSpacing.pageHorizontal,
+                bottom = HyperSpacing.cardGap
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 上一周
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(enabled = currentWeek > weekRange.first) {
+                    if (currentWeek > weekRange.first) onWeekChange(currentWeek - 1)
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.KeyboardArrowLeft,
+                contentDescription = "上一周",
+                tint = if (currentWeek > weekRange.first)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // 中间信息
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "第 $currentWeek 周",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$courseCount 节课",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (weekDateRange != null) {
+                    Text(
+                        text = " · $weekDateRange",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 下一周
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(enabled = currentWeek < weekRange.last) {
+                    if (currentWeek < weekRange.last) onWeekChange(currentWeek + 1)
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.KeyboardArrowRight,
+                contentDescription = "下一周",
+                tint = if (currentWeek < weekRange.last)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 旧版 WeekSelector（保留签名兼容，已不再使用）
+ */
+@Composable
+private fun LegacyWeekSelector(
     currentWeek: Int,
     weekRange: IntRange,
     courseCount: Int,
