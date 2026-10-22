@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -493,6 +494,16 @@ private fun ScheduleScreen(
                 }
             }
             }
+
+            // 下拉刷新指示器（Modifier.pullToRefresh 只负责手势，不渲染 UI，
+            // 需要手动叠一个 Indicator，否则下拉时看不到任何反馈）。
+            // 注意：Indicator 内部会按下拉距离自己算垂直位置，
+            // 这里不要再加 offset/padding，否则会破坏它的定位。
+            PullToRefreshDefaults.Indicator(
+                state = pullState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
