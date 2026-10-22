@@ -25,7 +25,10 @@ android {
         release {
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                // 注意：不要把 kotlin.** 放进 packageScope。
+                // kotlin-stdlib 的内部类（如 kotlin.sequences.d）被混淆后，
+                // 会破坏类继承关系，运行时抛 IllegalAccessError 直接闪退。
+                packageScope = setOf("androidx.**", "kotlinx.**")
             }
         }
     }

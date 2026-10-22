@@ -1,12 +1,56 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
+# ═══════════════════════════════════════════════════════════
+# All the BISTU — R8 混淆保留规则
+# ═══════════════════════════════════════════════════════════
 #
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# 这些规则不是「可选优化」，缺了会导致 release 版直接闪退。
+# 每次新增依赖（尤其是靠反射工作的库）都要检查是否需要补规则。
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# ── kotlinx.serialization ──────────────────────────────────
+# @Serializable 类靠编译期生成的 Companion/序列化器工作，
+# 类名或 Companion 被混淆后会在运行期找不到序列化器。
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.**
+
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# 本项目所有 @Serializable 数据类
+-keep,includedescriptorclasses class com.bistu.allthebistu.data.**$$serializer { *; }
+-keepclassmembers class com.bistu.allthebistu.data.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.bistu.allthebistu.data.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# ── Room ───────────────────────────────────────────────────
+# Room 生成的 *_Impl 通过反射按名称加载，实体字段也不能被混淆。
+-keep class com.bistu.allthebistu.data.db.** { *; }
+-keepclassmembers class com.bistu.allthebistu.data.db.** { *; }
+-dontwarn androidx.room.paging.**
+
+# ── Kona 国密（SM2 登录）────────────────────────────────────
+# 通过 JCA Provider 按算法名反射加载
+-keep class com.tencent.kona.** { *; }
+-dontwarn com.tencent.kona.**
+
+# ── OkHttp / Okio ──────────────────────────────────────────
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+
+# ── Kotlin 元数据 ──────────────────────────────────────────
+# 保留 Kotlin 反射所需的元数据，避免 kotlin.** 内部类被破坏
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+-dontwarn kotlin.**
+
+# ── 通用 ───────────────────────────────────────────────────
+# 保留行号，便于线上崩溃定位（不影响混淆强度）
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
