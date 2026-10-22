@@ -2,6 +2,7 @@ package com.bistu.allthebistu.ui.schedule
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +66,7 @@ private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
  * @param termStartDate 学期第 1 周周一的日期，格式 "yyyy-MM-dd"；为空则不显示日期
  * @param colorScheme 配色方案：0=学校 1=柔和 2=高对比
  * @param isDark 是否深色模式
+ * @param onCourseClick 点击课程块的回调；为 null 时课程块不可点击
  */
 @Composable
 fun ScheduleGrid(
@@ -74,6 +76,7 @@ fun ScheduleGrid(
     colorScheme: Int = CourseColorScheme.SCHOOL,
     isDark: Boolean = false,
     termStartDate: String? = null,
+    onCourseClick: ((Course) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val borderColor = if (isDark) DarkBorder else LightBorder
@@ -239,7 +242,8 @@ fun ScheduleGrid(
                             colorScheme = colorScheme,
                             isDark = isDark,
                             dayColumnWidth = dayWidth,
-                            periodRowHeight = PeriodRowHeight
+                            periodRowHeight = PeriodRowHeight,
+                            onClick = onCourseClick?.let { click -> { click(course) } }
                         )
                     }
                 }
@@ -254,7 +258,8 @@ private fun CourseBlock(
     colorScheme: Int,
     isDark: Boolean,
     dayColumnWidth: Dp,
-    periodRowHeight: Dp
+    periodRowHeight: Dp,
+    onClick: (() -> Unit)? = null
 ) {
     val bgColor = remember(course.colorHex, course.name, colorScheme, isDark) {
         CourseColors.backgroundOf(course.colorHex, course.name, colorScheme, isDark)
@@ -281,6 +286,10 @@ private fun CourseBlock(
             .padding(1.5.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
+            // clickable 放在 clip 之后，水波纹才会被圆角裁掉
+            .then(
+                if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+            )
     ) {
         Column(
             modifier = Modifier

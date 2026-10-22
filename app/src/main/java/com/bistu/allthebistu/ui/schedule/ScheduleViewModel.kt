@@ -1,0 +1,224 @@
+package com.bistu.allthebistu.ui.schedule
+
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.bistu.allthebistu.data.LoadResult
+import com.bistu.allthebistu.data.ScheduleRepository
+import com.bistu.allthebistu.ui.login.AuthHolder
+import com.bistu.allthebistu.ui.login.AutoLoginResult
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * 课表页的全部状态。
+ *
+ * 只放「跨重组需要活下来」的东西（数据、加载态、登录态），
+ * 纯交互态（当前 Tab、是否展开设置页、Pager 页码）留在 Compose 里。
+ */
+data class ScheduleUiState(
+    /** 课表数据 + 来源 + 时间戳；null 表示还没加载出结果 */
+    val loadResult: LoadResult? = null,
+    /** 首次加载中（整页转圈） */
+    val isLoading: Boolean = true,
+    /** 下拉刷新中（顶部指示器，不遮挡内容） */
+    val isRefreshing: Boolean = false,
+    /** 自动登录没成功的原因，展示在标题下方 */
+    val autoLoginHint: String? = null,
+    /** 是否展示底部登录引导条 */
+    val showLoginPrompt: Boolean = false,
+    /** 当前是否已登录（与 AuthHolder 同步） */
+    val isLoggedIn: Boolean = false
+)
+
+/**
+ * 课表 ViewModel。
+ *
+ * 从 MainActivity 里搬出来的那些状态与协程，现在都收在这里：
+ *  - 自动登录 + 首次加载
+ *  - 手动重新加载 / 下拉刷新（含最短展示时长）
+ *  - 会话失效清理
+ *  - 登录状态变化后的强制刷新
+ *
+ * Activity 只负责画界面和把点击事件转发过来。
+ */
+class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val repository = ScheduleRepository(app)
+
+    private val _uiState = MutableStateFlow(ScheduleUiState())
+    val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
+
+    /** 当前正在跑的加载任务；新的加载会取消旧的，避免两次结果互相覆盖 */
+    private var loadJob: Job? = null
+
+    /** 上一次的登录状态，用于识别「刚登录成功」这个跳变 */
+    private var lastKnownLoggedIn: Boolean? = null
+
+    init {
+        // 会话失效 → 清理持久化登录态（回调发生在 IO 线程，切回主线程再动 Compose 状态）
+        repository.onSessionExpired = {
+            viewModelScope.launch { handleSessionExpired() }
+        }
+        bootstrap()
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 启动：先静默恢复会话，再加载课表
+    // ───────────────────────────────────────────────────────────
+    private fun bootstrap() {
+        viewModelScope.launch {
+            val result = AuthHolder.autoLogin(getApplication())
+            Log.d(TAG, "自动登录结果: $result")
+            AuthHolder.auth?.let(repository::setAuth)
+            lastKnownLoggedIn = AuthHolder.isLoggedIn
+
+            when (result) {
+                is AutoLoginResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoggedIn = AuthHolder.isLoggedIn,
+                            autoLoginHint = null,
+                            isLoading = true
+                        )
+                    }
+                    // 自动登录成功 → 强制从网络拉最新课表
+                    val loaded = repository.loadSchedule(forceRefresh = true)
+                    _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                }
+
+                is AutoLoginResult.NeedManual -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoggedIn = AuthHolder.isLoggedIn,
+                            autoLoginHint = result.reason,
+                            // 未登录 → 每次启动都提示一次（不记忆、不打扰已登录用户）
+                            showLoginPrompt = true,
+                            isLoading = true
+                        )
+                    }
+                    val loaded = repository.loadSchedule()
+                    _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                }
+            }
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 对外操作
+    // ───────────────────────────────────────────────────────────
+
+    /**
+     * 重新加载。
+     *
+     * @param forceRefresh true 时先清缓存再拉，用于「刚登录」「退出登录」这类数据源已变的场景
+     */
+    fun reload(forceRefresh: Boolean = false) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            AuthHolder.auth?.let(repository::setAuth)
+            if (forceRefresh) repository.clearCache()
+            val loaded = repository.loadSchedule()
+            _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+        }
+    }
+
+    /**
+     * 下拉刷新：保留当前内容，只在顶部显示指示器。
+     */
+    fun refresh() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            val startedAt = System.currentTimeMillis()
+            try {
+                AuthHolder.auth?.let(repository::setAuth)
+                // 下拉 = 强制从网络拉最新
+                val loaded = repository.loadSchedule(forceRefresh = true)
+                _uiState.update { it.copy(loadResult = loaded) }
+            } finally {
+                // 本地数据（如未登录读 assets）几毫秒就返回，
+                // 指示器会一闪而过看不到动画。补足最短显示时长，
+                // 让「出现 → 转一圈 → 回缩」完整播完。
+                val remaining = MIN_REFRESH_MS - (System.currentTimeMillis() - startedAt)
+                if (remaining > 0) delay(remaining)
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
+        }
+    }
+
+    /**
+     * 登录状态变化（由界面观察到 AuthHolder 变化后转发进来）。
+     *
+     * 只在「未登录 → 已登录」这个跳变时强制刷新，避免每次重组都重复请求。
+     */
+    fun onAuthChanged(loggedIn: Boolean) {
+        val previous = lastKnownLoggedIn
+        lastKnownLoggedIn = loggedIn
+
+        _uiState.update {
+            it.copy(
+                isLoggedIn = loggedIn,
+                showLoginPrompt = if (loggedIn) false else it.showLoginPrompt
+            )
+        }
+
+        if (previous == false && loggedIn) {
+            _uiState.update { it.copy(autoLoginHint = null) }
+            reload(forceRefresh = true)
+        }
+    }
+
+    /** 退出登录：清内存 + 清磁盘 + 清缓存，回落到示例数据 */
+    fun logout() {
+        viewModelScope.launch {
+            AuthHolder.clear(getApplication())
+            repository.clearAuth()
+            repository.clearCache()
+            lastKnownLoggedIn = false
+            _uiState.update {
+                it.copy(
+                    isLoggedIn = false,
+                    autoLoginHint = null,
+                    showLoginPrompt = false,
+                    isLoading = true
+                )
+            }
+            val loaded = repository.loadSchedule()
+            _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+        }
+    }
+
+    /** 用户关掉底部登录引导条，或已经点了「去登录」 */
+    fun dismissLoginPrompt() {
+        _uiState.update { it.copy(showLoginPrompt = false) }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 内部
+    // ───────────────────────────────────────────────────────────
+    private suspend fun handleSessionExpired() {
+        AuthHolder.clear(getApplication())
+        repository.clearAuth()
+        lastKnownLoggedIn = false
+        _uiState.update { it.copy(isLoggedIn = false) }
+    }
+
+    companion object {
+        private const val TAG = "ScheduleViewModel"
+
+        /**
+         * 下拉刷新指示器的最短显示时长（毫秒）。
+         *
+         * 800ms 是 Material Design 建议的「既能感知到、又不觉得卡」的时长。
+         */
+        private const val MIN_REFRESH_MS = 800L
+    }
+}
