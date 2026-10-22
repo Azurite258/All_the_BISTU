@@ -148,6 +148,21 @@ class SessionStore(context: Context) {
     /** 最后保存时间（调试用） */
     fun savedAt(): Long = prefs.getLong(KEY_SAVED_AT, 0L)
 
+    // ── 学号记忆（自动登录用）──
+    //
+    // 只记学号，**绝不保存密码**：
+    // 密码仅用于本地 SM2 加密后发给学校，不做任何持久化。
+
+    /** 记住上次登录成功的学号 */
+    fun saveUsername(username: String) {
+        if (username.isBlank()) return
+        prefs.edit().putString(KEY_USERNAME, username).apply()
+        Log.d(TAG, "saveUsername: 已记住学号")
+    }
+
+    /** 读取上次登录的学号（用于登录页预填） */
+    fun loadUsername(): String = prefs.getString(KEY_USERNAME, "").orEmpty()
+
     /** 清空会话 */
     fun clear() {
         prefs.edit()
@@ -157,10 +172,21 @@ class SessionStore(context: Context) {
         Log.d(TAG, "clear: 会话已清除")
     }
 
+    /** 清空会话 + 学号（退出登录时用） */
+    fun clearAll() {
+        prefs.edit()
+            .remove(KEY_COOKIES)
+            .remove(KEY_SAVED_AT)
+            .remove(KEY_USERNAME)
+            .apply()
+        Log.d(TAG, "clearAll: 会话与学号已清除")
+    }
+
     companion object {
         private const val TAG = "SessionStore"
         private const val PREFS_NAME = "auth_session"
         private const val KEY_COOKIES = "cookies"
         private const val KEY_SAVED_AT = "saved_at"
+        private const val KEY_USERNAME = "username"
     }
 }

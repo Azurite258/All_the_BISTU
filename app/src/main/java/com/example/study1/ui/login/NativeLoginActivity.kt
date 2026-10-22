@@ -26,7 +26,9 @@ import com.example.study1.data.auth.BistuAuth
 import com.example.study1.data.auth.JwxtApi
 import com.example.study1.data.auth.SessionStore
 import com.example.study1.ui.theme.Study1Theme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -113,6 +115,57 @@ object AuthHolder {
         }
     }
 
+    /**
+     * 自动登录：尝试用已持久化的 Cookie 静默恢复登录态。
+     *
+     * 与 [restore] 的区别：
+     *  - [restore] 只在 App 启动时调一次，用于还原内存中的 BistuAuth
+     *  - [autoLogin] 是「确保登录可用」的入口
+     *
+     * **不做网络校验**（刻意的）：校验会产生一次请求，
+     * 网络差时（连接超时 20s）会把首屏卡住。这里只负责把 Cookie 装回内存，
+     * 真正的有效性由随后的 [ScheduleRepository.loadSchedule] 判定——
+     * 它失败时会触发 onSessionExpired 回调清理会话。
+     *
+     * 注意：**不会重新输入账号密码**。不保存密码是刻意设计（安全优先）。
+     */
+    fun autoLogin(context: Context): AutoLoginResult {
+        appContext = context.applicationContext
+
+        // ① 内存里已经有可用会话 → 直接复用
+        val existing = auth
+        if (existing != null && existing.isLoggedIn()) {
+            Log.d("AuthHolder", "autoLogin: 内存会话可用，直接复用")
+            return AutoLoginResult.Success(reusedFromMemory = true)
+        }
+
+        // ② 尝试从磁盘恢复
+        val stored = SessionStore(context).load()
+        if (stored.isEmpty()) {
+            Log.d("AuthHolder", "autoLogin: 没有持久化会话，需要手动登录")
+            return AutoLoginResult.NeedManual(reason = "没有保存的登录状态")
+        }
+
+        val newAuth = BistuAuth()
+        val count = newAuth.restoreCookies(stored)
+        if (count == 0) {
+            Log.d("AuthHolder", "autoLogin: Cookie 还原失败，需要手动登录")
+            SessionStore(context).clear()
+            return AutoLoginResult.NeedManual(reason = "登录状态已损坏")
+        }
+
+        // ③ 装上即可，不阻塞首屏。有效性交给后续请求判定。
+        auth = newAuth
+        isLoggedIn = newAuth.isLoggedIn()
+        restoredFromDisk = isLoggedIn
+        Log.d("AuthHolder", "autoLogin: 恢复 $count 个 Cookie，isLoggedIn=$isLoggedIn")
+        return if (isLoggedIn) {
+            AutoLoginResult.Success(reusedFromMemory = false)
+        } else {
+            AutoLoginResult.NeedManual(reason = "登录状态不完整")
+        }
+    }
+
     /** 退出登录：清内存 + 清磁盘 */
     fun clear(context: Context? = null) {
         auth?.clearCookies()
@@ -122,12 +175,24 @@ object AuthHolder {
         // 复位恢复标记：退出后若用户重新登录并重启，仍应能正常恢复
         restored = false
         val ctx = context ?: appContext
-        if (ctx != null) SessionStore(ctx).clear()
+        if (ctx != null) SessionStore(ctx).clearAll()
         Log.d("AuthHolder", "clear: 已退出登录")
     }
 
     /** Application Context（由 restore / setAuth 注入） */
     private var appContext: Context? = null
+}
+
+/** 自动登录结果 */
+sealed interface AutoLoginResult {
+    /** 登录可用 */
+    data class Success(
+        /** true 表示直接复用了内存中的会话，没有走磁盘 */
+        val reusedFromMemory: Boolean
+    ) : AutoLoginResult
+
+    /** 需要用户手动登录 */
+    data class NeedManual(val reason: String) : AutoLoginResult
 }
 
 /**
@@ -163,7 +228,8 @@ fun NativeLoginScreen(
     val context = LocalContext.current
     val auth = remember { BistuAuth() }
 
-    var username by remember { mutableStateOf("") }
+    // 预填上次登录的学号（只记学号，不保存密码）
+    var username by remember { mutableStateOf(SessionStore(context).loadUsername()) }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
@@ -266,6 +332,8 @@ fun NativeLoginScreen(
 
                                 // 保存到全局并持久化，供主界面使用 & 下次免登录
                                 AuthHolder.setAuth(auth, context)
+                                // 记住学号（只记学号，不保存密码）
+                                SessionStore(context).saveUsername(username.trim())
                                 addLog("✅ 会话已保存，下次启动免登录")
                                 success = true
                             } else {

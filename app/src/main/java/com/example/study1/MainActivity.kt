@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -92,18 +93,36 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
 
     var loadResult by remember { mutableStateOf<LoadResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    // 下拉刷新中的状态（与首次加载的 isLoading 分开，避免整页转圈）
+    var isRefreshing by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     // 登录状态变化触发器（登录成功后自增，触发重新加载）
     var loginVersion by remember { mutableIntStateOf(0) }
+    // 自动登录失败原因（用于提示用户）
+    var autoLoginHint by remember { mutableStateOf<String?>(null) }
 
+    /** 首次加载 / 普通重新加载 */
     fun reload(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            // 把全局登录态同步给 repository
             com.example.study1.ui.login.AuthHolder.auth?.let { repository.setAuth(it) }
             if (forceRefresh) repository.clearCache()
             loadResult = repository.loadSchedule()
             isLoading = false
+        }
+    }
+
+    /** 下拉刷新：保留当前内容，只在顶部显示刷新指示器 */
+    fun pullRefresh() {
+        scope.launch {
+            isRefreshing = true
+            try {
+                com.example.study1.ui.login.AuthHolder.auth?.let { repository.setAuth(it) }
+                // 下拉 = 强制从网络拉最新
+                loadResult = repository.loadSchedule(forceRefresh = true)
+            } finally {
+                isRefreshing = false
+            }
         }
     }
 
@@ -117,11 +136,24 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
         }
     }
 
-    // 首次加载：先从磁盘恢复会话，再加载课表
+    // 首次加载：先尝试自动登录（复用持久化 Cookie），再加载课表
     LaunchedEffect(Unit) {
-        val restored = com.example.study1.ui.login.AuthHolder.restore(context)
-        android.util.Log.d("MainScreen", "启动恢复会话: $restored")
-        reload()
+        val result = com.example.study1.ui.login.AuthHolder.autoLogin(context)
+        android.util.Log.d("MainScreen", "自动登录结果: $result")
+        when (result) {
+            is com.example.study1.ui.login.AutoLoginResult.Success -> {
+                autoLoginHint = null
+                // 自动登录成功 → 强制从网络拉最新课表
+                isLoading = true
+                com.example.study1.ui.login.AuthHolder.auth?.let { repository.setAuth(it) }
+                loadResult = repository.loadSchedule(forceRefresh = true)
+                isLoading = false
+            }
+            is com.example.study1.ui.login.AutoLoginResult.NeedManual -> {
+                autoLoginHint = result.reason
+                reload()
+            }
+        }
     }
 
     // 监听登录状态变化：登录成功后强制从网络刷新
@@ -186,9 +218,11 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
                     ScheduleTabContent(
                         loadResult = loadResult,
                         isLoading = isLoading,
+                        isRefreshing = isRefreshing,
                         isDark = isDark,
                         settings = settings,
-                        onRefresh = { reload(forceRefresh = true) },
+                        autoLoginHint = autoLoginHint,
+                        onRefresh = { pullRefresh() },
                         onOpenSettings = { showSettings = true },
                         onOpenLogin = {
                             context.startActivity(
@@ -224,8 +258,10 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
 private fun ScheduleTabContent(
     loadResult: LoadResult?,
     isLoading: Boolean,
+    isRefreshing: Boolean,
     isDark: Boolean,
     settings: AppSettings,
+    autoLoginHint: String?,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
@@ -240,6 +276,8 @@ private fun ScheduleTabContent(
             isDark = isDark,
             settings = settings,
             isLoggedIn = com.example.study1.ui.login.AuthHolder.isLoggedIn,
+            isRefreshing = isRefreshing,
+            autoLoginHint = autoLoginHint,
             onRefresh = onRefresh,
             onOpenSettings = onOpenSettings,
             onOpenLogin = onOpenLogin
@@ -271,6 +309,8 @@ private fun ScheduleScreen(
     isDark: Boolean,
     settings: AppSettings,
     isLoggedIn: Boolean,
+    isRefreshing: Boolean = false,
+    autoLoginHint: String? = null,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
@@ -320,18 +360,31 @@ private fun ScheduleScreen(
                             if (isLoggedIn) {
                                 // 已登录却仍在展示示例数据 → 说明本次同步失败
                                 append(
-                                    if (source == Source.ASSETS) " · 同步失败，可下拉重试"
+                                    if (source == Source.ASSETS) " · 同步失败"
                                     else " · 已登录"
                                 )
                             }
                         },
                         fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         color = when {
                             source == Source.ASSETS && isLoggedIn -> Color(0xFFE65100)
                             isLoggedIn -> Color(0xFF2E7D32)
                             else -> sourceColor(source)
                         }
                     )
+                    // 自动登录未成功时的提示（点击可去登录）
+                    if (!isLoggedIn && !autoLoginHint.isNullOrBlank()) {
+                        Text(
+                            text = "$autoLoginHint · 点右上角头像登录",
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = Color(0xFFE65100),
+                            modifier = Modifier.clickable(onClick = onOpenLogin)
+                        )
+                    }
                 }
 
                 // 圆形图标按钮（HyperOS 风格）
@@ -355,11 +408,17 @@ private fun ScheduleScreen(
             }
         }
     ) { padding ->
-        Column(
+        // 下拉刷新：包住整个内容区，周次卡片与课表都能下拉
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
             // ── 周次切换卡片 ──
             WeekSelector(
                 currentWeek = currentWeek,
@@ -423,6 +482,7 @@ private fun ScheduleScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
