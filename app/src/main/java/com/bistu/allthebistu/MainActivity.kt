@@ -178,7 +178,8 @@ private fun AppRoot(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 96.dp)
+                // 与课表卡片的底部留白保持一致，两条底边才在同一条线上
+                .padding(bottom = HyperSpacing.contentBottom)
         ) {
             LoginPromptBar(
                 onLogin = { openLogin() },

@@ -66,4 +66,12 @@ object HyperSpacing {
     val medium = 12.dp
     /** 大间距 */
     val large = 20.dp
+
+    /**
+     * 内容区底部留白：给悬浮导航胶囊让出的空间。
+     *
+     * 课表卡片和底部登录引导条都用这一个值，
+     * 两者的底边才能落在同一条线上（改一处即可同步）。
+     */
+    val contentBottom = 88.dp
 }

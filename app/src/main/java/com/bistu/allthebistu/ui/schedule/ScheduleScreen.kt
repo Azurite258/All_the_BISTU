@@ -273,7 +273,8 @@ private fun ScheduleContent(
                             start = HyperSpacing.pageHorizontal,
                             end = HyperSpacing.pageHorizontal,
                             // 底部留出悬浮导航栏的空间（胶囊高度 + 上下边距）
-                            bottom = 88.dp
+                            // 与登录引导条共用同一个常量，保证两者底边对齐
+                            bottom = HyperSpacing.contentBottom
                         )
                         .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surface)
