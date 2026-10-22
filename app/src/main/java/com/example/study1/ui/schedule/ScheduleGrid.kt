@@ -82,12 +82,10 @@ fun ScheduleGrid(
     Column(modifier = modifier) {
         // ══════ 表头：月份 + 星期 + 日期 ══════
         Row(modifier = Modifier.width(totalWidth)) {
-            // 左上角：显示月份
+            // 左上角：显示月份（无边框无背景）
             Box(
                 modifier = Modifier
-                    .size(width = TimeColumnWidth, height = HeaderHeight)
-                    .background(headerBg)
-                    .border(0.5.dp, borderColor),
+                    .size(width = TimeColumnWidth, height = HeaderHeight),
                 contentAlignment = Alignment.Center
             ) {
                 val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
@@ -108,7 +106,7 @@ fun ScheduleGrid(
                 }
             }
 
-            // 7 天：星期 + 日期
+            // 7 天：星期 + 日期（今天只加黑，不改变背景）
             DayLabels.forEachIndexed { index, label ->
                 val dayNum = index + 1
                 val isToday = dayNum == todayDayOfWeek
@@ -116,9 +114,7 @@ fun ScheduleGrid(
 
                 Column(
                     modifier = Modifier
-                        .size(width = DayColumnWidth, height = HeaderHeight)
-                        .background(if (isToday) todayBg else headerBg)
-                        .border(0.5.dp, borderColor),
+                        .size(width = DayColumnWidth, height = HeaderHeight),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -126,13 +122,16 @@ fun ScheduleGrid(
                         text = label,
                         fontSize = 12.sp,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isToday) todayTextColor else MaterialTheme.colorScheme.onSurface
+                        color = if (isToday) MaterialTheme.colorScheme.onSurface
+                        else timeTextColor
                     )
                     if (dateText != null) {
                         Text(
                             text = dateText,
                             fontSize = 9.sp,
-                            color = if (isToday) todayTextColor else timeTextColor
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isToday) MaterialTheme.colorScheme.onSurface
+                            else timeTextColor
                         )
                     }
                 }
@@ -142,15 +141,13 @@ fun ScheduleGrid(
         // ══════ 主体 ══════
         Row(modifier = Modifier.width(totalWidth)) {
 
-            // ① 左侧节次列：节次号 + 开始/结束时间
+            // ① 左侧节次列：节次号 + 开始/结束时间（无边框，无背景）
             Column {
                 periods.forEach { period ->
                     val pt = PeriodTimes.of(period)
                     Box(
                         modifier = Modifier
-                            .size(width = TimeColumnWidth, height = PeriodRowHeight)
-                            .background(headerBg)
-                            .border(0.5.dp, borderColor),
+                            .size(width = TimeColumnWidth, height = PeriodRowHeight),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
@@ -184,20 +181,17 @@ fun ScheduleGrid(
                 }
             }
 
-            // ② 7 天区域
+            // ② 7 天区域（无网格线，纯白底）
             Box {
-                // 背景网格
+                // 背景：纯色，不画网格线，不高亮今天整列
                 Column {
                     periods.forEach { _ ->
                         Row {
-                            DayLabels.forEachIndexed { index, _ ->
-                                val dayNum = index + 1
-                                val isToday = dayNum == todayDayOfWeek
+                            DayLabels.forEachIndexed { _, _ ->
                                 Box(
                                     modifier = Modifier
                                         .size(width = DayColumnWidth, height = PeriodRowHeight)
-                                        .background(if (isToday) todayBg else cellBg)
-                                        .border(0.5.dp, borderColor)
+                                        .background(cellBg)
                                 )
                             }
                         }
