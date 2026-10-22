@@ -38,6 +38,31 @@ private val DayColumnWidth = 44.dp
 private val PeriodRowHeight = 56.dp
 private val HeaderHeight = 46.dp
 
+/**
+ * 字号规范。
+ *
+ * 课表是 7 列平分屏幕，横向空间最紧：一行大约只能放 4 个汉字。
+ * 实测 10sp 和 9sp 都是 4 个字（48dp 列宽 - 内边距 ≈ 44dp，
+ * 10sp × 4 = 40dp 仍有余量），所以课程名放到 10sp 不会多换行，
+ * 但再往上到 11sp 就会掉成 3 个字，不要把 CourseTitleSize 再加大。
+ *
+ * 纵向同理：行高 56dp 时，2 节的课块（112dp）要装下
+ * 3 行课程名 + 时间 + 教室，加大字号必须同时核对这个预算。
+ */
+private val HeaderWeekdaySize = 13.sp
+private val HeaderDateSize = 10.sp
+private val HeaderMonthSize = 12.sp
+
+private val PeriodNumberSize = 14.sp
+private val PeriodTimeSize = 8.sp
+
+private val CourseTitleSize = 10.sp
+/** 中文行距给到 1.3 倍，10sp 的字挤在 12.5 里会显得发闷 */
+private val CourseTitleLineHeight = 13.sp
+private val CourseTimeSize = 8.sp
+private val CourseRoomSize = 9.sp
+private val CourseRoomLineHeight = 11.sp
+
 /** 网格总宽度：时间列 + 7 天 */
 private val GridTotalWidth = TimeColumnWidth + DayColumnWidth * 7
 
@@ -130,7 +155,7 @@ fun ScheduleGrid(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = monthLabel,
-                                fontSize = 11.sp,
+                                fontSize = HeaderMonthSize,
                                 fontWeight = FontWeight.Medium,
                                 color = timeTextColor
                             )
@@ -157,7 +182,7 @@ fun ScheduleGrid(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 12.sp,
+                            fontSize = HeaderWeekdaySize,
                             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                             color = if (isToday) MaterialTheme.colorScheme.onSurface
                             else timeTextColor
@@ -165,7 +190,7 @@ fun ScheduleGrid(
                         if (dateText != null) {
                             Text(
                                 text = dateText,
-                                fontSize = 9.sp,
+                                fontSize = HeaderDateSize,
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isToday) MaterialTheme.colorScheme.onSurface
                                 else timeTextColor
@@ -193,22 +218,22 @@ fun ScheduleGrid(
                             ) {
                                 Text(
                                     text = period.toString(),
-                                    fontSize = 13.sp,
+                                    fontSize = PeriodNumberSize,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isDark) Color(0xFFCCCCCC) else Color(0xFF666666)
                                 )
                                 if (pt != null) {
                                     Text(
                                         text = pt.startTime,
-                                        fontSize = 7.5.sp,
-                                        lineHeight = 9.sp,
+                                        fontSize = PeriodTimeSize,
+                                        lineHeight = 10.sp,
                                         color = timeTextColor,
                                         textAlign = TextAlign.Center
                                     )
                                     Text(
                                         text = pt.endTime,
-                                        fontSize = 7.5.sp,
-                                        lineHeight = 9.sp,
+                                        fontSize = PeriodTimeSize,
+                                        lineHeight = 10.sp,
                                         color = timeTextColor,
                                         textAlign = TextAlign.Center
                                     )
@@ -276,7 +301,8 @@ private fun CourseBlock(
     val blockHeight = periodRowHeight * course.sectionCount
 
     val sections = course.sectionCount
-    val showRoom = sections >= 2
+    // 教室为空时不画教室行：否则会渲染出一个孤零零的 "@"（示例数据里体育课就没排教室）
+    val showRoom = sections >= 2 && course.room.isNotBlank()
     val showTime = sections >= 2
 
     Box(
@@ -299,9 +325,9 @@ private fun CourseBlock(
             // 课程名
             Text(
                 text = course.name,
-                fontSize = 9.sp,
+                fontSize = CourseTitleSize,
                 fontWeight = FontWeight.Medium,
-                lineHeight = 11.sp,
+                lineHeight = CourseTitleLineHeight,
                 color = titleColor,
                 maxLines = if (sections >= 3) 4 else if (showRoom) 3 else 2,
                 overflow = TextOverflow.Ellipsis
@@ -311,8 +337,8 @@ private fun CourseBlock(
             if (showTime) {
                 Text(
                     text = course.beginTime,
-                    fontSize = 7.5.sp,
-                    lineHeight = 9.sp,
+                    fontSize = CourseTimeSize,
+                    lineHeight = 10.sp,
                     color = subColor.copy(alpha = 0.8f),
                     maxLines = 1
                 )
@@ -322,8 +348,8 @@ private fun CourseBlock(
             if (showRoom) {
                 Text(
                     text = "@${course.room}",
-                    fontSize = 8.sp,
-                    lineHeight = 10.sp,
+                    fontSize = CourseRoomSize,
+                    lineHeight = CourseRoomLineHeight,
                     color = subColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
