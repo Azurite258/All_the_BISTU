@@ -118,6 +118,19 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     var autoLoginHint by remember { mutableStateOf<String?>(null) }
     // 顶栏「添加日程」「日程提醒」的提示弹窗（功能尚未实现，先给明确反馈）
     var pendingFeature by remember { mutableStateOf<String?>(null) }
+    // 首次使用且未登录时的底部引导条（只展示一次）
+    var showLoginPrompt by remember { mutableStateOf(false) }
+
+    /** 跳转登录页（多处复用） */
+    fun openLogin() {
+        context.startActivity(
+            android.content.Intent(
+                context,
+                com.example.study1.ui.login.NativeLoginActivity::class.java
+            )
+        )
+        loginVersion++
+    }
 
     /** 首次加载 / 普通重新加载 */
     fun reload(forceRefresh: Boolean = false) {
@@ -177,6 +190,11 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             is com.example.study1.ui.login.AutoLoginResult.NeedManual -> {
                 autoLoginHint = result.reason
                 reload()
+                // 首次使用且未登录 → 底部弹一次登录引导
+                if (!settingsStore.hasShownLoginPrompt()) {
+                    showLoginPrompt = true
+                    settingsStore.markLoginPromptShown()
+                }
             }
         }
     }
@@ -263,15 +281,7 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
                         onAddEvent = { pendingFeature = "添加日程" },
                         onReminderSettings = { pendingFeature = "日程提醒" },
                         onOpenSettings = { showSettings = true },
-                        onOpenLogin = {
-                            context.startActivity(
-                                android.content.Intent(
-                                    context,
-                                    com.example.study1.ui.login.NativeLoginActivity::class.java
-                                )
-                            )
-                            loginVersion++
-                        }
+                        onOpenLogin = { openLogin() }
                     )
                 }
 
@@ -279,6 +289,27 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
                 MainTab.STUDY -> StudyScreen()
                 MainTab.PROFILE -> ProfileScreen()
             }
+        }
+
+        // 首次使用且未登录 → 底部引导条（只出现一次，点「去登录」跳转登录页）
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showLoginPrompt && !com.example.study1.ui.login.AuthHolder.isLoggedIn,
+            enter = androidx.compose.animation.fadeIn() +
+                    androidx.compose.animation.slideInVertically { it },
+            exit = androidx.compose.animation.fadeOut() +
+                    androidx.compose.animation.slideOutVertically { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 96.dp)
+        ) {
+            LoginPromptBar(
+                onLogin = {
+                    showLoginPrompt = false
+                    openLogin()
+                },
+                onDismiss = { showLoginPrompt = false }
+            )
         }
 
         // 悬浮导航栏（底部加 insets，避开手势导航条/虚拟按键）
@@ -289,6 +320,52 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)
         )
+    }
+}
+
+/**
+ * 底部登录引导条（首次使用且未登录时展示一次）。
+ */
+@Composable
+private fun LoginPromptBar(
+    onLogin: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HyperSpacing.pageHorizontal)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "还没登录",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "登录后可同步真实课表，要去登录吗？",
+                fontSize = 11.sp,
+                maxLines = 2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        TextButton(onClick = onDismiss) {
+            Text("稍后", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Button(
+            onClick = onLogin,
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            Text("去登录", fontSize = 13.sp)
+        }
     }
 }
 
@@ -427,7 +504,7 @@ private fun ScheduleScreen(
                     // 自动登录未成功时的提示（点击可去登录）
                     if (!isLoggedIn && !autoLoginHint.isNullOrBlank()) {
                         Text(
-                            text = "$autoLoginHint · 点右上角头像登录",
+                            text = "$autoLoginHint · 点此登录",
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
