@@ -22,13 +22,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
+import com.bistu.allthebistu.data.prefs.FontLevel
 import com.bistu.allthebistu.data.prefs.ThemeMode
 import com.bistu.allthebistu.ui.schedule.CourseColors
+import com.bistu.allthebistu.ui.schedule.CourseTypography
+import kotlin.math.roundToInt
 
 /**
  * 设置页面
@@ -39,6 +45,7 @@ fun SettingsScreen(
     settings: AppSettings,
     onThemeModeChange: (Int) -> Unit,
     onColorSchemeChange: (Int) -> Unit,
+    onFontLevelChange: (Int) -> Unit = {},
     onBack: () -> Unit,
     isLoggedIn: Boolean = false,
     onLogout: () -> Unit = {}
@@ -135,6 +142,16 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
+            // ══════ 课表字体 ══════
+            SectionTitle("课表字体")
+
+            FontLevelSelector(
+                level = settings.fontLevel,
+                onChange = onFontLevelChange
+            )
+
+            Spacer(Modifier.height(24.dp))
+
             // ══════ 账号 ══════
             SectionTitle("账号")
 
@@ -180,7 +197,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
 
             Text(
-                text = "提示：切换配色后，课表会立即生效。",
+                text = "提示：切换配色或字体后，课表会立即生效。",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -281,5 +298,158 @@ private fun ColorSchemeOption(
                 modifier = Modifier.size(20.dp)
             )
         }
+    }
+}
+
+/**
+ * 课表字体挡位选择。
+ *
+ * 用 Slider 而不是三个单选，是因为「字号」天生是连续量，
+ * 拖动时能直观看到预览块的变化；但落点只有 3 个（steps = 1），
+ * 不会出现半档这种奇怪的值。
+ */
+@Composable
+private fun FontLevelSelector(
+    level: Int,
+    onChange: (Int) -> Unit
+) {
+    val safeLevel = FontLevel.sanitize(level)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "字体大小",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "${FontLevel.label(safeLevel)} · 课名一行 ${CourseTypography.charsPerLine(safeLevel)} 个字",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        Slider(
+            value = safeLevel.toFloat(),
+            onValueChange = { onChange(it.roundToInt()) },
+            valueRange = FontLevel.SMALL.toFloat()..FontLevel.LARGE.toFloat(),
+            // 3 个落点之间 2 段间隔，中间插 1 个刻度
+            steps = 1,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "小",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "中",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Text(
+                text = "大",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        FontPreview(level = safeLevel)
+    }
+}
+
+/**
+ * 预览：按真实列宽渲染一个「2 节课」的课块，和课表里看到的完全同构
+ * （课名 + 时间 + 教室三行）。
+ *
+ * 不做「1 节课」的预览是因为那种课块在课表里本来就不显示时间和教室
+ * （56dp 放不下三行），预览要能代表实际效果才不会被误导。
+ */
+@Composable
+private fun FontPreview(level: Int) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
+    val columnWidth = CourseTypography.columnWidthDp(screenWidthDp)
+    val chars = CourseTypography.charsPerLine(level)
+    val titleSp = CourseTypography.titleSizeSp(columnWidth, chars)
+
+    // 跟随当前主题，避免深色模式下预览块依然是浅色
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val sample = "现代前沿传感技术"
+    val bg = CourseColors.backgroundOf(
+        originalHex = "#D3EAFD",
+        courseName = sample,
+        scheme = CourseColorScheme.SCHOOL,
+        isDark = isDark
+    )
+    val fg = CourseColors.textColorOf(bg, isDark)
+    val sub = CourseColors.subTextColorOf(bg, isDark)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .width(columnWidth.dp)
+                // 2 节课的高度 = 2 × 56dp，和课表一致
+                .height(112.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(bg)
+                // 和 ScheduleGrid 的 CourseBlock 同样的内缩：外层 1.5dp + 内层 2dp
+                .padding(1.5.dp)
+        ) {
+            Column(modifier = Modifier.padding(2.dp)) {
+                Text(
+                    text = sample,
+                    fontSize = titleSp.sp,
+                    lineHeight = (titleSp * 1.3f).sp,
+                    fontWeight = FontWeight.Medium,
+                    color = fg,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = "09:50",
+                    fontSize = (titleSp * 0.8f).sp,
+                    lineHeight = (titleSp * 0.8f * 1.25f).sp,
+                    color = sub.copy(alpha = 0.8f),
+                    maxLines = 1
+                )
+                Text(
+                    text = "@教室1",
+                    fontSize = (titleSp * 0.9f).sp,
+                    lineHeight = (titleSp * 0.9f * 1.25f).sp,
+                    color = sub,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Text(
+            text = "预览按手机真实列宽渲染，和课表里一模一样",
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
     }
 }

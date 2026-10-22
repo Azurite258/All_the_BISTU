@@ -294,6 +294,7 @@ private fun ScheduleContent(
                                 colorScheme = settings.colorScheme,
                                 isDark = isDark,
                                 termStartDate = TERM_START_DATE,
+                                fontLevel = settings.fontLevel,
                                 onCourseClick = { selectedCourse = it }
                             )
                         }

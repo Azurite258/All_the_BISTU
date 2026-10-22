@@ -17,11 +17,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
+import com.bistu.allthebistu.data.prefs.FontLevel
 
 // ── 尺寸常量（HyperOS 风格：圆角更大、留白更足）──
 private val TimeColumnWidth = 42.dp
@@ -39,15 +41,14 @@ private val PeriodRowHeight = 56.dp
 private val HeaderHeight = 46.dp
 
 /**
- * 字号规范。
+ * 字号规范（表头与节次列，固定不随设置变化）。
  *
- * 课表是 7 列平分屏幕，横向空间最紧：一行大约只能放 4 个汉字。
- * 实测 10sp 和 9sp 都是 4 个字（48dp 列宽 - 内边距 ≈ 44dp，
- * 10sp × 4 = 40dp 仍有余量），所以课程名放到 10sp 不会多换行，
- * 但再往上到 11sp 就会掉成 3 个字，不要把 CourseTitleSize 再加大。
+ * 随「字体大小」设置变化的是课程块里的字，换算逻辑见
+ * [CourseTypography]：按实际列宽反算，保证每行能放 5/4/3 个汉字。
  *
- * 纵向同理：行高 56dp 时，2 节的课块（112dp）要装下
- * 3 行课程名 + 时间 + 教室，加大字号必须同时核对这个预算。
+ * 纵向预算：行高 56dp 时，2 节的课块（112dp）要装下
+ * 3 行课程名 + 时间 + 教室；最大档（约 14sp）时
+ * 3×18 + 11 + 13 ≈ 78dp，仍在 105dp 可用高度内。
  */
 private val HeaderWeekdaySize = 13.sp
 private val HeaderDateSize = 10.sp
@@ -56,12 +57,13 @@ private val HeaderMonthSize = 12.sp
 private val PeriodNumberSize = 14.sp
 private val PeriodTimeSize = 8.sp
 
-private val CourseTitleSize = 10.sp
-/** 中文行距给到 1.3 倍，10sp 的字挤在 12.5 里会显得发闷 */
-private val CourseTitleLineHeight = 13.sp
-private val CourseTimeSize = 8.sp
-private val CourseRoomSize = 9.sp
-private val CourseRoomLineHeight = 11.sp
+/** 课程块内三种字号的相对比例：课名 : 教室 : 时间 = 1 : 0.9 : 0.8 */
+private const val ROOM_RATIO = 0.9f
+private const val TIME_RATIO = 0.8f
+
+/** 中文行距给到 1.3 倍，字号多大都不该挤在一起 */
+private const val TITLE_LINE_HEIGHT_RATIO = 1.3f
+private const val ROOM_LINE_HEIGHT_RATIO = 1.25f
 
 /** 网格总宽度：时间列 + 7 天 */
 private val GridTotalWidth = TimeColumnWidth + DayColumnWidth * 7
@@ -91,6 +93,7 @@ private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
  * @param termStartDate 学期第 1 周周一的日期，格式 "yyyy-MM-dd"；为空则不显示日期
  * @param colorScheme 配色方案：0=学校 1=柔和 2=高对比
  * @param isDark 是否深色模式
+ * @param fontLevel 课程块字体挡位：0=一行5字 1=一行4字 2=一行3字
  * @param onCourseClick 点击课程块的回调；为 null 时课程块不可点击
  */
 @Composable
@@ -101,6 +104,7 @@ fun ScheduleGrid(
     colorScheme: Int = CourseColorScheme.SCHOOL,
     isDark: Boolean = false,
     termStartDate: String? = null,
+    fontLevel: Int = FontLevel.MEDIUM,
     onCourseClick: ((Course) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -140,6 +144,11 @@ fun ScheduleGrid(
         } else {
             DayColumnWidth
         }
+
+        // 课程块字号：按真实列宽反算，保证这个挡位下一行正好放得下目标字数
+        val charsPerLine = CourseTypography.charsPerLine(fontLevel)
+        val titleSp = CourseTypography.titleSizeSp(dayWidth.value, charsPerLine)
+        val blockText = CourseBlockText.of(titleSp)
 
         Column(modifier = Modifier.width(totalWidth)) {
             // ══════ 表头：月份 + 星期 + 日期 ══════
@@ -268,12 +277,35 @@ fun ScheduleGrid(
                             isDark = isDark,
                             dayColumnWidth = dayWidth,
                             periodRowHeight = PeriodRowHeight,
+                            text = blockText,
                             onClick = onCourseClick?.let { click -> { click(course) } }
                         )
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * 课程块里三种字的字号，由课程名字号按固定比例推导，
+ * 保证切换挡位时三者的相对大小不变。
+ */
+private data class CourseBlockText(
+    val title: TextUnit,
+    val titleLineHeight: TextUnit,
+    val room: TextUnit,
+    val roomLineHeight: TextUnit,
+    val time: TextUnit
+) {
+    companion object {
+        fun of(titleSp: Float): CourseBlockText = CourseBlockText(
+            title = titleSp.sp,
+            titleLineHeight = (titleSp * TITLE_LINE_HEIGHT_RATIO).sp,
+            room = (titleSp * ROOM_RATIO).sp,
+            roomLineHeight = (titleSp * ROOM_RATIO * ROOM_LINE_HEIGHT_RATIO).sp,
+            time = (titleSp * TIME_RATIO).sp
+        )
     }
 }
 
@@ -284,6 +316,7 @@ private fun CourseBlock(
     isDark: Boolean,
     dayColumnWidth: Dp,
     periodRowHeight: Dp,
+    text: CourseBlockText,
     onClick: (() -> Unit)? = null
 ) {
     val bgColor = remember(course.colorHex, course.name, colorScheme, isDark) {
@@ -325,9 +358,9 @@ private fun CourseBlock(
             // 课程名
             Text(
                 text = course.name,
-                fontSize = CourseTitleSize,
+                fontSize = text.title,
                 fontWeight = FontWeight.Medium,
-                lineHeight = CourseTitleLineHeight,
+                lineHeight = text.titleLineHeight,
                 color = titleColor,
                 maxLines = if (sections >= 3) 4 else if (showRoom) 3 else 2,
                 overflow = TextOverflow.Ellipsis
@@ -337,8 +370,9 @@ private fun CourseBlock(
             if (showTime) {
                 Text(
                     text = course.beginTime,
-                    fontSize = CourseTimeSize,
-                    lineHeight = 10.sp,
+                    fontSize = text.time,
+                    // 行高必须跟着字号走，写死会在最大档把字裁掉半截
+                    lineHeight = text.time * 1.25f,
                     color = subColor.copy(alpha = 0.8f),
                     maxLines = 1
                 )
@@ -348,8 +382,8 @@ private fun CourseBlock(
             if (showRoom) {
                 Text(
                     text = "@${course.room}",
-                    fontSize = CourseRoomSize,
-                    lineHeight = CourseRoomLineHeight,
+                    fontSize = text.room,
+                    lineHeight = text.roomLineHeight,
                     color = subColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

@@ -129,6 +129,7 @@ private fun AppRoot(
             settings = settings,
             onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
             onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
+            onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
             onBack = { showSettings = false },
             isLoggedIn = uiState.isLoggedIn,
             onLogout = {

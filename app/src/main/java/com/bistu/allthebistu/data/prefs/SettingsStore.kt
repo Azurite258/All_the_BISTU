@@ -15,7 +15,9 @@ data class AppSettings(
     /** 主题模式：0=跟随系统 1=浅色 2=深色 */
     val themeMode: Int = ThemeMode.SYSTEM,
     /** 课程配色方案：0=学校配色 1=柔和 2=高对比 */
-    val colorScheme: Int = CourseColorScheme.SCHOOL
+    val colorScheme: Int = CourseColorScheme.SCHOOL,
+    /** 课表字体挡位：0=小(5字/行) 1=中(4字/行) 2=大(3字/行) */
+    val fontLevel: Int = FontLevel.MEDIUM
 )
 
 object ThemeMode {
@@ -41,13 +43,15 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val THEME_MODE = intPreferencesKey("theme_mode")
         val COLOR_SCHEME = intPreferencesKey("color_scheme")
+        val FONT_LEVEL = intPreferencesKey("font_level")
     }
 
     /** 读取设置流 */
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             themeMode = prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM,
-            colorScheme = prefs[Keys.COLOR_SCHEME] ?: CourseColorScheme.SCHOOL
+            colorScheme = prefs[Keys.COLOR_SCHEME] ?: CourseColorScheme.SCHOOL,
+            fontLevel = FontLevel.sanitize(prefs[Keys.FONT_LEVEL] ?: FontLevel.MEDIUM)
         )
     }
 
@@ -59,5 +63,10 @@ class SettingsStore(private val context: Context) {
     /** 设置配色方案 */
     suspend fun setColorScheme(scheme: Int) {
         context.dataStore.edit { it[Keys.COLOR_SCHEME] = scheme }
+    }
+
+    /** 设置课表字体挡位 */
+    suspend fun setFontLevel(level: Int) {
+        context.dataStore.edit { it[Keys.FONT_LEVEL] = FontLevel.sanitize(level) }
     }
 }
