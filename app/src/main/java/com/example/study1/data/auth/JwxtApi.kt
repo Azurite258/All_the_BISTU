@@ -51,17 +51,17 @@ class JwxtApi(
                 "(KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36"
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    /**
+     * 直接复用 auth 的 redirectClient —— 它带同一个 CookieJar，
+     * CAS 登录拿到的 Cookie 会自动带上，不用手动拼 Cookie 头。
+     */
+    private val client: OkHttpClient
+        get() = auth.redirectClient
 
-    /** 构造带 Cookie 的请求 */
+    /** 构造请求（Cookie 由 CookieJar 自动管理） */
     private fun requestBuilder(url: String): Request.Builder {
-        val cookie = auth.getAllCookiesHeader()
         return Request.Builder()
             .url(url)
-            .addHeader("Cookie", cookie)
             .addHeader("User-Agent", UA)
             .addHeader("Referer", "$BASE/jwapp/sys/kbapp/*default/index.do")
             .addHeader("X-Requested-With", "XMLHttpRequest")
@@ -70,6 +70,7 @@ class JwxtApi(
     /** GET 请求 */
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         logger("GET $url")
+        logger("Cookie 详情:\n${auth.dumpCookies()}")
         client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             logger("GET 响应: HTTP ${resp.code}, 长度 ${body.length}")

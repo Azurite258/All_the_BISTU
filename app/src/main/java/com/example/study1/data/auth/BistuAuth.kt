@@ -99,12 +99,54 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     fun getCookie(name: String): String? =
         cookieStore.firstOrNull { it.name == name }?.value
 
+    /**
+     * 从 COOKIE_INFO cookie 解析 flowKey。
+     *
+     * 学校 SSO 的会话标识，登录和信息查询都必须带上。
+     * COOKIE_INFO 是 URL 编码的 JSON，形如 {"data":{"flowKey":"xxx"}}
+     */
+    fun getFlowKey(): String {
+        val raw = getCookie("COOKIE_INFO") ?: run {
+            logger("getFlowKey: COOKIE_INFO 不存在")
+            return ""
+        }
+        return try {
+            val decoded = java.net.URLDecoder.decode(raw, "UTF-8")
+            val key = JSONObject(decoded).optJSONObject("data")?.optString("flowKey") ?: ""
+            logger("getFlowKey: ${if (key.isNotBlank()) "成功 (${key.length} 字符)" else "解析为空"}")
+            key
+        } catch (e: Exception) {
+            logger("getFlowKey 解析失败: ${e.message}")
+            ""
+        }
+    }
+
     /** 取所有 Cookie（拼成请求头格式） */
     fun getAllCookiesHeader(url: String = "https://jwxt.bistu.edu.cn"): String {
-        val httpUrl = url.toHttpUrlOrNull() ?: return ""
-        return cookieStore
-            .filter { it.matches(httpUrl) }
-            .joinToString("; ") { "${it.name}=${it.value}" }
+        // 先尝试用 matches 精确匹配
+        val httpUrl = url.toHttpUrlOrNull()
+        val matched = if (httpUrl != null) {
+            cookieStore.filter { it.matches(httpUrl) }
+        } else emptyList()
+
+        // 如果匹配到的太少，退化为「全部发送」
+        // 原因：CAS 跳转后 Cookie 可能挂在 sso 域名下，但 jwxt 接口也需要
+        val useList = if (matched.size >= 3) matched else cookieStore
+
+        val header = useList.joinToString("; ") { "${it.name}=${it.value}" }
+        logger(
+            "getAllCookiesHeader: 全部=${cookieStore.size}, 匹配=${matched.size}, " +
+                    "使用=${useList.size}, 长度=${header.length}"
+        )
+        logger("Cookie 名称: ${cookieStore.joinToString(", ") { it.name }}")
+        return header
+    }
+
+    /** 获取所有 Cookie 的详细信息（调试用） */
+    fun dumpCookies(): String {
+        return cookieStore.joinToString("\n") { c ->
+            "  ${c.name} = ${c.value.take(40)} (domain=${c.domain}, path=${c.path})"
+        }
     }
 
     /** 是否已登录（有 TGC 或 JSESSIONID） */
@@ -117,21 +159,50 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     suspend fun getPublicKey(): String = withContext(Dispatchers.IO) {
         logger("getPublicKey: 开始")
 
-        // 先访问登录入口建立 session
+        // ① 先访问登录入口，建立 session 并拿 COOKIE_INFO
         val encodedService = java.net.URLEncoder.encode(UC_SERVICE, "UTF-8")
         val initUrl = "$SSO_BASE/login?service=$encodedService"
+        logger("getPublicKey: 访问入口 $initUrl")
+
         runCatching {
             redirectClient.newCall(
                 Request.Builder().url(initUrl).get().build()
-            ).execute().close()
+            ).execute().use { resp ->
+                logger("getPublicKey: 入口 HTTP ${resp.code}")
+                logger("getPublicKey: 入口最终 URL = ${resp.request.url}")
+
+                // 打印响应头里的 Set-Cookie
+                val setCookies = resp.headers.values("Set-Cookie")
+                setCookies.forEach { c ->
+                    logger("getPublicKey: Set-Cookie = ${c.take(120)}")
+                }
+                // 打印响应体（可能是登录页 HTML，含 flowKey）
+                val bodyText = resp.body?.string() ?: ""
+                logger("getPublicKey: 入口响应长度 ${bodyText.length}")
+
+                // 尝试从 HTML 里找 flowKey
+                val flowKeyRegex = Regex("""flowKey["']?\s*[:=]\s*["']([A-Za-z0-9_\-]+)["']""")
+                flowKeyRegex.find(bodyText)?.let {
+                    logger("getPublicKey: ⭐ HTML 里找到 flowKey = ${it.groupValues[1]}")
+                }
+            }
         }
 
-        // 请求公钥
+        logger("getPublicKey: 入口访问后 Cookie = [${cookieStore.joinToString(", ") { it.name }}]")
+
+        // ② 请求公钥
         val req = Request.Builder().url("$SSO_BASE/api/reset/rules").get().build()
         val body = client.newCall(req).execute().use { resp ->
+            logger("getPublicKey: rules HTTP ${resp.code}")
+            resp.headers.values("Set-Cookie").forEach { c ->
+                logger("getPublicKey: rules Set-Cookie = ${c.take(120)}")
+            }
             if (!resp.isSuccessful) throw AuthException("获取公钥失败: HTTP ${resp.code}")
             resp.body?.string() ?: throw AuthException("公钥响应为空")
         }
+
+        logger("getPublicKey: rules 响应 = ${body.take(300)}")
+        logger("getPublicKey: 当前 Cookie = [${cookieStore.joinToString(", ") { it.name }}]")
 
         val json = JSONObject(body)
         if (json.optInt("code") != 200) {
@@ -142,7 +213,14 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
             .getJSONObject("encrypt")
             .getString("publicKey")
 
-        logger("getPublicKey: 成功，长度 ${publicKey.length}")
+        val flowKey = getFlowKey()
+        if (flowKey.isBlank()) {
+            logger("⚠️ 未拿到 flowKey（COOKIE_INFO 缺失）")
+        } else {
+            logger("✅ flowKey 已获取 (${flowKey.length} 字符)")
+        }
+
+        logger("getPublicKey: 成功，公钥长度 ${publicKey.length}")
         publicKey
     }
 
@@ -150,19 +228,27 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     // 步骤 2：查询是否需要验证码 / MFA
     // ══════════════════════════════════════════════════════════
     suspend fun infoQuery(): JSONObject = withContext(Dispatchers.IO) {
-        logger("infoQuery: 开始")
+        val flowKey = getFlowKey()
+        logger("infoQuery: flowKey=${if (flowKey.isBlank()) "(空)" else "${flowKey.length}字符"}")
+
+        // 关键：必须是 JSON body，且带 flowKey
+        val body = JSONObject().apply {
+            put("username", "")
+            put("flowKey", flowKey)
+        }
 
         val req = Request.Builder()
             .url("$SSO_BASE/info-query")
-            .post("{}".toRequestBody(JSON_MEDIA))
+            .post(body.toString().toRequestBody(JSON_MEDIA))
             .build()
 
-        val body = client.newCall(req).execute().use { resp ->
+        val respBody = client.newCall(req).execute().use { resp ->
+            logger("infoQuery: HTTP ${resp.code}")
             resp.body?.string() ?: "{}"
         }
 
-        logger("infoQuery: ${body.take(200)}")
-        runCatching { JSONObject(body) }.getOrElse { JSONObject() }
+        logger("infoQuery: ${respBody.take(200)}")
+        runCatching { JSONObject(respBody) }.getOrElse { JSONObject() }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -281,14 +367,19 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         val encrypted = encryptPassword(password, publicKey)
         logger("login: 密码已加密，长度 ${encrypted.length}")
 
-        val body = FormBody.Builder()
-            .add("username", username)
-            .add("password", encrypted)
-            .build()
+        val flowKey = getFlowKey()
+        logger("login: flowKey=${if (flowKey.isBlank()) "(空)" else "${flowKey.length}字符"}")
+
+        // 关键：必须是 JSON body，且带 flowKey
+        val body = JSONObject().apply {
+            put("flowKey", flowKey)
+            put("username", username)
+            put("password", encrypted)
+        }
 
         val req = Request.Builder()
             .url("$SSO_BASE/username-password/login")
-            .post(body)
+            .post(body.toString().toRequestBody(JSON_MEDIA))
             .build()
 
         val respBody = client.newCall(req).execute().use { resp ->
@@ -298,9 +389,12 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
 
         val json = runCatching { JSONObject(respBody) }.getOrElse { JSONObject() }
         val code = json.optInt("code", -1)
-        val message = json.optString("message", "")
+        val message = json.optString("msg", "")
 
-        logger("login: code=$code message=$message")
+        logger("login: code=$code msg=$message")
+        if (code != SUCCESS_CODE) {
+            logger("login: 失败响应全文: ${respBody.take(300)}")
+        }
 
         LoginResult(
             code = code,
