@@ -41,6 +41,11 @@ import com.example.study1.ui.schedule.ScheduleGrid
 import com.example.study1.ui.settings.SettingsScreen
 import com.example.study1.ui.theme.HyperSpacing
 import com.example.study1.ui.theme.Study1Theme
+import com.example.study1.ui.CampusScreen
+import com.example.study1.ui.StudyScreen
+import com.example.study1.ui.ProfileScreen
+import com.example.study1.ui.navigation.FloatingBottomBar
+import com.example.study1.ui.navigation.MainTab
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -134,6 +139,68 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
         return
     }
 
+    // ── 当前选中的 Tab ──
+    var currentTab by remember { mutableStateOf(MainTab.SCHEDULE) }
+
+    // ── 主框架：内容区 + 悬浮导航栏 ──
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        // 内容区
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = if (currentTab == MainTab.SCHEDULE) 0.dp else 0.dp)
+        ) {
+            when (currentTab) {
+                MainTab.SCHEDULE -> {
+                    // 课表页（原有逻辑）
+                    ScheduleTabContent(
+                        loadResult = loadResult,
+                        isLoading = isLoading,
+                        isDark = isDark,
+                        settings = settings,
+                        onRefresh = { reload(forceRefresh = true) },
+                        onOpenSettings = { showSettings = true },
+                        onOpenLogin = {
+                            context.startActivity(
+                                android.content.Intent(
+                                    context,
+                                    com.example.study1.ui.login.NativeLoginActivity::class.java
+                                )
+                            )
+                            loginVersion++
+                        }
+                    )
+                }
+
+                MainTab.CAMPUS -> CampusScreen()
+                MainTab.STUDY -> StudyScreen()
+                MainTab.PROFILE -> ProfileScreen()
+            }
+        }
+
+        // 悬浮导航栏
+        FloatingBottomBar(
+            currentTab = currentTab,
+            onTabSelected = { currentTab = it },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+}
+
+/**
+ * 课表 Tab 的内容（把原来 MainScreen 里的分支逻辑抽出来）。
+ */
+@Composable
+private fun ScheduleTabContent(
+    loadResult: LoadResult?,
+    isLoading: Boolean,
+    isDark: Boolean,
+    settings: AppSettings,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenLogin: () -> Unit
+) {
     val result = loadResult
     when {
         isLoading && result == null -> LoadingScreen()
@@ -144,18 +211,9 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             isDark = isDark,
             settings = settings,
             isLoggedIn = com.example.study1.ui.login.AuthHolder.isLoggedIn,
-            onRefresh = { reload(forceRefresh = true) },
-            onOpenSettings = { showSettings = true },
-            onOpenLogin = {
-                context.startActivity(
-                    android.content.Intent(
-                        context,
-                        com.example.study1.ui.login.NativeLoginActivity::class.java
-                    )
-                )
-                // 从登录页返回后重新加载（登录成功会设置 AuthHolder）
-                loginVersion++
-            }
+            onRefresh = onRefresh,
+            onOpenSettings = onOpenSettings,
+            onOpenLogin = onOpenLogin
         )
         else -> ErrorScreen(result?.error)
     }
@@ -281,7 +339,8 @@ private fun ScheduleScreen(
                     .padding(
                         start = HyperSpacing.pageHorizontal,
                         end = HyperSpacing.pageHorizontal,
-                        bottom = HyperSpacing.cardGap
+                        // 底部留出悬浮导航栏的空间（胶囊高度 + 上下边距）
+                        bottom = 88.dp
                     )
                     .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surface)
