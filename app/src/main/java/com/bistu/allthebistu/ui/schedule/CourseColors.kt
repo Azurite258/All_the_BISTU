@@ -18,51 +18,59 @@ import kotlin.math.pow
  */
 object CourseColors {
 
-    // ── 莫兰迪色系（8 色，对应小米「莫兰迪」配色）──
+    // ── 莫兰迪色系 ──
+    // 8 个色相 × 2 个明度层 = 16 色。
+    // 为什么不沿用「8 色」：示例课表就有 14 门课，8 色必然有两门撞色
+    // （实测「基础英语」和「高等数学(1)」拿到了同一个颜色）。
+    //
+    // 明度/饱和度是照着学校配色的手感定的：学校那套是「高明度 + 中高饱和」，
+    // 所以看着清爽。莫兰迪取 s=0.50/l=0.86（第二层 s=0.35/l=0.79 更灰一点），
+    // 比学校配色淡一档，但不再像之前那样糊成一片灰。
     private val MORANDI_LIGHT = listOf(
-        "#FCEB7F", // 奶油黄
-        "#FFBA7F", // 珊瑚橙
-        "#BCC6A4", // 牛油果绿
-        "#E7D9EB", // 薰衣草紫
-        "#E0F1E9", // 糖果绿
-        "#EFE9DC", // 卡其色（小米原值是 #F2F1ED，与下面的杏仁奶白几乎同色，
-                   //          这里往暖里压了一点，保证两门课不会撞成一样的块）
-        "#F4F4F4", // 杏仁奶白
-        "#DE837E"  // 宝石红
+        "#EDDBC9", "#DCC9B7", // 橙调
+        "#E4EDC9", "#D3DCB7", // 黄绿
+        "#C9EDC9", "#B7DCB7", // 草绿
+        "#C9EDE4", "#B7DCD3", // 薄荷
+        "#C9DBED", "#B7C9DC", // 天蓝
+        "#D2C9ED", "#C0B7DC", // 淡紫
+        "#EDC9ED", "#DCB7DC", // 紫红
+        "#EDC9D2", "#DCB7C0"  // 玫瑰
     )
 
     private val MORANDI_DARK = listOf(
-        "#6E6738", // 深奶油黄
-        "#7A4A2E", // 深珊瑚橙
-        "#3F5138", // 深牛油果绿
-        "#4B3F5C", // 深薰衣草紫
-        "#2F5C52", // 深糖果绿
-        "#6B6050", // 深卡其
-        "#54565C", // 深杏仁奶白
-        "#7A3A38"  // 深宝石红
+        "#725437", "#72471D",
+        "#637237", "#5D721D",
+        "#377237", "#1D721D",
+        "#377263", "#1D725D",
+        "#375472", "#1D4772",
+        "#453772", "#321D72",
+        "#723772", "#721D72",
+        "#723745", "#721D32"
     )
 
-    // ── 多巴胺色系（8 色，取自小米「多巴胺」配色，去掉色相重复的 3 个）──
+    // ── 多巴胺色系 ──
+    // 同样 16 色。饱和度提到 0.92（第二层 0.90），明度 0.88/0.80，
+    // 观感比莫兰迪艳一档，但明度和学校配色接近，不会出现之前那种深绿压屏。
     private val DOPAMINE_LIGHT = listOf(
-        "#F7F8CC", // 嫩芽黄
-        "#D3A6DF", // 海葵紫
-        "#007E69", // 冷杉绿（唯一的深色块，用来拉开层次）
-        "#F19DB4", // 荧光红
-        "#91A7F2", // 宝蓝
-        "#81D8CF", // 孔雀绿
-        "#B7E2E8", // 冰晶蓝
-        "#F0DBE2"  // 树莓粉
+        "#FDE0C4", "#FACC9E", // 蜜橘
+        "#EEFDC4", "#E3FA9E", // 嫩芽黄
+        "#C4FDC4", "#9EFA9E", // 青草绿
+        "#C4FDEE", "#9EFAE3", // 孔雀绿
+        "#C4E0FD", "#9ECCFA", // 宝蓝
+        "#D2C4FD", "#B59EFA", // 葡萄紫
+        "#FDC4FD", "#FA9EFA", // 荧光粉
+        "#FDC4D2", "#FA9EB5"  // 树莓
     )
 
     private val DOPAMINE_DARK = listOf(
-        "#6E6F36", // 深嫩芽黄（比参考色再压暗一点，白字对比度才够 4.5:1）
-        "#5E3F6B", // 深海葵紫
-        "#1F5A4E", // 深冷杉绿
-        "#8A4553", // 深荧光红
-        "#33417A", // 深宝蓝
-        "#2E6E6A", // 深孔雀绿
-        "#2F5560", // 深冰晶蓝
-        "#6B4450"  // 深树莓粉
+        "#774C22", "#54381C",
+        "#627722", "#46541C",
+        "#227722", "#1C541C",
+        "#227762", "#1C5446",
+        "#224C77", "#1C3854",
+        "#372277", "#2A1C54",
+        "#772277", "#541C54",
+        "#772237", "#541C2A"
     )
 
     /** 浅色底上的深字（不用纯黑，避免过硬） */
@@ -115,15 +123,22 @@ object CourseColors {
      * 其余两套直接取各自色板的前 4 个，所见即所得。
      */
     fun sampleSwatches(scheme: Int, isDark: Boolean, count: Int = 4): List<Color> = when (scheme) {
-        CourseColorScheme.MORANDI ->
-            (if (isDark) MORANDI_DARK else MORANDI_LIGHT).take(count).map { parse(it) }
+        // 色板是「色相 × 明度」交错的，直接取前 N 个会全是同一两个色相，
+        // 这里按步长跳着取，预览里能看出这是一套多色相色板
+        CourseColorScheme.MORANDI -> spread(if (isDark) MORANDI_DARK else MORANDI_LIGHT, count)
 
-        CourseColorScheme.DOPAMINE ->
-            (if (isDark) DOPAMINE_DARK else DOPAMINE_LIGHT).take(count).map { parse(it) }
+        CourseColorScheme.DOPAMINE -> spread(if (isDark) DOPAMINE_DARK else DOPAMINE_LIGHT, count)
 
         else -> listOf("#FFF0CC", "#D3EAFD", "#E8DDF7", "#D9F0DC")
             .take(count)
             .map { if (isDark) darken(parse(it)) else parse(it) }
+    }
+
+    /** 从色板里等间隔取 count 个，供色卡预览用 */
+    private fun spread(palette: List<String>, count: Int): List<Color> {
+        if (palette.isEmpty() || count <= 0) return emptyList()
+        val step = (palette.size / count).coerceAtLeast(1)
+        return (0 until count).map { parse(palette[(it * step) % palette.size]) }
     }
 
     /** 把任意索引收敛到色板范围内 */

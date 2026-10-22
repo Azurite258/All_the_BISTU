@@ -28,11 +28,11 @@ class CourseColorsTest {
     }
 
     @Test
-    fun `莫兰迪与多巴胺各有 8 色且两两可分辨`() {
+    fun `莫兰迪与多巴胺各有 16 色且两两可分辨`() {
         newSchemes.forEach { scheme ->
             listOf(false, true).forEach { isDark ->
-                val colors = CourseColors.sampleSwatches(scheme, isDark, count = 8)
-                assertEquals("scheme=$scheme 应取到完整色板", 8, colors.size)
+                val colors = CourseColors.sampleSwatches(scheme, isDark, count = 16)
+                assertEquals("scheme=$scheme 应取到完整色板", 16, colors.size)
 
                 for (i in colors.indices) {
                     for (j in i + 1 until colors.size) {
@@ -51,7 +51,7 @@ class CourseColorsTest {
     fun `课程块文字对比度不低于 4_5`() {
         newSchemes.forEach { scheme ->
             listOf(false, true).forEach { isDark ->
-                CourseColors.sampleSwatches(scheme, isDark, count = 8).forEachIndexed { i, bg ->
+                CourseColors.sampleSwatches(scheme, isDark, count = 16).forEachIndexed { i, bg ->
                     val text = CourseColors.textColorOf(bg, isDark)
                     val ratio = CourseColors.contrastRatio(bg, text)
                     assertTrue(
@@ -74,20 +74,23 @@ class CourseColorsTest {
 
     @Test
     fun `不同课程能分到不同颜色`() {
+        // 和示例课表真实的一批课一致：14 门课，正好压着 16 色色板的容量
         val names = listOf(
-            "高等数学(1)", "基础英语", "大学体育(1)", "人工智能导论",
-            "现代前沿传感技术", "思想道德与法治", "C语言编程实战A", "大学生心理健康"
+            "C语言编程实战A", "人工智能导论", "军事理论", "国家安全教育",
+            "基础英语", "大学体育(1)", "大学生心理健康", "形势与政策(1)",
+            "思想道德与法治", "现代前沿传感技术", "现代音乐赏析", "管理学原理",
+            "高等数学(1)", "高等数学(2)"
         )
         val index = CourseColors.paletteIndexFor(names)
-        assertEquals("索引表要覆盖全部课程", 8, index.size)
+        assertEquals("索引表要覆盖全部课程", 14, index.size)
 
         newSchemes.forEach { scheme ->
             val colors = names.map {
                 CourseColors.backgroundOf("#CCCCCC", it, scheme, false, index[it])
             }
             assertEquals(
-                "scheme=$scheme 8 门课应当拿到 8 种颜色",
-                8, colors.distinct().size
+                "scheme=$scheme 14 门课应当拿到 14 种颜色（基础英语与高等数学(1)曾撞色）",
+                14, colors.distinct().size
             )
         }
     }
