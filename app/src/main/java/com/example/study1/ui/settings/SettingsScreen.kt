@@ -11,8 +11,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,10 +39,31 @@ fun SettingsScreen(
     settings: AppSettings,
     onThemeModeChange: (Int) -> Unit,
     onColorSchemeChange: (Int) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isLoggedIn: Boolean = false,
+    onLogout: () -> Unit = {}
 ) {
     // 拦截系统返回键：返回课表而不是退出 App
     BackHandler { onBack() }
+
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text("退出登录") },
+            text = { Text("退出后需要重新输入学号和密码登录，确定要退出吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLogoutConfirm = false
+                    onLogout()
+                }) { Text("退出登录") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) { Text("取消") }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -106,6 +132,50 @@ fun SettingsScreen(
                 selected = settings.colorScheme == CourseColorScheme.VIVID,
                 onClick = { onColorSchemeChange(CourseColorScheme.VIVID) }
             )
+
+            Spacer(Modifier.height(24.dp))
+
+            // ══════ 账号 ══════
+            SectionTitle("账号")
+
+            if (isLoggedIn) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showLogoutConfirm = true }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.ExitToApp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "退出登录",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "清除本机保存的登录状态",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = "当前未登录，登录后可同步真实课表。",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
 
             Spacer(Modifier.height(24.dp))
 

@@ -103,12 +103,26 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
         }
     }
 
-    // 首次加载
-    LaunchedEffect(Unit) { reload() }
+    // 会话失效时：清理持久化登录态
+    LaunchedEffect(Unit) {
+        repository.onSessionExpired = {
+            scope.launch {
+                com.example.study1.ui.login.AuthHolder.clear(context)
+                repository.clearAuth()
+            }
+        }
+    }
+
+    // 首次加载：先从磁盘恢复会话，再加载课表
+    LaunchedEffect(Unit) {
+        val restored = com.example.study1.ui.login.AuthHolder.restore(context)
+        android.util.Log.d("MainScreen", "启动恢复会话: $restored")
+        reload()
+    }
 
     // 监听登录状态变化：登录成功后强制从网络刷新
     val isLoggedInNow = com.example.study1.ui.login.AuthHolder.isLoggedIn
-    var lastLoginState by remember { mutableStateOf(false) }
+    var lastLoginState by remember { mutableStateOf(isLoggedInNow) }
 
     LaunchedEffect(isLoggedInNow) {
         if (isLoggedInNow && !lastLoginState) {
@@ -134,7 +148,18 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             onColorSchemeChange = { scheme ->
                 scope.launch { settingsStore.setColorScheme(scheme) }
             },
-            onBack = { showSettings = false }
+            onBack = { showSettings = false },
+            isLoggedIn = com.example.study1.ui.login.AuthHolder.isLoggedIn,
+            onLogout = {
+                com.example.study1.ui.login.AuthHolder.clear(context)
+                repository.clearAuth()
+                scope.launch {
+                    // 退出后清掉真实课表缓存，回落到示例数据
+                    repository.clearCache()
+                    loadResult = repository.loadSchedule()
+                }
+                showSettings = false
+            }
         )
         return
     }
@@ -287,10 +312,20 @@ private fun ScheduleScreen(
                             append(data.className)
                             append(" · ")
                             append(sourceLabel(source, timestamp))
-                            if (isLoggedIn) append(" · 已登录")
+                            if (isLoggedIn) {
+                                // 已登录却仍在展示示例数据 → 说明本次同步失败
+                                append(
+                                    if (source == Source.ASSETS) " · 同步失败，可下拉重试"
+                                    else " · 已登录"
+                                )
+                            }
                         },
                         fontSize = 12.sp,
-                        color = if (isLoggedIn) Color(0xFF2E7D32) else sourceColor(source)
+                        color = when {
+                            source == Source.ASSETS && isLoggedIn -> Color(0xFFE65100)
+                            isLoggedIn -> Color(0xFF2E7D32)
+                            else -> sourceColor(source)
+                        }
                     )
                 }
 

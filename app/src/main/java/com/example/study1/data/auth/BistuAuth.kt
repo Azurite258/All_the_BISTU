@@ -459,6 +459,43 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         cookieStore.clear()
         logger("clearCookies: 已清空")
     }
+
+    // ══════════════════════════════════════════════════════════
+    // 会话持久化：导出 / 还原
+    // ══════════════════════════════════════════════════════════
+
+    /** 导出当前所有 Cookie 快照（用于落盘） */
+    fun exportCookies(): List<StoredCookie> =
+        cookieStore.map { StoredCookie.from(it) }
+
+    /** 当前持有的 Cookie 数量（调试用） */
+    fun cookieCount(): Int = cookieStore.size
+
+    /**
+     * 用快照还原 Cookie。
+     *
+     * 会先清空内存里的旧 Cookie，再逐个还原；
+     * 已过期的条目自动跳过。返回实际还原成功的数量。
+     */
+    fun restoreCookies(stored: List<StoredCookie>): Int {
+        cookieStore.clear()
+        var restored = 0
+        stored.forEach { s ->
+            if (s.isExpired()) {
+                logger("restoreCookies: 跳过已过期 ${s.name}")
+                return@forEach
+            }
+            val cookie = s.toCookie()
+            if (cookie == null) {
+                logger("restoreCookies: 还原失败 ${s.name}")
+            } else {
+                cookieStore.add(cookie)
+                restored++
+            }
+        }
+        logger("restoreCookies: 尝试 ${stored.size} 个，成功 $restored 个")
+        return restored
+    }
 }
 
 /** 登录结果 */
