@@ -20,10 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -116,6 +116,8 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     var loginVersion by remember { mutableIntStateOf(0) }
     // 自动登录失败原因（用于提示用户）
     var autoLoginHint by remember { mutableStateOf<String?>(null) }
+    // 顶栏「添加日程」「日程提醒」的提示弹窗（功能尚未实现，先给明确反馈）
+    var pendingFeature by remember { mutableStateOf<String?>(null) }
 
     /** 首次加载 / 普通重新加载 */
     fun reload(forceRefresh: Boolean = false) {
@@ -226,6 +228,18 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     // ── 当前选中的 Tab ──
     var currentTab by remember { mutableStateOf(MainTab.SCHEDULE) }
 
+    // 「添加日程」「日程提醒」暂未实现，先给明确反馈，避免点了没反应
+    pendingFeature?.let { feature ->
+        AlertDialog(
+            onDismissRequest = { pendingFeature = null },
+            title = { Text(feature) },
+            text = { Text("这个功能还在开发中，敬请期待。") },
+            confirmButton = {
+                TextButton(onClick = { pendingFeature = null }) { Text("知道了") }
+            }
+        )
+    }
+
     // ── 主框架：内容区 + 悬浮导航栏 ──
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -246,6 +260,8 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
                         settings = settings,
                         autoLoginHint = autoLoginHint,
                         onRefresh = { pullRefresh() },
+                        onAddEvent = { pendingFeature = "添加日程" },
+                        onReminderSettings = { pendingFeature = "日程提醒" },
                         onOpenSettings = { showSettings = true },
                         onOpenLogin = {
                             context.startActivity(
@@ -288,6 +304,8 @@ private fun ScheduleTabContent(
     settings: AppSettings,
     autoLoginHint: String?,
     onRefresh: () -> Unit,
+    onAddEvent: () -> Unit,
+    onReminderSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
@@ -304,6 +322,8 @@ private fun ScheduleTabContent(
             isRefreshing = isRefreshing,
             autoLoginHint = autoLoginHint,
             onRefresh = onRefresh,
+            onAddEvent = onAddEvent,
+            onReminderSettings = onReminderSettings,
             onOpenSettings = onOpenSettings,
             onOpenLogin = onOpenLogin
         )
@@ -337,6 +357,8 @@ private fun ScheduleScreen(
     isRefreshing: Boolean = false,
     autoLoginHint: String? = null,
     onRefresh: () -> Unit,
+    onAddEvent: () -> Unit,
+    onReminderSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
@@ -416,22 +438,23 @@ private fun ScheduleScreen(
                 }
 
                 // 圆形图标按钮（HyperOS 风格）
+                // 顺序：添加日程 → 日程提醒 → 设置（设置固定在最右）
                 HyperIconButton(
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "重新加载",
-                    onClick = onRefresh
+                    icon = Icons.Default.Add,
+                    contentDescription = "添加日程",
+                    onClick = onAddEvent
+                )
+                Spacer(Modifier.width(8.dp))
+                HyperIconButton(
+                    icon = Icons.Default.Notifications,
+                    contentDescription = "日程提醒",
+                    onClick = onReminderSettings
                 )
                 Spacer(Modifier.width(8.dp))
                 HyperIconButton(
                     icon = Icons.Default.Settings,
                     contentDescription = "设置",
                     onClick = onOpenSettings
-                )
-                Spacer(Modifier.width(8.dp))
-                HyperIconButton(
-                    icon = Icons.Default.AccountCircle,
-                    contentDescription = "登录",
-                    onClick = onOpenLogin
                 )
             }
         }
