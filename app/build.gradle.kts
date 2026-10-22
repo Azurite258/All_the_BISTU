@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.study1"
+    namespace = "com.bistu.allthebistu"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.study1"
+        applicationId = "com.bistu.allthebistu"
         minSdk = 33
         targetSdk = 37
         versionCode = 1

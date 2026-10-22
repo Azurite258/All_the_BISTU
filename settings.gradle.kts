@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Study 1"
+rootProject.name = "All the BISTU"
 include(":app")
