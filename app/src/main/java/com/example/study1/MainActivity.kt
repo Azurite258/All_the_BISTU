@@ -53,6 +53,7 @@ import com.example.study1.ui.StudyScreen
 import com.example.study1.ui.ProfileScreen
 import com.example.study1.ui.navigation.FloatingBottomBar
 import com.example.study1.ui.navigation.MainTab
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -68,6 +69,15 @@ import java.util.Locale
  * 或者由用户在设置里手动指定。
  */
 private const val TERM_START_DATE = "2026-09-07"
+
+/**
+ * 下拉刷新指示器的最短显示时长（毫秒）。
+ *
+ * 本地数据（如未登录时读 assets）几毫秒就返回，指示器会一闪而过。
+ * 保证至少显示这么久，让「下拉出现 → 转一圈 → 回缩」的动画完整播完。
+ * 800ms 是 Material Design 建议的「既能感知到、又不觉得卡」的时长。
+ */
+private const val MIN_REFRESH_MS = 800L
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,11 +128,18 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     fun pullRefresh() {
         scope.launch {
             isRefreshing = true
+            val startedAt = System.currentTimeMillis()
             try {
                 com.example.study1.ui.login.AuthHolder.auth?.let { repository.setAuth(it) }
                 // 下拉 = 强制从网络拉最新
                 loadResult = repository.loadSchedule(forceRefresh = true)
             } finally {
+                // 本地数据（如未登录读 assets）几毫秒就返回，
+                // 指示器会一闪而过看不到动画。这里补足最短显示时长，
+                // 让「出现 → 转一圈 → 回缩」完整播完。
+                val elapsed = System.currentTimeMillis() - startedAt
+                val remaining = MIN_REFRESH_MS - elapsed
+                if (remaining > 0) delay(remaining)
                 isRefreshing = false
             }
         }
@@ -504,6 +521,16 @@ private fun ScheduleScreen(
                 isRefreshing = isRefreshing,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+
+            // 刷新结束后播放「回缩」动画：指示器平滑缩回顶部后消失，
+            // 而不是 isRefreshing 一置 false 就瞬间跳没。
+            var wasRefreshing by remember { mutableStateOf(false) }
+            LaunchedEffect(isRefreshing) {
+                if (wasRefreshing && !isRefreshing) {
+                    pullState.animateToHidden()
+                }
+                wasRefreshing = isRefreshing
+            }
         }
     }
 }
