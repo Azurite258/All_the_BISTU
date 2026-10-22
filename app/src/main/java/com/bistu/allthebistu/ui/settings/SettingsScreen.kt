@@ -32,9 +32,9 @@ import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.data.prefs.FontLevel
 import com.bistu.allthebistu.data.prefs.ThemeMode
+import com.bistu.allthebistu.ui.components.DiscreteSlider
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
-import kotlin.math.roundToInt
 
 /**
  * 设置页面
@@ -126,18 +126,18 @@ fun SettingsScreen(
                 onClick = { onColorSchemeChange(CourseColorScheme.SCHOOL) }
             )
             ColorSchemeOption(
-                title = "柔和配色",
-                subtitle = "马卡龙色系，视觉更协调",
-                scheme = CourseColorScheme.SOFT,
-                selected = settings.colorScheme == CourseColorScheme.SOFT,
-                onClick = { onColorSchemeChange(CourseColorScheme.SOFT) }
+                title = "莫兰迪色系",
+                subtitle = "低饱和灰调，久看不累",
+                scheme = CourseColorScheme.MORANDI,
+                selected = settings.colorScheme == CourseColorScheme.MORANDI,
+                onClick = { onColorSchemeChange(CourseColorScheme.MORANDI) }
             )
             ColorSchemeOption(
-                title = "高对比配色",
-                subtitle = "色彩更鲜明，深色模式下也清晰",
-                scheme = CourseColorScheme.VIVID,
-                selected = settings.colorScheme == CourseColorScheme.VIVID,
-                onClick = { onColorSchemeChange(CourseColorScheme.VIVID) }
+                title = "多巴胺色系",
+                subtitle = "高饱和亮色，像小米 15 的自选色",
+                scheme = CourseColorScheme.DOPAMINE,
+                selected = settings.colorScheme == CourseColorScheme.DOPAMINE,
+                onClick = { onColorSchemeChange(CourseColorScheme.DOPAMINE) }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -261,14 +261,9 @@ private fun ColorSchemeOption(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 色卡预览
+        val swatchDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            repeat(4) { i ->
-                val c = CourseColors.backgroundOf(
-                    originalHex = "#CCCCCC",
-                    courseName = "示例课程$i",
-                    scheme = scheme,
-                    isDark = false
-                )
+            CourseColors.sampleSwatches(scheme, swatchDark).forEach { c ->
                 Box(
                     modifier = Modifier
                         .size(14.dp)
@@ -338,16 +333,14 @@ private fun FontLevelSelector(
             )
         }
 
-        Slider(
-            value = safeLevel.toFloat(),
-            onValueChange = { onChange(it.roundToInt()) },
-            valueRange = FontLevel.SMALL.toFloat()..FontLevel.LARGE.toFloat(),
-            // 3 个落点之间 2 段间隔，中间插 1 个刻度
-            steps = 1,
-            modifier = Modifier.padding(top = 4.dp)
+        DiscreteSlider(
+            value = safeLevel,
+            onValueChange = onChange,
+            steps = 3,
+            modifier = Modifier.padding(top = 6.dp)
         )
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
             Text(
                 text = "小",
                 fontSize = 11.sp,

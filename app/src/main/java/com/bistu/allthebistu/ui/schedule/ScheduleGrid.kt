@@ -94,6 +94,7 @@ private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
  * @param colorScheme 配色方案：0=学校 1=柔和 2=高对比
  * @param isDark 是否深色模式
  * @param fontLevel 课程块字体挡位：0=一行5字 1=一行4字 2=一行3字
+ * @param paletteIndex 课程名 → 色板索引，保证同屏课程颜色互不相同
  * @param onCourseClick 点击课程块的回调；为 null 时课程块不可点击
  */
 @Composable
@@ -105,6 +106,7 @@ fun ScheduleGrid(
     isDark: Boolean = false,
     termStartDate: String? = null,
     fontLevel: Int = FontLevel.MEDIUM,
+    paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -278,6 +280,7 @@ fun ScheduleGrid(
                             dayColumnWidth = dayWidth,
                             periodRowHeight = PeriodRowHeight,
                             text = blockText,
+                            paletteIndex = paletteIndex[course.name],
                             onClick = onCourseClick?.let { click -> { click(course) } }
                         )
                     }
@@ -317,10 +320,17 @@ private fun CourseBlock(
     dayColumnWidth: Dp,
     periodRowHeight: Dp,
     text: CourseBlockText,
+    paletteIndex: Int? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val bgColor = remember(course.colorHex, course.name, colorScheme, isDark) {
-        CourseColors.backgroundOf(course.colorHex, course.name, colorScheme, isDark)
+    val bgColor = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex) {
+        CourseColors.backgroundOf(
+            originalHex = course.colorHex,
+            courseName = course.name,
+            scheme = colorScheme,
+            isDark = isDark,
+            paletteIndex = paletteIndex
+        )
     }
     val titleColor = remember(bgColor, isDark) {
         CourseColors.textColorOf(bgColor, isDark)

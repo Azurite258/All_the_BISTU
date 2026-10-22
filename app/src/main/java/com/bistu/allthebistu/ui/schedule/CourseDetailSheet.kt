@@ -45,13 +45,20 @@ fun CourseDetailSheet(
     currentWeek: Int,
     colorScheme: Int,
     isDark: Boolean,
+    paletteIndex: Int? = null,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // 沿用课表里的同一套配色，点开弹窗时颜色和课块对得上
-    val accent = remember(course.colorHex, course.name, colorScheme, isDark) {
-        CourseColors.backgroundOf(course.colorHex, course.name, colorScheme, isDark)
+    val accent = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex) {
+        CourseColors.backgroundOf(
+            originalHex = course.colorHex,
+            courseName = course.name,
+            scheme = colorScheme,
+            isDark = isDark,
+            paletteIndex = paletteIndex
+        )
     }
     val onAccent = remember(accent, isDark) { CourseColors.textColorOf(accent, isDark) }
 

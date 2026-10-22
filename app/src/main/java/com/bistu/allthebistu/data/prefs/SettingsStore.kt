@@ -29,10 +29,10 @@ object ThemeMode {
 object CourseColorScheme {
     /** 使用教务系统返回的原始颜色 */
     const val SCHOOL = 0
-    /** 柔和马卡龙色 */
-    const val SOFT = 1
-    /** 高对比度（适合深色模式） */
-    const val VIVID = 2
+    /** 莫兰迪色系：低饱和灰调 */
+    const val MORANDI = 1
+    /** 多巴胺色系：高饱和亮色（参考小米 15 自选色） */
+    const val DOPAMINE = 2
 }
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")

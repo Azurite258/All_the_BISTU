@@ -132,6 +132,12 @@ private fun ScheduleContent(
     // 点击课程块 → 弹出详情
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
 
+    // 色板索引：按课程名排序后依次编号，保证同屏课程颜色不重复；
+    // 课块和详情弹窗共用这一份，点开时颜色才对得上
+    val paletteIndex = remember(data.courses) {
+        CourseColors.paletteIndexFor(data.courses.map { it.name })
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
@@ -295,6 +301,7 @@ private fun ScheduleContent(
                                 isDark = isDark,
                                 termStartDate = TERM_START_DATE,
                                 fontLevel = settings.fontLevel,
+                                paletteIndex = paletteIndex,
                                 onCourseClick = { selectedCourse = it }
                             )
                         }
@@ -331,6 +338,7 @@ private fun ScheduleContent(
             currentWeek = currentWeek,
             colorScheme = settings.colorScheme,
             isDark = isDark,
+            paletteIndex = paletteIndex[course.name],
             onDismiss = { selectedCourse = null }
         )
     }
