@@ -2,6 +2,9 @@ package com.example.study1.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -97,6 +100,9 @@ private fun PlaceholderScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            // 这几个页面没有 Scaffold，启用 edge-to-edge 后必须自己加 insets，
+            // 否则大标题会压到状态栏（手机时间/信号图标）上。
+            .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
                 start = HyperSpacing.pageHorizontal,

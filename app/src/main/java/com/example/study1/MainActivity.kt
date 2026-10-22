@@ -9,6 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -261,11 +265,13 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             }
         }
 
-        // 悬浮导航栏
+        // 悬浮导航栏（底部加 insets，避开手势导航条/虚拟按键）
         FloatingBottomBar(
             currentTab = currentTab,
             onTabSelected = { currentTab = it },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(WindowInsets.navigationBars)
         )
     }
 }
@@ -350,10 +356,13 @@ private fun ScheduleScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            // HyperOS 风格：不用 TopAppBar，自己画一个
+            // HyperOS 风格：不用 TopAppBar，自己画一个。
+            // 注意：启用 enableEdgeToEdge 后内容会绘制到状态栏下方，
+            // 必须自己加 statusBars inset，否则标题会压到手机时间上。
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(
                         start = HyperSpacing.pageHorizontal,
                         end = HyperSpacing.pageHorizontal,
