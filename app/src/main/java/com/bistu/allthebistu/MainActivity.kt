@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -200,18 +201,29 @@ private fun AppRoot(
 
 /**
  * 底部登录引导条（未登录时展示一次）。
+ *
+ * 视觉上要能看出是「浮在课表上方的一层」，但底色和课表卡片一样都是纯白时
+ * 会糊成一片，所以这里用两件事拉开层次（HyperOS 不靠阴影，靠色差和描边）：
+ *  1. 底色换成 surfaceVariant，比卡片深一档
+ *  2. 加 0.5dp 发丝描边，给边缘一个明确的边界
  */
 @Composable
 private fun LoginPromptBar(
     onLogin: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = HyperSpacing.pageHorizontal)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+                shape = shape
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
