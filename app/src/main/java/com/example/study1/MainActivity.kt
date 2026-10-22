@@ -84,18 +84,34 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
     var loadResult by remember { mutableStateOf<LoadResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
+    // 登录状态变化触发器（登录成功后自增，触发重新加载）
+    var loginVersion by remember { mutableIntStateOf(0) }
 
     fun reload(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
+            // 把全局登录态同步给 repository
+            com.example.study1.ui.login.AuthHolder.auth?.let { repository.setAuth(it) }
             if (forceRefresh) repository.clearCache()
             loadResult = repository.loadSchedule()
             isLoading = false
         }
     }
 
+    // 首次加载
     LaunchedEffect(Unit) { reload() }
 
+    // 监听登录状态变化：登录成功后强制从网络刷新
+    val isLoggedInNow = com.example.study1.ui.login.AuthHolder.isLoggedIn
+    var lastLoginState by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isLoggedInNow) {
+        if (isLoggedInNow && !lastLoginState) {
+            // 刚登录成功 → 强制刷新（清缓存，从网络拉）
+            reload(forceRefresh = true)
+        }
+        lastLoginState = isLoggedInNow
+    }
     // 计算当前是否深色
     val systemDark = isSystemInDarkTheme()
     val isDark = when (settings.themeMode) {
@@ -127,13 +143,18 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             timestamp = result.timestamp,
             isDark = isDark,
             settings = settings,
+            isLoggedIn = com.example.study1.ui.login.AuthHolder.isLoggedIn,
             onRefresh = { reload(forceRefresh = true) },
             onOpenSettings = { showSettings = true },
             onOpenLogin = {
-                // 启动 WebView 登录页（验证版）
                 context.startActivity(
-                    android.content.Intent(context, com.example.study1.ui.login.WebViewLoginActivity::class.java)
+                    android.content.Intent(
+                        context,
+                        com.example.study1.ui.login.NativeLoginActivity::class.java
+                    )
                 )
+                // 从登录页返回后重新加载（登录成功会设置 AuthHolder）
+                loginVersion++
             }
         )
         else -> ErrorScreen(result?.error)
@@ -162,6 +183,7 @@ private fun ScheduleScreen(
     timestamp: Long,
     isDark: Boolean,
     settings: AppSettings,
+    isLoggedIn: Boolean,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
@@ -203,9 +225,14 @@ private fun ScheduleScreen(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "${data.className} · ${sourceLabel(source, timestamp)}",
+                        text = buildString {
+                            append(data.className)
+                            append(" · ")
+                            append(sourceLabel(source, timestamp))
+                            if (isLoggedIn) append(" · 已登录")
+                        },
                         fontSize = 12.sp,
-                        color = sourceColor(source)
+                        color = if (isLoggedIn) Color(0xFF2E7D32) else sourceColor(source)
                     )
                 }
 

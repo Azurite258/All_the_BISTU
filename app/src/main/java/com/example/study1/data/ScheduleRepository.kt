@@ -1,61 +1,114 @@
 package com.example.study1.data
 
 import android.content.Context
+import com.example.study1.data.auth.BistuAuth
+import com.example.study1.data.auth.JwxtApi
 import com.example.study1.data.db.AppDatabase
 import com.example.study1.data.db.toCourse
 import com.example.study1.data.db.toEntity
 import com.example.study1.data.db.toMetaEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * 课表仓库：统一管理「内存 → 数据库」的读取。
+ * 课表仓库：统一管理「网络 → 数据库 → 界面」的数据流。
  *
- * 当前阶段数据来自 assets 里的示例 JSON，
- * 后续接入登录后，把 loadFromAssets 换成 loadFromNetwork 即可，
- * 上层调用方不用改。
+ * 加载策略：
+ *  1. 有缓存 → 立刻返回（秒开）
+ *  2. 缓存为空 + 已登录 → 从教务系统拉取 → 存库 → 返回
+ *  3. 缓存为空 + 未登录 → 读 assets 示例数据（首次体验用）
  */
 class ScheduleRepository(private val context: Context) {
 
     private val dao by lazy { AppDatabase.get(context).scheduleDao() }
 
+    /** 登录状态（内存中，App 重启后丢失，后续可持久化） */
+    private var auth: BistuAuth? = null
+
+    /** 是否已登录 */
+    val isLoggedIn: Boolean get() = auth?.isLoggedIn() == true
+
+    /** 设置登录实例（登录成功后调用） */
+    fun setAuth(newAuth: BistuAuth) {
+        auth = newAuth
+    }
+
+    /** 清除登录状态 */
+    fun clearAuth() {
+        auth?.clearCookies()
+        auth = null
+    }
+
     /**
      * 加载课表。
      *
-     * 策略：
-     *  1. 先读数据库缓存 → 有数据立刻返回
-     *  2. 缓存为空 → 从 assets 解析 → 写入数据库 → 返回
-     *
-     * @return 课表数据 + 数据来源
+     * @param forceRefresh true 时跳过缓存，强制从网络拉取
      */
-    suspend fun loadSchedule(termCode: String = "2026-2027-1"): LoadResult {
-        // ── 1. 尝试读缓存 ──
-        val cachedCourses = dao.getCourses(termCode)
-        if (cachedCourses.isNotEmpty()) {
-            val meta = dao.getMeta(termCode)
-            if (meta != null) {
-                val data = ScheduleData(
-                    termCode = meta.termCode,
-                    termName = meta.termName,
-                    studentName = meta.studentName,
-                    studentId = meta.studentId,
-                    major = meta.major,
-                    className = meta.className,
-                    campus = meta.campus,
-                    courses = cachedCourses.map { it.toCourse() }
-                )
-                return LoadResult(data, Source.CACHE, meta.lastSyncAt)
+    suspend fun loadSchedule(
+        termCode: String = "2026-2027-1",
+        forceRefresh: Boolean = false
+    ): LoadResult = withContext(Dispatchers.IO) {
+
+        // ── 1. 缓存优先（除非强制刷新）──
+        if (!forceRefresh) {
+            val cachedCourses = dao.getCourses(termCode)
+            if (cachedCourses.isNotEmpty()) {
+                val meta = dao.getMeta(termCode)
+                if (meta != null) {
+                    val data = ScheduleData(
+                        termCode = meta.termCode,
+                        termName = meta.termName,
+                        studentName = meta.studentName,
+                        studentId = meta.studentId,
+                        major = meta.major,
+                        className = meta.className,
+                        campus = meta.campus,
+                        courses = cachedCourses.map { it.toCourse() }
+                    )
+                    return@withContext LoadResult(data, Source.CACHE, meta.lastSyncAt)
+                }
             }
         }
 
-        // ── 2. 缓存为空，从 assets 解析 ──
-        return try {
+        // ── 2. 已登录 → 从网络拉 ──
+        val currentAuth = auth
+        if (currentAuth != null && currentAuth.isLoggedIn()) {
+            try {
+                val api = JwxtApi(currentAuth)
+                val data = api.fetchSchedule(termCode = null)  // null = 自动取当前学期
+                saveSchedule(data)
+                return@withContext LoadResult(
+                    data,
+                    Source.NETWORK,
+                    System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                // 网络失败 → 回退到缓存
+                val cachedCourses = dao.getCourses(termCode)
+                if (cachedCourses.isNotEmpty()) {
+                    val meta = dao.getMeta(termCode)
+                    if (meta != null) {
+                        val data = ScheduleData(
+                            meta.termCode, meta.termName, meta.studentName,
+                            meta.studentId, meta.major, meta.className, meta.campus,
+                            cachedCourses.map { it.toCourse() }
+                        )
+                        return@withContext LoadResult(
+                            data, Source.CACHE, meta.lastSyncAt, e
+                        )
+                    }
+                }
+                return@withContext LoadResult(null, Source.ERROR, 0, e)
+            }
+        }
+
+        // ── 3. 未登录 → 读 assets 示例 ──
+        return@withContext try {
             val rawJson = context.assets.open("schedule_sample.json")
                 .bufferedReader()
                 .use { it.readText() }
             val data = ScheduleParser.parse(rawJson, termCode)
-
-            // 写入数据库
             saveSchedule(data)
-
             LoadResult(data, Source.ASSETS, System.currentTimeMillis())
         } catch (e: Exception) {
             LoadResult(null, Source.ERROR, 0, e)
@@ -63,7 +116,7 @@ class ScheduleRepository(private val context: Context) {
     }
 
     /** 保存到数据库（覆盖同一学期的旧数据） */
-    suspend fun saveSchedule(data: ScheduleData) {
+    suspend fun saveSchedule(data: ScheduleData) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         dao.deleteCourses(data.termCode)
         dao.insertCourses(data.courses.map { it.toEntity(data.termCode) })
@@ -71,7 +124,7 @@ class ScheduleRepository(private val context: Context) {
     }
 
     /** 清空缓存 */
-    suspend fun clearCache() {
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
         dao.clearAllCourses()
         dao.clearAllMeta()
     }
@@ -87,9 +140,9 @@ class ScheduleRepository(private val context: Context) {
 
 /** 数据来源 */
 enum class Source {
-    CACHE,      // 来自本地数据库
-    ASSETS,     // 来自 assets 示例数据（将来会换成 NETWORK）
-    NETWORK,    // 来自网络（登录后实现）
+    CACHE,      // 本地数据库
+    ASSETS,     // assets 示例数据
+    NETWORK,    // 教务系统实时拉取
     ERROR
 }
 

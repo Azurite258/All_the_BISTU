@@ -11,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -24,12 +23,39 @@ import com.example.study1.data.auth.BistuAuth
 import com.example.study1.data.auth.JwxtApi
 import com.example.study1.ui.theme.Study1Theme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * 全局登录状态持有者。
+ *
+ * 用 mutableStateOf 让 Compose 能观察到变化，登录成功后主界面自动刷新。
+ */
+object AuthHolder {
+    var auth: BistuAuth? = null
+        private set
+
+    /** Compose 可观察的登录状态 */
+    var isLoggedIn by mutableStateOf(false)
+        private set
+
+    fun setAuth(newAuth: BistuAuth) {
+        auth = newAuth
+        isLoggedIn = newAuth.isLoggedIn()
+    }
+
+    fun clear() {
+        auth?.clearCookies()
+        auth = null
+        isLoggedIn = false
+    }
+}
 
 /**
  * 原生登录页（CAS + SM2）。
  *
- * 替代 WebView 方案——WebView 会被学校页面检测导致白屏，
- * 原生实现完全绕过前端检测。
+ * 登录成功后把 BistuAuth 存到 AuthHolder，主界面刷新即可拉真实课表。
  */
 class NativeLoginActivity : ComponentActivity() {
 
@@ -39,7 +65,10 @@ class NativeLoginActivity : ComponentActivity() {
         setContent {
             Study1Theme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    NativeLoginScreen(onClose = { finish() })
+                    NativeLoginScreen(
+                        onClose = { finish() },
+                        onSuccess = { finish() }
+                    )
                 }
             }
         }
@@ -48,7 +77,10 @@ class NativeLoginActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NativeLoginScreen(onClose: () -> Unit) {
+fun NativeLoginScreen(
+    onClose: () -> Unit,
+    onSuccess: () -> Unit
+) {
     val scope = rememberCoroutineScope()
     val auth = remember { BistuAuth() }
 
@@ -60,7 +92,8 @@ fun NativeLoginScreen(onClose: () -> Unit) {
     var success by remember { mutableStateOf(false) }
 
     fun addLog(msg: String) {
-        logs = (logs + "[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.CHINA).format(java.util.Date())}] $msg").takeLast(50)
+        val time = SimpleDateFormat("HH:mm:ss", Locale.CHINA).format(Date())
+        logs = (logs + "[$time] $msg").takeLast(40)
     }
 
     Scaffold(
@@ -83,7 +116,7 @@ fun NativeLoginScreen(onClose: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── 输入区 ──
+            // ── 学号 ──
             Text("学号", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = username,
@@ -98,6 +131,7 @@ fun NativeLoginScreen(onClose: () -> Unit) {
                 )
             )
 
+            // ── 密码 ──
             Text("密码", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(
                 value = password,
@@ -115,7 +149,7 @@ fun NativeLoginScreen(onClose: () -> Unit) {
                 trailingIcon = {
                     IconButton(onClick = { showPassword = !showPassword }) {
                         Text(
-                            text = if (showPassword) "隐藏" else "显示",
+                            if (showPassword) "隐藏" else "显示",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -127,35 +161,32 @@ fun NativeLoginScreen(onClose: () -> Unit) {
             Button(
                 onClick = {
                     if (username.isBlank() || password.isBlank()) {
-                        addLog("❌ 学号和密码不能为空")
+                        addLog("学号和密码不能为空")
                         return@Button
                     }
                     loading = true
                     logs = emptyList()
                     scope.launch {
                         try {
-                            val authWithLog = BistuAuth { msg ->
-                                // 把日志同步到 UI（用普通变量，重组时更新）
-                                android.util.Log.d("NativeLogin", msg)
-                            }
-                            // 直接用 auth 实例（带日志回调不方便，改用静态日志）
-                            val result = auth.fullLogin(username, password)
-                            addLog("登录返回: code=${result.code}, message=${result.message}")
+                            val result = auth.fullLogin(username, password.trim())
+                            addLog("登录返回: code=${result.code} ${result.message}")
 
                             if (result.isSuccess) {
                                 addLog("✅ 登录成功！")
-                                addLog("Cookie 数: ${auth.getAllCookiesHeader().length} 字符")
 
-                                // 立即测试拉课表
+                                // 立即验证能否拉课表
                                 addLog("正在获取课表…")
-                                val api = JwxtApi(auth) { msg ->
-                                    android.util.Log.d("JwxtApi", msg)
-                                }
+                                val api = JwxtApi(auth)
                                 val schedule = api.fetchSchedule()
+
                                 addLog("✅ 课表获取成功！")
                                 addLog("共 ${schedule.courses.size} 条课程")
-                                addLog("班级: ${schedule.className}")
                                 addLog("学生: ${schedule.studentName}")
+                                addLog("班级: ${schedule.className}")
+                                addLog("学期: ${schedule.termCode}")
+
+                                // 保存到全局，供主界面使用
+                                AuthHolder.setAuth(auth)
                                 success = true
                             } else {
                                 addLog("❌ 登录失败: ${result.message}")
@@ -184,7 +215,17 @@ fun NativeLoginScreen(onClose: () -> Unit) {
                 }
             }
 
-            // ── 日志区 ──
+            // ── 成功后按钮 ──
+            if (success) {
+                Button(
+                    onClick = onSuccess,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("进入课表")
+                }
+            }
+
+            // ── 日志 ──
             if (logs.isNotEmpty()) {
                 HorizontalDivider()
                 Text("执行日志", fontSize = 13.sp)
@@ -205,14 +246,6 @@ fun NativeLoginScreen(onClose: () -> Unit) {
                         }
                     }
                 }
-            }
-
-            if (success) {
-                Text(
-                    text = "✅ 登录成功，可以返回课表页了",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
 
             Spacer(Modifier.height(24.dp))
