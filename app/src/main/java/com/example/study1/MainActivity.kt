@@ -190,11 +190,8 @@ fun MainScreen(settings: AppSettings, settingsStore: SettingsStore) {
             is com.example.study1.ui.login.AutoLoginResult.NeedManual -> {
                 autoLoginHint = result.reason
                 reload()
-                // 首次使用且未登录 → 底部弹一次登录引导
-                if (!settingsStore.hasShownLoginPrompt()) {
-                    showLoginPrompt = true
-                    settingsStore.markLoginPromptShown()
-                }
+                // 未登录 → 每次启动都在底部提示一次（不记忆、不打扰已登录用户）
+                showLoginPrompt = true
             }
         }
     }
