@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -364,9 +367,28 @@ private fun ScheduleScreen(
                 onWeekChange = { currentWeek = it }
             )
 
-            // ── 课表卡片 ──
+            // ── 课表卡片（支持左右滑动切换周次）──
             val vScroll = rememberScrollState()
-            val hScroll = rememberScrollState()
+
+            // 周次列表：weekRange 可能是 1..20 这样的范围，转成 0-based 索引
+            val weeks = remember(weekRange) { weekRange.toList() }
+            val pagerState = rememberPagerState(
+                initialPage = (currentWeek - weekRange.first).coerceIn(0, weeks.lastIndex),
+                pageCount = { weeks.size }
+            )
+
+            // 滑动 pager → 同步回 currentWeek
+            LaunchedEffect(pagerState) {
+                snapshotFlow { pagerState.currentPage }.collect { page ->
+                    val w = weeks.getOrNull(page) ?: return@collect
+                    if (w != currentWeek) currentWeek = w
+                }
+            }
+            // 点箭头/外部改 currentWeek → 同步 pager
+            LaunchedEffect(currentWeek) {
+                val target = (currentWeek - weekRange.first).coerceIn(0, weeks.lastIndex)
+                if (target != pagerState.currentPage) pagerState.animateScrollToPage(target)
+            }
 
             Box(
                 modifier = Modifier
@@ -379,17 +401,25 @@ private fun ScheduleScreen(
                     )
                     .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surface)
-                    .verticalScroll(vScroll)
-                    .horizontalScroll(hScroll)
             ) {
-                ScheduleGrid(
-                    data = data,
-                    weekNumber = currentWeek,
-                    todayDayOfWeek = todayDayOfWeek(),
-                    colorScheme = settings.colorScheme,
-                    isDark = isDark,
-                    termStartDate = TERM_START_DATE
-                )
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    // 边界不回弹，避免误以为还能继续滑
+                    overscrollEffect = null
+                ) { page ->
+                    val weekNumber = weeks.getOrNull(page) ?: return@HorizontalPager
+                    Box(modifier = Modifier.verticalScroll(vScroll)) {
+                        ScheduleGrid(
+                            data = data,
+                            weekNumber = weekNumber,
+                            todayDayOfWeek = todayDayOfWeek(),
+                            colorScheme = settings.colorScheme,
+                            isDark = isDark,
+                            termStartDate = TERM_START_DATE
+                        )
+                    }
+                }
             }
         }
     }

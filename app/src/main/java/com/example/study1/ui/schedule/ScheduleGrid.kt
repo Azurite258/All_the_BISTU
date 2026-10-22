@@ -28,6 +28,9 @@ private val DayColumnWidth = 44.dp
 private val PeriodRowHeight = 60.dp
 private val HeaderHeight = 46.dp
 
+/** 网格总宽度：时间列 + 7 天 */
+private val GridTotalWidth = TimeColumnWidth + DayColumnWidth * 7
+
 private val LightBorder = Color(0xFFE5E5E5)
 private val DarkBorder = Color(0xFF333333)
 private val LightHeaderBg = Color(0xFFF7F7F7)
@@ -43,6 +46,11 @@ private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
  * 课表网格（含节次时间）。
+ *
+ * 布局说明：
+ *  - 网格宽度默认自适应父容器（7 天平分剩余宽度），此时**不应**再套 horizontalScroll，
+ *    否则左右滑动会被滚动容器吃掉，无法用于切换周次。
+ *  - 若父容器未给出确定的宽度约束，则回退到固定宽度 [GridTotalWidth]。
  *
  * @param weekNumber 当前周次（用于计算日期）
  * @param termStartDate 学期第 1 周周一的日期，格式 "yyyy-MM-dd"；为空则不显示日期
@@ -71,7 +79,6 @@ fun ScheduleGrid(
     // 节次范围：至少到 14 节（覆盖晚上的课）
     val maxSection = maxOf(14, coursesInWeek.maxOfOrNull { it.endSection } ?: 14)
     val periods = 1..maxSection
-    val totalWidth = TimeColumnWidth + DayColumnWidth * 7
 
     // 本周周一的日期（用于表头显示日期）
     val weekDates = remember(weekNumber, termStartDate) {
@@ -79,134 +86,146 @@ fun ScheduleGrid(
         else runCatching { DateUtils.weekDates(termStartDate, weekNumber) }.getOrNull()
     }
 
-    Column(modifier = modifier) {
-        // ══════ 表头：月份 + 星期 + 日期 ══════
-        Row(modifier = Modifier.width(totalWidth)) {
-            // 左上角：显示月份（无边框无背景）
-            Box(
-                modifier = Modifier
-                    .size(width = TimeColumnWidth, height = HeaderHeight),
-                contentAlignment = Alignment.Center
-            ) {
-                val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
-                if (monthLabel != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = monthLabel,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = timeTextColor
-                        )
-                        Text(
-                            text = "月",
-                            fontSize = 9.sp,
-                            color = timeTextColor
-                        )
+    // 自适应宽度：父容器有确定宽度时按比例分配，否则用固定宽度
+    BoxWithConstraints(modifier = modifier) {
+        val isBounded = constraints.maxWidth != androidx.compose.ui.unit.Constraints.Infinity
+        val totalWidth = if (isBounded) maxWidth else GridTotalWidth
+        // 7 天平分「总宽 - 时间列」
+        val dayWidth = if (isBounded) {
+            ((totalWidth - TimeColumnWidth) / 7).coerceAtLeast(24.dp)
+        } else {
+            DayColumnWidth
+        }
+
+        Column(modifier = Modifier.width(totalWidth)) {
+            // ══════ 表头：月份 + 星期 + 日期 ══════
+            Row(modifier = Modifier.width(totalWidth)) {
+                // 左上角：显示月份（无边框无背景）
+                Box(
+                    modifier = Modifier
+                        .size(width = TimeColumnWidth, height = HeaderHeight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
+                    if (monthLabel != null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = monthLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = timeTextColor
+                            )
+                            Text(
+                                text = "月",
+                                fontSize = 9.sp,
+                                color = timeTextColor
+                            )
+                        }
                     }
                 }
-            }
 
-            // 7 天：星期 + 日期（今天只加黑，不改变背景）
-            DayLabels.forEachIndexed { index, label ->
-                val dayNum = index + 1
-                val isToday = dayNum == todayDayOfWeek
-                val dateText = weekDates?.getOrNull(index)?.let { DateUtils.dayOfMonth(it) }
+                // 7 天：星期 + 日期（今天只加黑，不改变背景）
+                DayLabels.forEachIndexed { index, label ->
+                    val dayNum = index + 1
+                    val isToday = dayNum == todayDayOfWeek
+                    val dateText = weekDates?.getOrNull(index)?.let { DateUtils.dayOfMonth(it) }
 
-                Column(
-                    modifier = Modifier
-                        .size(width = DayColumnWidth, height = HeaderHeight),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = label,
-                        fontSize = 12.sp,
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isToday) MaterialTheme.colorScheme.onSurface
-                        else timeTextColor
-                    )
-                    if (dateText != null) {
+                    Column(
+                        modifier = Modifier
+                            .size(width = dayWidth, height = HeaderHeight),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
-                            text = dateText,
-                            fontSize = 9.sp,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                             color = if (isToday) MaterialTheme.colorScheme.onSurface
                             else timeTextColor
                         )
-                    }
-                }
-            }
-        }
-
-        // ══════ 主体 ══════
-        Row(modifier = Modifier.width(totalWidth)) {
-
-            // ① 左侧节次列：节次号 + 开始/结束时间（无边框，无背景）
-            Column {
-                periods.forEach { period ->
-                    val pt = PeriodTimes.of(period)
-                    Box(
-                        modifier = Modifier
-                            .size(width = TimeColumnWidth, height = PeriodRowHeight),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
+                        if (dateText != null) {
                             Text(
-                                text = period.toString(),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (isDark) Color(0xFFCCCCCC) else Color(0xFF666666)
+                                text = dateText,
+                                fontSize = 9.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isToday) MaterialTheme.colorScheme.onSurface
+                                else timeTextColor
                             )
-                            if (pt != null) {
-                                Text(
-                                    text = pt.startTime,
-                                    fontSize = 7.5.sp,
-                                    lineHeight = 9.sp,
-                                    color = timeTextColor,
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = pt.endTime,
-                                    fontSize = 7.5.sp,
-                                    lineHeight = 9.sp,
-                                    color = timeTextColor,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
                         }
                     }
                 }
             }
 
-            // ② 7 天区域（无网格线，纯白底）
-            Box {
-                // 背景：纯色，不画网格线，不高亮今天整列
+            // ══════ 主体 ══════
+            Row(modifier = Modifier.width(totalWidth)) {
+
+                // ① 左侧节次列：节次号 + 开始/结束时间（无边框，无背景）
                 Column {
-                    periods.forEach { _ ->
-                        Row {
-                            DayLabels.forEachIndexed { _, _ ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = DayColumnWidth, height = PeriodRowHeight)
-                                        .background(cellBg)
+                    periods.forEach { period ->
+                        val pt = PeriodTimes.of(period)
+                        Box(
+                            modifier = Modifier
+                                .size(width = TimeColumnWidth, height = PeriodRowHeight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = period.toString(),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isDark) Color(0xFFCCCCCC) else Color(0xFF666666)
                                 )
+                                if (pt != null) {
+                                    Text(
+                                        text = pt.startTime,
+                                        fontSize = 7.5.sp,
+                                        lineHeight = 9.sp,
+                                        color = timeTextColor,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = pt.endTime,
+                                        fontSize = 7.5.sp,
+                                        lineHeight = 9.sp,
+                                        color = timeTextColor,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // 课程块
-                coursesInWeek.forEach { course ->
-                    CourseBlock(
-                        course = course,
-                        colorScheme = colorScheme,
-                        isDark = isDark,
-                        dayColumnWidth = DayColumnWidth,
-                        periodRowHeight = PeriodRowHeight
-                    )
+                // ② 7 天区域（无网格线，纯白底）
+                Box {
+                    // 背景：纯色，不画网格线，不高亮今天整列
+                    Column {
+                        periods.forEach { _ ->
+                            Row {
+                                DayLabels.forEachIndexed { _, _ ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = dayWidth, height = PeriodRowHeight)
+                                            .background(cellBg)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 课程块
+                    coursesInWeek.forEach { course ->
+                        CourseBlock(
+                            course = course,
+                            colorScheme = colorScheme,
+                            isDark = isDark,
+                            dayColumnWidth = dayWidth,
+                            periodRowHeight = PeriodRowHeight
+                        )
+                    }
                 }
             }
         }
