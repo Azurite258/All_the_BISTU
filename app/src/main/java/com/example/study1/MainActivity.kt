@@ -478,8 +478,7 @@ private fun ScheduleScreen(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = buildString {
-                            append(data.className)
-                            append(" · ")
+                            // 不显示班级/姓名等个人信息，只显示数据来源状态
                             append(sourceLabel(source, timestamp))
                             if (isLoggedIn) {
                                 // 已登录却仍在展示示例数据 → 说明本次同步失败
