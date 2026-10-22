@@ -22,7 +22,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -408,13 +409,23 @@ private fun ScheduleScreen(
             }
         }
     ) { padding ->
-        // 下拉刷新：包住整个内容区，周次卡片与课表都能下拉
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
+        // 课表纵向滚动状态（下拉刷新的「是否在顶部」判断依赖它）
+        val vScroll = rememberScrollState()
+        val pullState = rememberPullToRefreshState()
+
+        // 下拉刷新：包在滚动容器外层，才能在下拉时优先拿到手势。
+        // 只有课表已滚到顶部（无法继续向上滚）时才允许触发刷新，
+        // 否则课表中途往下拖也会误触发。
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .pullToRefresh(
+                    isRefreshing = isRefreshing,
+                    state = pullState,
+                    enabled = !vScroll.canScrollBackward,
+                    onRefresh = onRefresh
+                )
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
@@ -430,8 +441,6 @@ private fun ScheduleScreen(
             )
 
             // ── 课表卡片（支持左右滑动切换周次）──
-            val vScroll = rememberScrollState()
-
             // 周次列表：weekRange 可能是 1..20 这样的范围，转成 0-based 索引
             val weeks = remember(weekRange) { weekRange.toList() }
             val pagerState = rememberPagerState(

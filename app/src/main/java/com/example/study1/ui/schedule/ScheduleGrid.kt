@@ -25,7 +25,16 @@ import com.example.study1.data.prefs.CourseColorScheme
 // ── 尺寸常量（HyperOS 风格：圆角更大、留白更足）──
 private val TimeColumnWidth = 42.dp
 private val DayColumnWidth = 44.dp
-private val PeriodRowHeight = 60.dp
+
+/**
+ * 每节课的行高。
+ *
+ * 从 60dp 调到 56dp（-4dp，约 -7%）：
+ * 一屏能多看到约 1 节课，但单节课的课程名/教室仍能完整显示，
+ * 不会挤成两行截断。再往下调（如 52dp）就会让 1 节课的课块
+ * 装不下「课程名 + 时间 + 教室」三行，不要轻易再减。
+ */
+private val PeriodRowHeight = 56.dp
 private val HeaderHeight = 46.dp
 
 /** 网格总宽度：时间列 + 7 天 */
