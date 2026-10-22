@@ -9,6 +9,7 @@ import com.example.study1.data.db.AppDatabase
 import com.example.study1.data.db.toCourse
 import com.example.study1.data.db.toEntity
 import com.example.study1.data.db.toMetaEntity
+import com.example.study1.data.db.toTermWeek
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -137,7 +138,8 @@ class ScheduleRepository(private val context: Context) {
             major = meta.major,
             className = meta.className,
             campus = meta.campus,
-            courses = cachedCourses.map { it.toCourse() }
+            courses = cachedCourses.map { it.toCourse() },
+            termWeeks = dao.getTermWeeks(meta.termCode).map { it.toTermWeek() }
         )
         return LoadResult(data, Source.CACHE, meta.lastSyncAt)
     }
@@ -160,12 +162,18 @@ class ScheduleRepository(private val context: Context) {
         dao.deleteCourses(data.termCode)
         dao.insertCourses(data.courses.map { it.toEntity(data.termCode) })
         dao.insertMeta(data.toMetaEntity(now))
+        // 教学周：只有拿到数据时才覆盖，避免一次接口失败把已有数据清空
+        if (data.termWeeks.isNotEmpty()) {
+            dao.deleteTermWeeks(data.termCode)
+            dao.insertTermWeeks(data.termWeeks.map { it.toEntity(data.termCode) })
+        }
     }
 
     /** 清空缓存 */
     suspend fun clearCache() = withContext(Dispatchers.IO) {
         dao.clearAllCourses()
         dao.clearAllMeta()
+        dao.clearAllTermWeeks()
     }
 
     /** 缓存里的课程数 */

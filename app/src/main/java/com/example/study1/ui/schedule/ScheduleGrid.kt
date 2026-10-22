@@ -80,10 +80,17 @@ fun ScheduleGrid(
     val maxSection = maxOf(14, coursesInWeek.maxOfOrNull { it.endSection } ?: 14)
     val periods = 1..maxSection
 
-    // 本周周一的日期（用于表头显示日期）
-    val weekDates = remember(weekNumber, termStartDate) {
-        if (termStartDate.isNullOrBlank()) null
-        else runCatching { DateUtils.weekDates(termStartDate, weekNumber) }.getOrNull()
+    // 本周 7 天日期：优先用教务系统的教学周，其次用学期起始日推算
+    val weekDates = remember(weekNumber, termStartDate, data.termWeeks) {
+        val tw = data.termWeekOf(weekNumber)
+        if (tw != null) {
+            // 教学周只给了起止日期，按周一~周日展开 7 天
+            runCatching { DateUtils.weekDates(tw.startDate, 1) }.getOrNull()
+        } else if (termStartDate.isNullOrBlank()) {
+            null
+        } else {
+            runCatching { DateUtils.weekDates(termStartDate, weekNumber) }.getOrNull()
+        }
     }
 
     // 自适应宽度：父容器有确定宽度时按比例分配，否则用固定宽度

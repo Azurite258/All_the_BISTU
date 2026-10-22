@@ -10,6 +10,7 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import com.example.study1.data.Course
 import com.example.study1.data.ScheduleData
+import com.example.study1.data.TermWeek
 
 // ═══════════════════════════════════════════════════════════════
 // 一、实体
@@ -54,6 +55,23 @@ data class ScheduleMetaEntity(
     val lastSyncAt: Long
 )
 
+/**
+ * 教学周（每周的起止日期）。
+ *
+ * 与课表分开存表，因为它是「学期」级别的属性，
+ * 同一学期的所有课程共用一份。
+ */
+@Entity(
+    tableName = "term_weeks",
+    primaryKeys = ["termCode", "weekNumber"]
+)
+data class TermWeekEntity(
+    val termCode: String,
+    val weekNumber: Int,
+    val startDate: String,
+    val endDate: String
+)
+
 // ═══════════════════════════════════════════════════════════════
 // 二、DAO
 // ═══════════════════════════════════════════════════════════════
@@ -90,6 +108,19 @@ interface ScheduleDao {
     @Query("DELETE FROM schedule_meta")
     suspend fun clearAllMeta()
 
+    // ── 教学周 ──
+    @Query("SELECT * FROM term_weeks WHERE termCode = :termCode ORDER BY weekNumber")
+    suspend fun getTermWeeks(termCode: String): List<TermWeekEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTermWeeks(weeks: List<TermWeekEntity>)
+
+    @Query("DELETE FROM term_weeks WHERE termCode = :termCode")
+    suspend fun deleteTermWeeks(termCode: String)
+
+    @Query("DELETE FROM term_weeks")
+    suspend fun clearAllTermWeeks()
+
     // ── 清空全部 ──
     @Query("DELETE FROM courses")
     suspend fun clearAllCourses()
@@ -100,8 +131,8 @@ interface ScheduleDao {
 // ═══════════════════════════════════════════════════════════════
 
 @Database(
-    entities = [CourseEntity::class, ScheduleMetaEntity::class],
-    version = 1,
+    entities = [CourseEntity::class, ScheduleMetaEntity::class, TermWeekEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -185,3 +216,14 @@ fun ScheduleData.toMetaEntity(lastSyncAt: Long): ScheduleMetaEntity =
         campus = campus,
         lastSyncAt = lastSyncAt
     )
+
+fun TermWeek.toEntity(termCode: String): TermWeekEntity =
+    TermWeekEntity(
+        termCode = termCode,
+        weekNumber = weekNumber,
+        startDate = startDate,
+        endDate = endDate
+    )
+
+fun TermWeekEntity.toTermWeek(): TermWeek =
+    TermWeek(weekNumber = weekNumber, startDate = startDate, endDate = endDate)

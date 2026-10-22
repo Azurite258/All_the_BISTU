@@ -40,6 +40,7 @@ import com.example.study1.data.Source
 import com.example.study1.data.prefs.AppSettings
 import com.example.study1.data.prefs.SettingsStore
 import com.example.study1.data.prefs.ThemeMode
+import com.example.study1.ui.schedule.DateUtils
 import com.example.study1.ui.schedule.ScheduleGrid
 import com.example.study1.ui.settings.SettingsScreen
 import com.example.study1.ui.theme.HyperSpacing
@@ -274,13 +275,14 @@ private fun ScheduleScreen(
     onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit
 ) {
-    val weekRange = data.weekRange
+    // 显示范围：优先用教务系统的教学周，拿不到时退化为课程覆盖范围
+    val weekRange = data.displayWeekRange
 
-    // 默认显示「今天所在周」；如果算不出来或超出范围，回退到第 1 周
-    var currentWeek by remember(data.termCode) {
+    // 默认显示「今天所在周」；如果算不出来或超出范围，回退到范围内第一周
+    var currentWeek by remember(data.termCode, data.termWeeks.size) {
         mutableIntStateOf(
-            com.example.study1.ui.schedule.DateUtils
-                .currentWeekOf(TERM_START_DATE)
+            DateUtils.currentWeekOfTermWeeks(data.termWeeks, DateUtils.todayIso())
+                ?: DateUtils.currentWeekOf(TERM_START_DATE)
                 ?.takeIf { it in weekRange }
                 ?: weekRange.first
         )
@@ -364,6 +366,7 @@ private fun ScheduleScreen(
                 weekRange = weekRange,
                 courseCount = data.coursesInWeek(currentWeek).size,
                 termStartDate = TERM_START_DATE,
+                termWeek = data.termWeekOf(currentWeek),
                 onWeekChange = { currentWeek = it }
             )
 
@@ -460,17 +463,26 @@ private fun WeekSelector(
     weekRange: IntRange,
     courseCount: Int,
     termStartDate: String?,
+    termWeek: com.example.study1.data.TermWeek? = null,
     onWeekChange: (Int) -> Unit
 ) {
-    val weekDateRange = remember(currentWeek, termStartDate) {
-        if (termStartDate.isNullOrBlank()) null
-        else runCatching {
-            val dates = com.example.study1.ui.schedule.DateUtils
-                .weekDates(termStartDate, currentWeek)
-            if (dates.size == 7) {
-                "${dates[0].substring(5)} ~ ${dates[6].substring(5)}"
-            } else null
-        }.getOrNull()
+    // 日期显示优先级：教务系统给的教学周 > 用学期起始日推算
+    val weekDateRange = remember(currentWeek, termStartDate, termWeek) {
+        if (termWeek != null) {
+            // 教学周直接给 "yyyy-MM-dd"，转成 "MM-dd ~ MM-dd"
+            val s = termWeek.startDate.takeIf { it.length >= 10 }?.substring(5)
+            val e = termWeek.endDate.takeIf { it.length >= 10 }?.substring(5)
+            if (s != null && e != null) "$s ~ $e" else null
+        } else if (termStartDate.isNullOrBlank()) {
+            null
+        } else {
+            runCatching {
+                val dates = DateUtils.weekDates(termStartDate, currentWeek)
+                if (dates.size == 7) {
+                    "${dates[0].substring(5)} ~ ${dates[6].substring(5)}"
+                } else null
+            }.getOrNull()
+        }
     }
 
     Row(

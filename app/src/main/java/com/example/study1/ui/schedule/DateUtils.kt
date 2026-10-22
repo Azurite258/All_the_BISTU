@@ -1,5 +1,6 @@
 package com.example.study1.ui.schedule
 
+import com.example.study1.data.TermWeek
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -54,6 +55,38 @@ object DateUtils {
 
     /** 今天是否在学期内（用于判断"今天高亮"是否该显示） */
     fun todayIso(): String = isoFormat.format(Date())
+
+    /**
+     * 根据教学周列表 + 今天日期，算出当前是第几周。
+     *
+     * 比 [currentWeekOf] 更可靠：直接用教务系统给的每周起止日期，
+     * 不依赖「学期第 1 周周一」这个需要人工维护的常量。
+     *
+     * @param termWeeks 教学周列表（可为空）
+     * @param today 今天日期，格式 "yyyy-MM-dd"
+     * @return 周次；今天不在任何教学周内则返回 null
+     */
+    fun currentWeekOfTermWeeks(termWeeks: List<TermWeek>, today: String = todayIso()): Int? {
+        if (termWeeks.isEmpty()) return null
+        val todayMs = runCatching { isoFormat.parse(today)?.time }.getOrNull() ?: return null
+
+        // 先找「今天落在 startDate..endDate 内」的那一周
+        termWeeks.forEach { w ->
+            val start = runCatching { isoFormat.parse(w.startDate)?.time }.getOrNull()
+            val end = runCatching { isoFormat.parse(w.endDate)?.time }.getOrNull()
+            if (start != null && end != null) {
+                // endDate 是当天 00:00，补足一天再比较
+                if (todayMs >= start && todayMs < end + 24 * 60 * 60 * 1000L) {
+                    return w.weekNumber
+                }
+            }
+        }
+
+        // 没落在任何周内（假期/开学前）→ 取最近的一周
+        val firstStart = runCatching { isoFormat.parse(termWeeks.first().startDate)?.time }.getOrNull()
+        if (firstStart != null && todayMs < firstStart) return termWeeks.first().weekNumber
+        return termWeeks.lastOrNull()?.weekNumber
+    }
 
     /**
      * 根据当前日期反推是第几周。

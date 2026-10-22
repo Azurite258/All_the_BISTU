@@ -3,6 +3,7 @@ package com.example.study1.data.auth
 import android.util.Log
 import com.example.study1.data.ScheduleData
 import com.example.study1.data.ScheduleParser
+import com.example.study1.data.TermWeek
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -144,6 +145,35 @@ class JwxtApi(
     }
 
     /**
+     * 获取教学周列表（每周的起止日期）。
+     *
+     * 接口：POST getTermWeeks.do，参数 XNXQDM=学期代码
+     * 返回：datas.getTermWeeks[]，每项含 serialNumber / startDate / endDate
+     *
+     * 失败时返回空列表而不是抛异常 —— 教学周只是「锦上添花」，
+     * 拿不到时课表仍应能按课程覆盖范围正常显示。
+     */
+    suspend fun getTermWeeks(termCode: String): List<TermWeek> {
+        return runCatching {
+            val json = post(API_TERM_WEEKS, mapOf("XNXQDM" to termCode))
+            val obj = org.json.JSONObject(json)
+            val arr = obj.optJSONObject("datas")?.optJSONArray("getTermWeeks")
+                ?: return@runCatching emptyList()
+
+            (0 until arr.length()).mapNotNull { i ->
+                val w = arr.optJSONObject(i) ?: return@mapNotNull null
+                val num = w.optInt("serialNumber", 0)
+                val start = w.optString("startDate", "")
+                val end = w.optString("endDate", "")
+                if (num <= 0 || start.isBlank()) null
+                else TermWeek(weekNumber = num, startDate = start, endDate = end)
+            }.sortedBy { it.weekNumber }
+        }.onFailure {
+            logger("getTermWeeks 失败（将退化为按课程周次显示）: ${it.message}")
+        }.getOrDefault(emptyList())
+    }
+
+    /**
      * 获取完整课表。
      *
      * @param termCode 学期代码，null 表示自动获取当前学期
@@ -211,5 +241,6 @@ class JwxtApi(
         }
 
         return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
+            .copy(termWeeks = getTermWeeks(actualTermCode))
     }
 }
