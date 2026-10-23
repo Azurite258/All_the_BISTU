@@ -17,10 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.Source
+import com.bistu.allthebistu.data.StudyReport
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.schedule.ScheduleUiState
@@ -43,6 +45,7 @@ fun StudyScreen(
     uiState: ScheduleUiState,
     colorScheme: Int,
     isDark: Boolean,
+    report: StudyReport? = null,
     modifier: Modifier = Modifier
 ) {
     val data = uiState.loadResult?.data
@@ -124,7 +127,8 @@ fun StudyScreen(
                     totalWeeks = totalWeeks,
                     credit = semesterCredit,
                     courseCount = courseCount,
-                    unarrangedCount = unarrangedCount
+                    unarrangedCount = unarrangedCount,
+                    report = report
                 )
 
                 Spacer(Modifier.height(HyperSpacing.cardGap))
@@ -205,7 +209,8 @@ private fun SemesterOverviewCard(
     totalWeeks: Int,
     credit: Double,
     courseCount: Int,
-    unarrangedCount: Int
+    unarrangedCount: Int,
+    report: StudyReport?
 ) {
     val progress = (week.toFloat() / totalWeeks.coerceAtLeast(1)).coerceIn(0f, 1f)
 
@@ -253,24 +258,64 @@ private fun SemesterOverviewCard(
         Spacer(Modifier.height(14.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StatBlock(
-                value = formatCredit(credit),
-                unit = "学分",
-                label = "本学期已选",
-                modifier = Modifier.weight(1f)
-            )
-            StatBlock(
-                value = courseCount.toString(),
-                unit = "门",
-                label = "课程",
-                modifier = Modifier.weight(1f)
-            )
+            if (report != null && report.creditsRequired > 0.0) {
+                // 有教务的学业数据时，用官方的「已修 / 要求」
+                StatBlock(
+                    value = formatCredit(report.creditsEarned),
+                    unit = "/ ${formatCredit(report.creditsRequired)} 学分",
+                    label = "已修 / 要求",
+                    modifier = Modifier.weight(1f)
+                )
+                StatBlock(
+                    value = formatCredit(report.creditsSelection),
+                    unit = "学分",
+                    label = "本学期已选",
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                StatBlock(
+                    value = formatCredit(credit),
+                    unit = "学分",
+                    label = "本学期已选",
+                    modifier = Modifier.weight(1f)
+                )
+                StatBlock(
+                    value = courseCount.toString(),
+                    unit = "门",
+                    label = "课程",
+                    modifier = Modifier.weight(1f)
+                )
+            }
             StatBlock(
                 value = (totalWeeks - week).coerceAtLeast(0).toString(),
                 unit = "周",
                 label = "距学期结束",
                 modifier = Modifier.weight(1f)
             )
+        }
+
+        // 分类学分：通识 / 专业 / 拓展，各占一份要求
+        if (report != null && report.categories.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                report.categories.forEach { c ->
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${formatCredit(c.earned)}/${formatCredit(c.required)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = c.name,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         // 有些课没有排上课时间（线上课/安全教育），它们不在课表里但学分要算

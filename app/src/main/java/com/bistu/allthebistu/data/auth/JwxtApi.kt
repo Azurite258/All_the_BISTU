@@ -3,6 +3,8 @@ package com.bistu.allthebistu.data.auth
 import android.util.Log
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.ScheduleParser
+import com.bistu.allthebistu.data.StudyReport
+import com.bistu.allthebistu.data.StudyReportParser
 import com.bistu.allthebistu.data.TermWeek
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,6 +41,9 @@ class JwxtApi(
 
         /** 课表详情 */
         const val API_SCHEDULE = "$BASE/jwapp/sys/kbapp/api/wdkbcx/getMyScheduleDetail.do"
+
+        /** 学业完成查询（个人学业监测报告：要求学分 / 已修 / 已选 / 分类明细） */
+        const val API_STUDY_REPORT = "$BASE/jwapp/sys/byshapp/api/grbg/queryXyzhbx.do"
 
         /** 考试安排 */
         const val API_EXAM = "$BASE/jwapp/sys/wdkwapp/api/wdks/queryMyExamArrangeMent.do"
@@ -92,21 +97,54 @@ class JwxtApi(
                 val text = resp.body?.string() ?: ""
                 logger("POST 响应: HTTP ${resp.code}, 长度 ${text.length}")
                 if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
-
-                // 会话失效时，教务系统常常不返回 401，而是 200 + 一张统一身份认证登录页。
-                // 这种响应交给 JSONObject 解析会抛 JSONException，被当成「普通错误」，
-                // 于是登录态不会被清理，界面就出现「已登录却显示示例数据」的矛盾状态。
-                // 这里提前识别 HTML / 登录页，统一按会话失效处理。
-                if (isLikelyLoginPage(text)) {
-                    throw AuthException("接口返回登录页，会话已失效（HTTP ${resp.code}）")
-                }
-                val head = text.trimStart()
-                if (!head.startsWith("{") && !head.startsWith("[")) {
-                    throw IllegalStateException("接口返回了非 JSON 内容：${head.take(120)}")
-                }
+                validateJsonBody(text, resp.code)
                 text
             }
         }
+
+    /**
+     * 学业完成情况（要求学分 / 已修 / 已选 / 分类明细）。
+     *
+     * 这个接口不带参数，但不同版本对 GET/POST 的支持不一样：
+     * 先按 GET 试，拿到非 JSON 或失败再退回 POST（历史接口大多是 POST）。
+     */
+    suspend fun fetchStudyReport(): StudyReport {
+        val raw = runCatching { getRaw(API_STUDY_REPORT) }
+            .getOrElse { e ->
+                logger("学业报告 GET 失败，改用 POST: ${e.message}")
+                post(API_STUDY_REPORT, emptyMap())
+            }
+        return StudyReportParser.parse(raw)
+    }
+
+    /** 最朴素的 GET，供不带参数的查询接口使用 */
+    private suspend fun getRaw(url: String): String = withContext(Dispatchers.IO) {
+        logger("GET $url")
+        client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
+            val text = resp.body?.string() ?: ""
+            logger("GET 响应: HTTP ${resp.code}, 长度 ${text.length}")
+            if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
+            validateJsonBody(text, resp.code)
+            text
+        }
+    }
+
+    /**
+     * 校验响应体是不是接口数据。
+     *
+     * 会话失效时教务常常返回 200 + 统一身份认证登录页，
+     * 这种响应交给 JSONObject 会抛 JSONException，被误当成普通错误，
+     * 于是登录态不清、界面出现「已登录却显示示例数据」的矛盾状态。
+     */
+    private fun validateJsonBody(text: String, httpCode: Int) {
+        if (isLikelyLoginPage(text)) {
+            throw AuthException("接口返回登录页，会话已失效（HTTP $httpCode）")
+        }
+        val head = text.trimStart()
+        if (!head.startsWith("{") && !head.startsWith("[")) {
+            throw IllegalStateException("接口返回了非 JSON 内容：${head.take(120)}")
+        }
+    }
 
     /**
      * 建立课表模块的 session。

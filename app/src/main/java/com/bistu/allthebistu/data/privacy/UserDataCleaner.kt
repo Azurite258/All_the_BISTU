@@ -96,6 +96,11 @@ class UserDataCleaner(private val context: Context) {
             .onSuccess { done += "课表缓存" }
             .onFailure { Log.w(TAG, "清除课表缓存失败: ${it.message}") }
 
+        // ②' 学业报告（含要求/已修学分，属于个人学籍数据）
+        runCatching { com.bistu.allthebistu.data.StudyReportStore(context).clear() }
+            .onSuccess { done += "学业报告" }
+            .onFailure { Log.w(TAG, "清除学业报告失败: ${it.message}") }
+
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }
             .onSuccess { done += "临时文件" }

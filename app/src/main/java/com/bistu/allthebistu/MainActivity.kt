@@ -170,7 +170,8 @@ private fun AppRoot(
             MainTab.STUDY -> StudyScreen(
                 uiState = uiState,
                 colorScheme = settings.colorScheme,
-                isDark = isDark
+                isDark = isDark,
+                report = uiState.studyReport
             )
 
             MainTab.LIFE -> LifeScreen()

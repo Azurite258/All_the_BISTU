@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
+import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.privacy.UserDataCleaner
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.AutoLoginResult
@@ -35,7 +36,11 @@ data class ScheduleUiState(
     /** 是否展示底部登录引导条 */
     val showLoginPrompt: Boolean = false,
     /** 当前是否已登录（与 AuthHolder 同步） */
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+    /** 学业完成情况（要求学分/已修/已选），没拿到时为 null */
+    val studyReport: com.bistu.allthebistu.data.StudyReport? = null,
+    /** 学业报告是否正在刷新 */
+    val reportLoading: Boolean = false
 )
 
 /**
@@ -52,6 +57,9 @@ data class ScheduleUiState(
 class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = ScheduleRepository(app)
+
+    /** 学业报告的本地缓存（文件 + JSON），退出登录时会被清掉 */
+    private val reportStore = com.bistu.allthebistu.data.StudyReportStore(app)
 
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
@@ -90,6 +98,11 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
 
+            // 先显示上次抓到的学业报告（离线也能看）
+            reportStore.load()?.let { cachedReport ->
+                _uiState.update { it.copy(studyReport = cachedReport) }
+            }
+
             // ② 恢复登录态
             val result = AuthHolder.autoLogin(getApplication())
             Log.d(TAG, "自动登录结果: $result")
@@ -112,6 +125,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     _uiState.update {
                         it.copy(loadResult = loaded, isLoading = false, isRefreshing = false)
                     }
+                    refreshStudyReport()
                 }
 
                 is AutoLoginResult.NeedManual -> {
@@ -173,6 +187,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                 // 下拉 = 强制从网络拉最新
                 val loaded = repository.loadSchedule(forceRefresh = true)
                 _uiState.update { it.copy(loadResult = loaded) }
+                refreshStudyReport()
             } finally {
                 // 本地数据（如未登录读 assets）几毫秒就返回，
                 // 指示器会一闪而过看不到动画。补足最短显示时长，
@@ -234,7 +249,33 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             Log.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
 
             val loaded = repository.loadSchedule()
-            _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+            _uiState.update {
+                it.copy(loadResult = loaded, isLoading = false, studyReport = null)
+            }
+        }
+    }
+
+    /**
+     * 拉取学业完成情况（要求学分 / 已修 / 已选）。
+     *
+     * 失败只记日志，不弹错误——学业数据属于「锦上添花」，
+     * 挂了不该影响课表本身的使用。
+     */
+    fun refreshStudyReport() {
+        val auth = AuthHolder.auth ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(reportLoading = true) }
+            runCatching { JwxtApi(auth).fetchStudyReport() }
+                .onSuccess { report ->
+                    reportStore.save(report)
+                    _uiState.update { it.copy(studyReport = report, reportLoading = false) }
+                    Log.d(TAG, "学业报告: 已修 ${report.creditsEarned}/${report.creditsRequired}，" +
+                            "已选 ${report.creditsSelection}")
+                }
+                .onFailure { e ->
+                    Log.w(TAG, "学业报告获取失败: ${e.message}")
+                    _uiState.update { it.copy(reportLoading = false) }
+                }
         }
     }
 
