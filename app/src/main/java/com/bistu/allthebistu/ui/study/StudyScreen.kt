@@ -67,6 +67,13 @@ fun StudyScreen(
             .orEmpty()
     }
 
+    // 学期总周数：教学周给多少算多少，没有教学周就用课程覆盖的最后一周
+    val totalWeeks = remember(data) { data?.displayWeekRange?.last ?: 20 }
+
+    // 已选学分：同一门课可能被拆成多个课块（换教室/换周次），按课程码去重后再加
+    val semesterCredit = remember(data) { semesterCreditOf(data?.courses.orEmpty()) }
+    val courseCount = remember(data) { distinctCourseCount(data?.courses.orEmpty()) }
+
     // 和课表页共用同一套「课程名 → 色板索引」，两边的颜色才对得上
     val paletteIndex = remember(data) {
         CourseColors.paletteIndexFor(data?.courses?.map { it.name }.orEmpty())
@@ -108,6 +115,15 @@ fun StudyScreen(
             )
 
             else -> {
+                SemesterOverviewCard(
+                    week = week,
+                    totalWeeks = totalWeeks,
+                    credit = semesterCredit,
+                    courseCount = courseCount
+                )
+
+                Spacer(Modifier.height(HyperSpacing.cardGap))
+
                 TodaySummary(courses = todayCourses, nowMinutes = nowMinutes)
 
                 Spacer(Modifier.height(HyperSpacing.cardGap))
@@ -168,6 +184,141 @@ fun StudyScreen(
 
         Spacer(Modifier.height(100.dp))
     }
+}
+
+/**
+ * 学期概览：这学期的整体进度与已选学分。
+ *
+ * 放在学习页最上面，回答「这学期还剩多久、我这学期上了多少学分」。
+ * 注意「已选学分」是从课表里每门课的 credit 字段累加出来的，
+ * 含义是**本学期选了哪些课、合计多少学分**，不是「已修学分」——
+ * 后者要等成绩接口接通后才能算。
+ */
+@Composable
+private fun SemesterOverviewCard(
+    week: Int,
+    totalWeeks: Int,
+    credit: Double,
+    courseCount: Int
+) {
+    val progress = (week.toFloat() / totalWeeks.coerceAtLeast(1)).coerceIn(0f, 1f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "学期进度",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "第 $week / $totalWeeks 周",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // 进度条
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatBlock(
+                value = formatCredit(credit),
+                unit = "学分",
+                label = "本学期已选",
+                modifier = Modifier.weight(1f)
+            )
+            StatBlock(
+                value = courseCount.toString(),
+                unit = "门",
+                label = "课程",
+                modifier = Modifier.weight(1f)
+            )
+            StatBlock(
+                value = (totalWeeks - week).coerceAtLeast(0).toString(),
+                unit = "周",
+                label = "距学期结束",
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatBlock(
+    value: String,
+    unit: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = value,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = " $unit",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 3.dp)
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * 本学期已选学分。
+ *
+ * 课表里同一门课可能被拆成多个课块（换教室、换周次），
+ * 所以先按课程码去重再累加，否则学分会被重复计算。
+ * 学分字段是字符串且可能为空，解析不出来就按 0 处理。
+ */
+internal fun semesterCreditOf(courses: List<Course>): Double =
+    courses.distinctBy { it.code.ifBlank { it.name } }
+        .sumOf { it.credit.toDoubleOrNull() ?: 0.0 }
+
+/** 去重后的课程门数 */
+internal fun distinctCourseCount(courses: List<Course>): Int =
+    courses.distinctBy { it.code.ifBlank { it.name } }.size
+
+/** 23.5 → "23.5"，23.0 → "23"，避免出现「23.0 学分」这种别扭写法 */
+private fun formatCredit(credit: Double): String {
+    if (credit <= 0.0) return "—"
+    return if (credit % 1.0 == 0.0) credit.toInt().toString()
+    else String.format(java.util.Locale.CHINA, "%.1f", credit)
 }
 
 /** 今日概览：几节、几门、首末节时间 */
