@@ -124,10 +124,11 @@ private fun ScheduleContent(
     // 用 rememberSaveable：横竖屏切换后仍停在原来那一周。
     var currentWeek by rememberSaveable(data.termCode, data.termWeeks.size) {
         mutableIntStateOf(
-            DateUtils.currentWeekOfTermWeeks(data.termWeeks, DateUtils.todayIso())
-                ?: DateUtils.currentWeekOf(TERM_START_DATE)
-                    ?.takeIf { it in weekRange }
-                ?: weekRange.first
+            DateUtils.displayWeek(
+                termWeeks = data.termWeeks,
+                termStartDate = TERM_START_DATE,
+                weekRange = weekRange
+            )
         )
     }
 

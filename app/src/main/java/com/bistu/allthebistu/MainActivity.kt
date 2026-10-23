@@ -32,9 +32,9 @@ import androidx.lifecycle.ViewModelProvider
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.prefs.ThemeMode
-import com.bistu.allthebistu.ui.CampusScreen
+import com.bistu.allthebistu.ui.LifeScreen
 import com.bistu.allthebistu.ui.ProfileScreen
-import com.bistu.allthebistu.ui.StudyScreen
+import com.bistu.allthebistu.ui.study.StudyScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
@@ -167,8 +167,13 @@ private fun AppRoot(
                 onOpenLogin = { openLogin() }
             )
 
-            MainTab.CAMPUS -> CampusScreen()
-            MainTab.STUDY -> StudyScreen()
+            MainTab.STUDY -> StudyScreen(
+                uiState = uiState,
+                colorScheme = settings.colorScheme,
+                isDark = isDark
+            )
+
+            MainTab.LIFE -> LifeScreen()
             MainTab.PROFILE -> ProfileScreen()
         }
 

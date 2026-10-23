@@ -89,6 +89,23 @@ object DateUtils {
     }
 
     /**
+     * 显示用的「当前周次」，三级兜底：
+     *  1. 教务系统的教学周（最准，不依赖人工维护的常量）
+     *  2. 学期起始日推算
+     *  3. 显示范围的第一周
+     *
+     * 课表页和学习页都用它，避免两边算出不同的周次。
+     */
+    fun displayWeek(
+        termWeeks: List<TermWeek>,
+        termStartDate: String?,
+        weekRange: IntRange,
+        today: String = todayIso()
+    ): Int = currentWeekOfTermWeeks(termWeeks, today)
+        ?: termStartDate?.let { currentWeekOf(it) }?.takeIf { it in weekRange }
+        ?: weekRange.first
+
+    /**
      * 根据当前日期反推是第几周。
      *
      * @param termStartDate 第 1 周周一日期

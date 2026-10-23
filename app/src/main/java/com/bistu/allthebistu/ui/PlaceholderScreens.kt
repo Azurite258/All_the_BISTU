@@ -21,15 +21,16 @@ import com.bistu.allthebistu.ui.navigation.MainTab
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 
 /**
- * 校园 Tab 占位页。
+ * 生活 Tab 占位页。
  *
+ * 由原「校园」板块改名而来，定位从「教务相关」放宽到「校园生活服务」。
  * 未来放：一卡通余额、电费、图书馆、空教室、校园通知、校历。
  */
 @Composable
-fun CampusScreen(modifier: Modifier = Modifier) {
+fun LifeScreen(modifier: Modifier = Modifier) {
     PlaceholderScreen(
-        title = "校园",
-        subtitle = "All the Bistu 的核心板块",
+        title = "生活",
+        subtitle = "校园里的吃穿住行，一站搞定",
         plannedItems = listOf(
             "一卡通余额与消费流水",
             "宿舍电费余额与用量",
@@ -37,28 +38,6 @@ fun CampusScreen(modifier: Modifier = Modifier) {
             "空教室查询",
             "校园通知聚合",
             "校历与节假日"
-        ),
-        modifier = modifier
-    )
-}
-
-/**
- * 学习 Tab 占位页。
- *
- * 未来放：考试安排、课时统计、课表总览、课程笔记、AI 问答、学习计划。
- */
-@Composable
-fun StudyScreen(modifier: Modifier = Modifier) {
-    PlaceholderScreen(
-        title = "学习",
-        subtitle = "学业相关的一切",
-        plannedItems = listOf(
-            "考试安排与倒计时",
-            "课时统计图表",
-            "整学期课表总览",
-            "课程笔记",
-            "AI 课表问答",
-            "学习计划生成"
         ),
         modifier = modifier
     )
