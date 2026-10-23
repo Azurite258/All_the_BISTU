@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
+import com.bistu.allthebistu.data.privacy.UserDataCleaner
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.AutoLoginResult
 import kotlinx.coroutines.Job
@@ -70,10 +71,26 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ───────────────────────────────────────────────────────────
-    // 启动：先静默恢复会话，再加载课表
+    // 启动：缓存秒开 → 恢复会话 → 后台静默刷新
     // ───────────────────────────────────────────────────────────
     private fun bootstrap() {
         viewModelScope.launch {
+            // ① 先把上次同步的课表亮出来。
+            // 这一步不碰网络：没网、教务系统宕机、机房断电，
+            // 用户打开 App 也能立刻看到自己的课表，而不是转圈等待。
+            val cached = repository.loadCached()
+            if (cached != null) {
+                _uiState.update {
+                    it.copy(
+                        loadResult = cached,
+                        isLoading = false,
+                        // 有缓存时用顶部指示器表示「正在后台同步」，不再整页转圈
+                        isRefreshing = true
+                    )
+                }
+            }
+
+            // ② 恢复登录态
             val result = AuthHolder.autoLogin(getApplication())
             Log.d(TAG, "自动登录结果: $result")
             AuthHolder.auth?.let(repository::setAuth)
@@ -85,12 +102,16 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                         it.copy(
                             isLoggedIn = AuthHolder.isLoggedIn,
                             autoLoginHint = null,
-                            isLoading = true
+                            // 没有缓存才整页 loading，有缓存就保持界面可见
+                            isLoading = cached == null,
+                            isRefreshing = cached != null
                         )
                     }
-                    // 自动登录成功 → 强制从网络拉最新课表
+                    // 已登录 → 跳过缓存读，直接拉最新；失败会自动回退到刚显示的缓存
                     val loaded = repository.loadSchedule(forceRefresh = true)
-                    _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                    _uiState.update {
+                        it.copy(loadResult = loaded, isLoading = false, isRefreshing = false)
+                    }
                 }
 
                 is AutoLoginResult.NeedManual -> {
@@ -100,11 +121,16 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                             autoLoginHint = result.reason,
                             // 未登录 → 每次启动都提示一次（不记忆、不打扰已登录用户）
                             showLoginPrompt = true,
-                            isLoading = true
+                            isLoading = cached == null,
+                            isRefreshing = false
                         )
                     }
-                    val loaded = repository.loadSchedule()
-                    _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                    // 有缓存就先用缓存（说明是「会话过期」而不是「从没登录过」），
+                    // 没有缓存才回落到示例数据
+                    if (cached == null) {
+                        val loaded = repository.loadSchedule()
+                        _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                    }
                 }
             }
         }
@@ -180,12 +206,20 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 退出登录：清内存 + 清磁盘 + 清缓存，回落到示例数据 */
+    /**
+     * 退出登录：清掉本机所有个人信息，回落到示例数据。
+     *
+     * 清除范围见 [UserDataCleaner]：登录凭据（Cookie / 记住的学号）、
+     * 课表缓存（含学期信息里的姓名学号专业）、应用临时文件，
+     * 以及各业务模块注册进来的扩展数据（后续的校园卡、学籍等）。
+     *
+     * 注意第一步先断内存里的登录态：即使后面的磁盘清理出问题，
+     * 也不会出现「界面还显示登录中」的状态。
+     */
     fun logout() {
         viewModelScope.launch {
             AuthHolder.clear(getApplication())
             repository.clearAuth()
-            repository.clearCache()
             lastKnownLoggedIn = false
             _uiState.update {
                 it.copy(
@@ -195,6 +229,10 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     isLoading = true
                 )
             }
+
+            val cleared = UserDataCleaner(getApplication()).wipeAll()
+            Log.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
+
             val loaded = repository.loadSchedule()
             _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
         }

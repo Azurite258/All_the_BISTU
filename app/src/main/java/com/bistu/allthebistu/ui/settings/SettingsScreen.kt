@@ -59,12 +59,19 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
             title = { Text("退出登录") },
-            text = { Text("退出后需要重新输入学号和密码登录，确定要退出吗？") },
+            text = {
+                Text(
+                    "退出会清除本机保存的全部个人信息：" +
+                            "登录状态、记住的学号、课表缓存（含姓名/学号/专业）" +
+                            "以及后续校园卡等数据。\n\n" +
+                            "清除后需要重新登录才能同步，确定退出吗？"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutConfirm = false
                     onLogout()
-                }) { Text("退出登录") }
+                }) { Text("退出并清除") }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutConfirm = false }) { Text("取消") }
@@ -179,7 +186,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "清除本机保存的登录状态",
+                            text = "清除课表、学号等本机全部个人信息",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

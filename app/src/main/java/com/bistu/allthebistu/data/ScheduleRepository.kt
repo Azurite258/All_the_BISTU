@@ -100,6 +100,15 @@ class ScheduleRepository(private val context: Context) {
     }
 
     /**
+     * 只读本地缓存，不触网。
+     *
+     * 冷启动时先拿它把界面点亮（离线、教务系统宕机也能看到上次的课表），
+     * 随后再在后台静默刷新。
+     */
+    suspend fun loadCached(termCode: String? = null): LoadResult? =
+        withContext(Dispatchers.IO) { readCache(termCode) }
+
+    /**
      * 读取 assets 里的示例课表（只用于展示，不写入数据库）。
      *
      * @param cause 若非 null，表示这是网络失败后的降级展示，错误会一并带出
