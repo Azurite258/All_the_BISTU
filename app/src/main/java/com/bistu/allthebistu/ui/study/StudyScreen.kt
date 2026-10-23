@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.study
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -8,14 +9,24 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,6 +98,7 @@ fun StudyScreen(
     }
 
     val nowMinutes = remember { nowMinutes() }
+    var showErkeSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -191,7 +203,19 @@ fun StudyScreen(
             body = "课时统计、课程笔记、学习计划还在排队，先把今天的时间线用起来"
         )
 
-        Spacer(Modifier.height(100.dp))
+        Spacer(Modifier.height(HyperSpacing.cardGap))
+
+        // 二课积分：数据在微信公众号里，App 拿不到会话，这里只做入口和规则说明
+        ErkeCard(onClick = { showErkeSheet = true })
+
+        // 底部留白要同时躲开「悬浮导航栏」和「未登录提示条」，
+        // 只留 100dp 时最后一张卡会被提示条盖住
+        Spacer(Modifier.height(180.dp))
+    }
+
+    // 弹窗必须写在 Column 外面：写进去会被当成列表里的一个条目参与滚动
+    if (showErkeSheet) {
+        ErkeSheet(onDismiss = { showErkeSheet = false })
     }
 }
 
@@ -676,3 +700,152 @@ internal fun weekdayLabel(dow: Int): String =
 
 /** "2026-10-23" → "10-23" */
 private fun todayLabel(): String = DateUtils.todayIso().takeLast(5)
+
+/**
+ * 二课积分入口卡。
+ *
+ * 北信科的第二课堂系统挂在微信公众号「勤信青年」里，
+ * 走微信授权登录，原生 App 拿不到那个会话——所以这里不做数据抓取，
+ * 只负责把「去哪看」和「要攒多少」讲清楚。
+ */
+@Composable
+private fun ErkeCard(onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "二课积分",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "查看你的二课积分 →",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "毕业前需累计 80 积分，且五大模块各达最低要求，才拿得到 2 个必修学分",
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 二课积分的查看指引 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ErkeSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HyperSpacing.pageHorizontal)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "二课积分在哪看",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "北信科的第二课堂系统在微信公众号里，不在教务系统",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            ErkeStep("1", "打开微信，搜索公众号「勤信青年」（校团委官方号）")
+            ErkeStep("2", "进公众号，底部菜单找「第二课堂」")
+            ErkeStep("3", "点「我的」→ 学分/学时，可以看到总积分和各模块明细")
+
+            Spacer(Modifier.height(18.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .padding(14.dp)
+            ) {
+                Text(
+                    text = "达标要求",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "毕业前累计满 80 积分 + 五大模块各达最低线 → 兑换 2 个必修学分。" +
+                            "二课还占综合测评的 25%，直接影响奖学金和保研。",
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Button(
+                onClick = {
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    cm?.setPrimaryClip(ClipData.newPlainText("公众号", "勤信青年"))
+                    copied = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (copied) "已复制「勤信青年」" else "复制公众号名称")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErkeStep(index: String, text: String) {
+    Row(
+        modifier = Modifier.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = index,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
