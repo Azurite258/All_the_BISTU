@@ -24,8 +24,17 @@ data class ScheduleDatas(
 @Serializable
 data class ScheduleDetail(
     val subTitles: List<SubTitle> = emptyList(),
+    /** 已排课：有明确的星期 / 节次 / 教室 */
     val arrangedList: List<RawCourse> = emptyList(),
     val mergeArrangedList: List<RawCourse> = emptyList(),
+    /**
+     * 未排课：本学期选了、但教务没给具体时间的课
+     * （线上课、安全教育、职业规划这类，通常只有学分没有节次）。
+     * 它们不进课表网格，但**要算进已选学分**。
+     */
+    val notArrangeList: List<RawCourse> = emptyList(),
+    /** 实践环节（实习、课程设计等），结构同上 */
+    val practiceList: List<RawCourse> = emptyList(),
     val termName: String? = null
 )
 
@@ -108,6 +117,14 @@ data class Course(
 ) {
     /** 占几节 */
     val sectionCount: Int get() = endSection - beginSection + 1
+
+    /**
+     * 是否有具体上课时间。
+     *
+     * 未排课的课程（notArrangeList）dayOfWeek / beginSection 都是 0
+     * 或 null，只能参与学分统计，不能画进课表网格。
+     */
+    val isArranged: Boolean get() = dayOfWeek in 1..7 && beginSection >= 1
 
     /** 指定周次是否有课 */
     fun isInWeek(weekNumber: Int): Boolean = weekNumber in weeks
@@ -198,8 +215,11 @@ object ScheduleParser {
         // 从 subTitles 提取学生信息
         val info = detail.subTitles.associate { it.label to it.value }
 
-        val expanded = detail.arrangedList.flatMap { expandCourse(it) }
-        val courses = mergeDuplicates(expanded)
+        // 已排课放前面（课表按它画），未排课与实践环节跟在后面，只用于学分统计
+        val arranged = detail.arrangedList.flatMap { expandCourse(it) }
+        val notArranged = detail.notArrangeList.flatMap { expandCourse(it) }
+        val practice = detail.practiceList.flatMap { expandCourse(it) }
+        val courses = mergeDuplicates(arranged) + mergeDuplicates(notArranged) + mergeDuplicates(practice)
 
         return ScheduleData(
             termCode = termCode,

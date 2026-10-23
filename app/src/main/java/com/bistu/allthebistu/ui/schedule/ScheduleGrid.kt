@@ -117,7 +117,8 @@ fun ScheduleGrid(
     val todayTextColor = if (isDark) DarkTodayText else LightTodayText
     val cellBg = MaterialTheme.colorScheme.surface
 
-    val coursesInWeek = data.courses.filter { it.isInWeek(weekNumber) }
+    // 未排课的课程（只有学分、没有节次）不能画进网格，否则会跑到画布外面
+    val coursesInWeek = data.courses.filter { it.isInWeek(weekNumber) && it.isArranged }
 
     // 节次范围：至少到 14 节（覆盖晚上的课）
     val maxSection = maxOf(14, coursesInWeek.maxOfOrNull { it.endSection } ?: 14)

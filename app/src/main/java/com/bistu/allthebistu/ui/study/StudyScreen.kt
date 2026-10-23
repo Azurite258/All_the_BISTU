@@ -73,6 +73,10 @@ fun StudyScreen(
     // 已选学分：同一门课可能被拆成多个课块（换教室/换周次），按课程码去重后再加
     val semesterCredit = remember(data) { semesterCreditOf(data?.courses.orEmpty()) }
     val courseCount = remember(data) { distinctCourseCount(data?.courses.orEmpty()) }
+    // 只有学分、没有上课时间的课（线上课 / 安全教育 / 职业规划…）
+    val unarrangedCount = remember(data) {
+        data?.courses?.distinctBy { it.code.ifBlank { it.name } }?.count { !it.isArranged } ?: 0
+    }
 
     // 和课表页共用同一套「课程名 → 色板索引」，两边的颜色才对得上
     val paletteIndex = remember(data) {
@@ -119,7 +123,8 @@ fun StudyScreen(
                     week = week,
                     totalWeeks = totalWeeks,
                     credit = semesterCredit,
-                    courseCount = courseCount
+                    courseCount = courseCount,
+                    unarrangedCount = unarrangedCount
                 )
 
                 Spacer(Modifier.height(HyperSpacing.cardGap))
@@ -199,7 +204,8 @@ private fun SemesterOverviewCard(
     week: Int,
     totalWeeks: Int,
     credit: Double,
-    courseCount: Int
+    courseCount: Int,
+    unarrangedCount: Int
 ) {
     val progress = (week.toFloat() / totalWeeks.coerceAtLeast(1)).coerceIn(0f, 1f)
 
@@ -264,6 +270,16 @@ private fun SemesterOverviewCard(
                 unit = "周",
                 label = "距学期结束",
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        // 有些课没有排上课时间（线上课/安全教育），它们不在课表里但学分要算
+        if (unarrangedCount > 0) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "另有 $unarrangedCount 门未排课的课程，已计入学分但不显示在课表",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

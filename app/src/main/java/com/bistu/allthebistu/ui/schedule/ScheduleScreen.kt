@@ -260,7 +260,8 @@ private fun ScheduleContent(
                 WeekSelector(
                     currentWeek = currentWeek,
                     weekRange = weekRange,
-                    courseCount = data.coursesInWeek(currentWeek).size,
+                    // 只数画在格子里的课，未排课（无节次）不该算进来
+                    courseCount = data.coursesInWeek(currentWeek).count { it.isArranged },
                     termStartDate = TERM_START_DATE,
                     termWeek = data.termWeekOf(currentWeek),
                     onWeekChange = { currentWeek = it }
