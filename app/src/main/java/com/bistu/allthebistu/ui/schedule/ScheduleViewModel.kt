@@ -124,8 +124,12 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             AuthHolder.auth?.let(repository::setAuth)
-            if (forceRefresh) repository.clearCache()
-            val loaded = repository.loadSchedule()
+            // 注意：这里**不再**先 clearCache 再拉。
+            // 之前「登录后强制刷新」会先清空缓存，一旦这次网络请求失败，
+            // 用户就从「有真实课表」直接掉到「示例数据」，看起来像数据丢了。
+            // forceRefresh 的语义是「跳过缓存读」，而不是「删掉缓存」，
+            // 拉取成功时 saveSchedule 会整学期覆盖，用不着提前清。
+            val loaded = repository.loadSchedule(forceRefresh = forceRefresh)
             _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
         }
     }

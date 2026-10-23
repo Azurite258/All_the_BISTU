@@ -80,6 +80,7 @@ fun ScheduleScreen(
             data = result.data,
             source = result.source,
             timestamp = result.timestamp,
+            error = result.error,
             isDark = isDark,
             settings = settings,
             isLoggedIn = uiState.isLoggedIn,
@@ -103,6 +104,7 @@ private fun ScheduleContent(
     data: ScheduleData,
     source: Source,
     timestamp: Long,
+    error: Throwable? = null,
     isDark: Boolean,
     settings: AppSettings,
     isLoggedIn: Boolean,
@@ -131,6 +133,14 @@ private fun ScheduleContent(
 
     // 点击课程块 → 弹出详情
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
+
+    // 已登录却退化成示例数据时，把真实原因摊给用户看，而不是只显示「同步失败」
+    var errorDetail by remember { mutableStateOf<Throwable?>(null) }
+    LaunchedEffect(error, source, isLoggedIn) {
+        if (isLoggedIn && source == Source.ASSETS && error != null) {
+            errorDetail = error
+        }
+    }
 
     // 色板索引：按课程名排序后依次编号，保证同屏课程颜色不重复；
     // 课块和详情弹窗共用这一份，点开时颜色才对得上
@@ -185,6 +195,10 @@ private fun ScheduleContent(
                             source == Source.ASSETS && isLoggedIn -> Color(0xFFE65100)
                             isLoggedIn -> Color(0xFF2E7D32)
                             else -> sourceColor(source)
+                        },
+                        // 同步失败时点这行可以看具体原因
+                        modifier = Modifier.clickable(enabled = error != null) {
+                            errorDetail = error
                         }
                     )
                     // 自动登录未成功时的提示（点击可去登录）
@@ -329,6 +343,36 @@ private fun ScheduleContent(
                 wasRefreshing = isRefreshing
             }
         }
+    }
+
+    // ── 同步失败详情 ──
+    errorDetail?.let { err ->
+        AlertDialog(
+            onDismissRequest = { errorDetail = null },
+            title = { Text("同步失败") },
+            text = {
+                Column {
+                    Text(LoadErrorText.describe(err), fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = LoadErrorText.detail(err),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    errorDetail = null
+                    if (LoadErrorText.needsRelogin(err)) onOpenLogin()
+                }) {
+                    Text(if (LoadErrorText.needsRelogin(err)) "重新登录" else "知道了")
+                }
+            },
+            dismissButton = if (LoadErrorText.needsRelogin(err)) {
+                { TextButton(onClick = { errorDetail = null }) { Text("稍后") } }
+            } else null
+        )
     }
 
     // ── 课程详情弹窗 ──

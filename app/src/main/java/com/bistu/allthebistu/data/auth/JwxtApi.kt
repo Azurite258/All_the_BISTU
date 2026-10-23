@@ -92,6 +92,18 @@ class JwxtApi(
                 val text = resp.body?.string() ?: ""
                 logger("POST 响应: HTTP ${resp.code}, 长度 ${text.length}")
                 if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
+
+                // 会话失效时，教务系统常常不返回 401，而是 200 + 一张统一身份认证登录页。
+                // 这种响应交给 JSONObject 解析会抛 JSONException，被当成「普通错误」，
+                // 于是登录态不会被清理，界面就出现「已登录却显示示例数据」的矛盾状态。
+                // 这里提前识别 HTML / 登录页，统一按会话失效处理。
+                if (isLikelyLoginPage(text)) {
+                    throw AuthException("接口返回登录页，会话已失效（HTTP ${resp.code}）")
+                }
+                val head = text.trimStart()
+                if (!head.startsWith("{") && !head.startsWith("[")) {
+                    throw IllegalStateException("接口返回了非 JSON 内容：${head.take(120)}")
+                }
                 text
             }
         }
@@ -243,4 +255,23 @@ class JwxtApi(
         return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
             .copy(termWeeks = getTermWeeks(actualTermCode))
     }
+}
+
+/**
+ * 判断一段响应体是不是「登录页」而不是接口数据。
+ *
+ * 教务系统的会话过期后不会回 401，而是 200 + 一张 CAS 登录页；
+ * 这类响应必须按「会话失效」处理，否则会被误当成普通解析错误，
+ * 登录态不清、界面就会显示「已登录但只有示例数据」。
+ */
+internal fun isLikelyLoginPage(body: String): Boolean {
+    val head = body.trimStart()
+    if (head.isEmpty()) return false
+    // 正常接口一定是 JSON
+    if (head.startsWith("{") || head.startsWith("[")) return false
+    return head.startsWith("<") ||
+            head.contains("统一身份认证") ||
+            head.contains("CASTGC") ||
+            head.contains("login", ignoreCase = true) ||
+            head.contains("service=", ignoreCase = true)
 }
