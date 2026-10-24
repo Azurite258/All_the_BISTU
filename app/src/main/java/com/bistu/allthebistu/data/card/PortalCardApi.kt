@@ -72,6 +72,14 @@ object PortalCardApi {
         val totalPages: Int,
         val log: String,
         val error: String? = null,
+        /** 校园卡状态，如「正常」 */
+        val status: String = "",
+        /** 有效期，如「2046-08-09」 */
+        val expiry: String = "",
+        /** 宿舍电费余额。门户当前没暴露接口，先占位。 */
+        val electricity: Double? = null,
+        /** 网费余额。同上。 */
+        val networkFee: Double? = null,
         val rawItems: String = "",
         val rawDetail: String = "",
         val rawRecords: String = "",
@@ -161,7 +169,8 @@ object PortalCardApi {
             recordsResp.close()
 
             val (records, totalPages) = parseRecords(rawRecords)
-            log.appendLine("解析到 ${records.size} 条流水，共 $totalPages 页")
+            val (status, expiry) = parseMeta(rawRecords)
+            log.appendLine("解析到 ${records.size} 条流水，共 $totalPages 页，状态=$status 有效期=$expiry")
 
             Overview(
                 balance = records.firstOrNull()?.balance,
@@ -169,6 +178,8 @@ object PortalCardApi {
                 records = records,
                 totalPages = totalPages,
                 log = log.toString(),
+                status = status,
+                expiry = expiry,
                 rawItems = rawItems,
                 rawDetail = rawDetail,
                 rawRecords = rawRecords
@@ -198,6 +209,18 @@ object PortalCardApi {
         val d = root.optJSONObject("d") ?: root
         val data = d.optJSONObject("data") ?: return 0.0
         return data.optDouble("value", 0.0) / 100.0
+    }
+
+    /**
+     * 从流水里取卡面信息：账号状态、有效期。
+     * 这两个字段每条记录都有，取第一条即可。
+     */
+    private fun parseMeta(json: String): Pair<String, String> {
+        val root = runCatching { JSONObject(json) }.getOrNull() ?: return "" to ""
+        val d = root.optJSONObject("d") ?: root
+        val arr: JSONArray = d.optJSONArray("data") ?: return "" to ""
+        val first = arr.optJSONObject(0) ?: return "" to ""
+        return first.optString("ZHZTMC") to first.optString("YXQ")
     }
 
     /**
