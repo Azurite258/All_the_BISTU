@@ -113,8 +113,8 @@ fun FloatingBottomBar(
     // 药丸实际显示位置：拖动时听手指的，其余时候听动画
     val displayPos = dragPos ?: indicatorPos.value
 
-    // 吸附动画：damping 0.8 留一点点回弹，stiffness 340 接近 iOS 分段控件的节奏
-    val settleSpec: AnimationSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 340f)
+    // 吸附动画：damping 0.7 让药丸落位时轻微过冲再回弹，stiffness 340 保持跟手
+    val settleSpec: AnimationSpec<Float> = spring(dampingRatio = 0.7f, stiffness = 340f)
 
     // 坑 3：唯一驱动源，key 只能是 selectedIndex
     LaunchedEffect(selectedIndex) {
@@ -302,5 +302,5 @@ fun FloatingBottomBar(
     }
 }
 
-/** 轻扫判定阈值（px/s）。超过它，松手时按方向多进一格。 */
-private const val FLING_VELOCITY = 700f
+/** 轻扫判定阈值（px/s）。超过它，松手时按方向多进一格。调高 = 更不灵敏。 */
+private const val FLING_VELOCITY = 1250f
