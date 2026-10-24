@@ -68,8 +68,9 @@ private val CardBadgeRed = Color(0xFF8E1B1B)
  *
  * 刻意**不展示**姓名、学号、学院、班级、照片。
  *
- * 宿舍电费 / 网费：门户目前没有暴露接口，先占位显示「--」，
- * 数据层 [PortalCardApi.Overview] 已留好 electricity / networkFee 字段。
+ * 电费 / 网费：门户没有这两项的余额接口（`items` 里只有邮件/工资/手机号/一卡通/知会
+ * 五张卡），所以改成从一卡通流水里识别「电费充值」「网费充值」的商户记录，
+ * 显示本月充值合计。本月一笔都没有时显示「--」，不编 0。
  */
 @Composable
 fun LifeScreen(modifier: Modifier = Modifier) {
@@ -392,16 +393,21 @@ private fun CampusCard(
 
             Spacer(Modifier.height(14.dp))
 
-            // 宿舍电费 / 网费（文字与数值横排，两者间距拉开）
+            // 电费 / 网费：门户没有余额接口，但这两项充值都会落在一卡通流水里
+            // （实测商户名「网络中心网费（微信）」），所以这里显示的是**本月充值合计**。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InlineStat(
-                    label = "宿舍电费",
-                    value = overview?.electricity?.let { PortalCardApi.formatMoney(it) } ?: "--"
+                    label = "电费充值",
+                    value = overview?.electricityTopUp?.let {
+                        PortalCardApi.formatMoney(it.amount)
+                    } ?: "--"
                 )
                 Spacer(Modifier.width(36.dp))
                 InlineStat(
-                    label = "网费",
-                    value = overview?.networkFee?.let { PortalCardApi.formatMoney(it) } ?: "--"
+                    label = "网费充值",
+                    value = overview?.networkTopUp?.let {
+                        PortalCardApi.formatMoney(it.amount)
+                    } ?: "--"
                 )
             }
 
