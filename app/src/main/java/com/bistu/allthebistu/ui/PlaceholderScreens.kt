@@ -37,8 +37,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -315,19 +313,10 @@ private fun CampusCard(
             .background(Brush.linearGradient(listOf(CardGoldTop, CardGoldBottom)))
             .clickable { onClick() }
     ) {
-        // 右下角校园建筑剪影。底部正好抵住状态条上沿，既不悬空也不压文字。
-        Canvas(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 44.dp)
-                .width(150.dp)
-                .height(76.dp)
-        ) {
-            drawCampusSkyline()
-        }
-
         Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 20.dp)) {
             // 卡头：真实校徽 + 校名 + 学生卡徽章
+            // 校名区固定 32dp 高（= 校徽高度）并两端对齐：书法体顶端贴校徽顶端，
+            // 英文底端贴校徽底端，中间空出来的部分是两者的天然行距。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(R.drawable.ic_school_badge),
@@ -335,7 +324,12 @@ private fun CampusCard(
                     modifier = Modifier.size(32.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
                     // 校名用学校官方书法体（从 logo 里裁出来的），比排版字更贴原图
                     Image(
                         painter = painterResource(R.drawable.ic_school_name),
@@ -345,10 +339,10 @@ private fun CampusCard(
                             .height(19.dp)
                             .aspectRatio(8.43f)
                     )
-                    // 英文紧跟中文，中间不留空
                     Text(
                         text = "BEIJING INFORMATION SCIENCE & TECHNOLOGY UNIVERSITY",
                         fontSize = 4.5.sp,
+                        lineHeight = 5.sp,
                         color = Color.White.copy(alpha = 0.78f),
                         maxLines = 1
                     )
@@ -365,27 +359,34 @@ private fun CampusCard(
 
             Spacer(Modifier.height(16.dp))
 
-            // 余额
-            Row(verticalAlignment = Alignment.Bottom) {
+            // 余额 + 本月消费
+            // 两个标签统一 14sp、统一 CenterVertically，所以「余额」和「本月消费」
+            // 这四个字落在同一条水平线上（之前 12sp/11sp + 各自不同的底部留白，是歪的）。
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "余额",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(bottom = 4.dp)
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.85f)
                 )
-                Spacer(Modifier.width(7.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = balanceText,
-                    fontSize = 28.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(14.dp))
                 Text(
-                    text = "本月 $monthText",
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    text = "本月消费",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = monthText,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
             }
 
@@ -431,126 +432,19 @@ private fun CampusCard(
     }
 }
 
-/**
- * 右下角校园建筑剪影。
- *
- * 参考 E 卡通卡面：主楼 + 两侧副楼 + 窗户阵列 + 树，用比背景稍深的橙色画，
- * 窗户用半透明白，整体压在卡面右下角，不抢文字。
- */
-private fun DrawScope.drawCampusSkyline() {
-    val w = size.width
-    val h = size.height
-    val base = h
-
-    val body = Color(0xFFA94D0A).copy(alpha = 0.26f)
-    val bodyLight = Color(0xFFA94D0A).copy(alpha = 0.18f)
-    val win = Color.White.copy(alpha = 0.42f)
-
-    // 地面
-    drawRect(
-        color = bodyLight,
-        topLeft = Offset(0f, base - h * 0.06f),
-        size = Size(w, h * 0.06f)
-    )
-
-    // 左侧副楼
-    val lx = w * 0.06f
-    val lw = w * 0.17f
-    val lh = h * 0.42f
-    drawRect(bodyLight, Offset(lx, base - lh), Size(lw, lh))
-    repeat(3) { row ->
-        repeat(2) { col ->
-            drawRect(
-                win.copy(alpha = 0.32f),
-                Offset(
-                    lx + lw * (0.18f + col * 0.42f),
-                    base - lh + lh * (0.16f + row * 0.25f)
-                ),
-                Size(lw * 0.22f, lh * 0.14f)
-            )
-        }
-    }
-
-    // 主楼（带屋顶塔楼）
-    val mx = w * 0.30f
-    val mw = w * 0.40f
-    val mh = h * 0.74f
-    drawRect(body, Offset(mx, base - mh), Size(mw, mh))
-    // 塔楼
-    drawRect(
-        body,
-        Offset(mx + mw * 0.40f, base - mh - h * 0.14f),
-        Size(mw * 0.20f, h * 0.14f)
-    )
-    // 窗户阵列 4 列 x 4 行
-    val cols = 4
-    val rows = 4
-    val padX = mw * 0.10f
-    val cellW = (mw - padX * 2f) / cols
-    val cellH = (mh * 0.78f) / rows
-    for (r in 0 until rows) {
-        for (c in 0 until cols) {
-            drawRect(
-                win,
-                Offset(
-                    mx + padX + c * cellW + cellW * 0.18f,
-                    base - mh + mh * 0.09f + r * cellH
-                ),
-                Size(cellW * 0.62f, cellH * 0.46f)
-            )
-        }
-    }
-
-    // 右侧副楼
-    val rx = w * 0.74f
-    val rw = w * 0.18f
-    val rh = h * 0.50f
-    drawRect(bodyLight, Offset(rx, base - rh), Size(rw, rh))
-    repeat(3) { row ->
-        repeat(2) { col ->
-            drawRect(
-                win.copy(alpha = 0.32f),
-                Offset(
-                    rx + rw * (0.18f + col * 0.42f),
-                    base - rh + rh * (0.16f + row * 0.24f)
-                ),
-                Size(rw * 0.22f, rh * 0.13f)
-            )
-        }
-    }
-
-    // 树（靠左，在两栋楼之间）
-    val tx = w * 0.26f
-    drawRect(
-        body,
-        Offset(tx - w * 0.006f, base - h * 0.22f),
-        Size(w * 0.012f, h * 0.22f)
-    )
-    drawCircle(
-        color = bodyLight,
-        radius = h * 0.15f,
-        center = Offset(tx, base - h * 0.30f)
-    )
-    drawCircle(
-        color = bodyLight,
-        radius = h * 0.10f,
-        center = Offset(tx - h * 0.11f, base - h * 0.22f)
-    )
-}
-
-/** 标签和数值排在同一行，省掉一整行高度 */
+/** 标签和数值排在同一行，省掉一整行高度。两者统一 14sp，与「余额 / 本月消费」同规格 */
 @Composable
 private fun InlineStat(label: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 14.sp,
             color = Color.White.copy(alpha = 0.85f)
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = value,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White
         )
