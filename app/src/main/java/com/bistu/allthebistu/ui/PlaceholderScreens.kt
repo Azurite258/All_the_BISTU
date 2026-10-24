@@ -5,17 +5,22 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,20 +37,22 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.bistu.allthebistu.R
 import com.bistu.allthebistu.data.card.PortalCardApi
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 
 // 卡面配色（取自「信息科大 E 卡通」的橙金渐变）
 private val CardGoldTop = Color(0xFFF9C24A)
@@ -56,15 +63,14 @@ private val CardBadgeRed = Color(0xFF8E1B1B)
  * 生活 Tab。
  *
  * 卡面样式对齐学校「信息科大 E 卡通」：
- *  - 橙金渐变校园卡：校名 + 学生卡徽章 + 余额 + 宿舍电费 + 网费 + 状态/有效期
+ *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 余额 + 宿舍电费 + 网费
  *  - 卡片下方是「扫一扫」「校园码」两个入口（功能待接）
- *  - 再下面是近期流水
+ *  - 流水不在本页展示，**点击卡片进入明细页** [CardDetailScreen]
  *
- * 刻意**不展示**姓名、学号、学院、班级、照片——这些字段接口里虽然有（XH 等），
- * 但不落盘、不上屏，避免截图外泄。
+ * 刻意**不展示**姓名、学号、学院、班级、照片。
  *
  * 宿舍电费 / 网费：门户目前没有暴露接口，先占位显示「--」，
- * 数据层 [PortalCardApi.Overview] 已经留好 electricity / networkFee 两个字段。
+ * 数据层 [PortalCardApi.Overview] 已留好 electricity / networkFee 字段。
  */
 @Composable
 fun LifeScreen(modifier: Modifier = Modifier) {
@@ -74,6 +80,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     var overview by remember { mutableStateOf<PortalCardApi.Overview?>(null) }
     var loading by remember { mutableStateOf(false) }
     var showRaw by remember { mutableStateOf(false) }
+    var showDetail by remember { mutableStateOf(false) }
 
     fun load() {
         val auth = AuthHolder.auth ?: return
@@ -90,7 +97,18 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             if (overview == null) load()
         } else {
             overview = null
+            showDetail = false
         }
+    }
+
+    // 明细页：整页覆盖
+    if (showDetail && overview != null) {
+        CardDetailScreen(
+            overview = overview!!,
+            onBack = { showDetail = false },
+            modifier = modifier
+        )
+        return
     }
 
     Column(
@@ -102,14 +120,14 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             .padding(
                 start = HyperSpacing.pageHorizontal,
                 end = HyperSpacing.pageHorizontal,
-                top = 16.dp
+                top = 14.dp
             ),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "生活",
-                fontSize = 30.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -117,7 +135,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             if (AuthHolder.isLoggedIn) {
                 if (loading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                         strokeWidth = 1.5.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -129,14 +147,13 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { load() }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
             }
         }
 
         if (!AuthHolder.isLoggedIn) {
-            // 未登录：给一张简单的引导卡，不做假数据
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -165,19 +182,25 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 }
             }
         } else {
-            // ── 校园卡 ──
-            CampusCard(overview = overview, loading = loading)
+            // ── 校园卡（点击进明细）──
+            CampusCard(
+                overview = overview,
+                loading = loading,
+                onClick = {
+                    if (overview != null) showDetail = true
+                }
+            )
 
-            // ── 扫一扫 / 校园码 ──
+            // ── 扫一扫 / 校园码（压矮版）──
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 20.dp),
+                        .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     QuickAction(
@@ -186,14 +209,12 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         onClick = {
                             Toast.makeText(context, "扫一扫还在接", Toast.LENGTH_SHORT).show()
                         }
-                    ) { tint ->
-                        ScanGlyph(tint = tint)
-                    }
+                    ) { tint -> ScanGlyph(tint = tint, size = 24.dp) }
 
                     Box(
                         modifier = Modifier
                             .width(1.dp)
-                            .height(34.dp)
+                            .height(26.dp)
                             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
                     )
 
@@ -203,77 +224,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         onClick = {
                             Toast.makeText(context, "校园码还在接", Toast.LENGTH_SHORT).show()
                         }
-                    ) { tint ->
-                        BarcodeGlyph(tint = tint)
-                    }
-                }
-            }
-
-            // ── 近期流水 ──
-            val records = overview?.records.orEmpty()
-            if (records.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "近期流水",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                text = "本月 ${PortalCardApi.formatMoney(overview?.monthSpent ?: 0.0)}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-
-                        records.take(8).forEach { r ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = r.merchant,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = shortTime(r.time),
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    text = PortalCardApi.formatMoney(r.amount, withSign = true),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (r.amount > 0) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        if (records.size > 8) {
-                            Text(
-                                text = "仅显示最近 8 笔",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    ) { tint -> BarcodeGlyph(tint = tint, size = 24.dp) }
                 }
             }
 
@@ -285,9 +236,14 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 )
             }
 
-            overview?.let { ov ->
-                TextButton(onClick = { showRaw = true }) {
-                    Text("查看原始数据", fontSize = 11.sp)
+            if (overview != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(onClick = { showRaw = true }) {
+                        Text("查看原始数据", fontSize = 11.sp)
+                    }
                 }
             }
         }
@@ -342,6 +298,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
 private fun CampusCard(
     overview: PortalCardApi.Overview?,
     loading: Boolean,
+    onClick: () -> Unit,
 ) {
     val balanceText = when {
         overview?.balance != null -> PortalCardApi.formatMoney(overview.balance)
@@ -353,56 +310,55 @@ private fun CampusCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(Brush.linearGradient(listOf(CardGoldTop, CardGoldBottom)))
+            .clickable { onClick() }
     ) {
-        // 右下角装饰弧线（模拟原卡面的建筑剪影层次）
-        Canvas(modifier = Modifier.matchParentSize()) {
-            drawCircle(
-                color = Color.White.copy(alpha = 0.10f),
-                radius = size.width * 0.62f,
-                center = Offset(size.width * 1.12f, size.height * 1.02f)
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.08f),
-                radius = size.width * 0.44f,
-                center = Offset(size.width * 1.06f, size.height * 0.96f)
-            )
+        // 右下角校园建筑剪影。底部正好抵住状态条上沿，既不悬空也不压文字。
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 40.dp)
+                .width(150.dp)
+                .height(76.dp)
+        ) {
+            drawCampusSkyline()
         }
 
-        Column(modifier = Modifier.padding(18.dp)) {
-            // 卡头：校徽 + 校名 + 学生卡徽章
+        Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 14.dp)) {
+            // 卡头：真实校徽 + 校名 + 学生卡徽章
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SchoolBadge()
-                Spacer(Modifier.width(9.dp))
+                Image(
+                    painter = painterResource(R.drawable.ic_school_badge),
+                    contentDescription = "校徽",
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "北京信息科技大学",
-                        fontSize = 14.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
                         text = "BEIJING INFORMATION SCIENCE & TECHNOLOGY UNIVERSITY",
-                        fontSize = 5.5.sp,
-                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 5.sp,
+                        color = Color.White.copy(alpha = 0.78f),
                         maxLines = 1
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = CardBadgeRed
-                ) {
+                Surface(shape = RoundedCornerShape(50), color = CardBadgeRed) {
                     Text(
                         text = "学生卡",
                         fontSize = 10.sp,
                         color = Color.White,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(13.dp))
 
             // 余额
             Row(verticalAlignment = Alignment.Bottom) {
@@ -410,24 +366,23 @@ private fun CampusCard(
                     text = "余额",
                     fontSize = 11.sp,
                     color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(7.dp))
                 Text(
                     text = balanceText,
-                    fontSize = 32.sp,
+                    fontSize = 27.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
-            Spacer(Modifier.height(2.dp))
             Text(
                 text = "本月消费 $monthText",
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 color = Color.White.copy(alpha = 0.85f)
             )
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
 
             // 宿舍电费 / 网费
             Row {
@@ -435,33 +390,33 @@ private fun CampusCard(
                     label = "宿舍电费",
                     value = overview?.electricity?.let { PortalCardApi.formatMoney(it) } ?: "--"
                 )
-                Spacer(Modifier.width(36.dp))
+                Spacer(Modifier.width(34.dp))
                 CardStat(
                     label = "网费",
                     value = overview?.networkFee?.let { PortalCardApi.formatMoney(it) } ?: "--"
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(11.dp))
 
             // 状态条
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.16f))
-                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                    .background(Color.White.copy(alpha = 0.22f))
+                    .padding(horizontal = 11.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "校园卡状态：${overview?.status?.ifBlank { "正常" } ?: "--"}",
-                    fontSize = 10.sp,
+                    fontSize = 9.5.sp,
                     color = Color.White.copy(alpha = 0.95f)
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = "有效期 ${overview?.expiry?.ifBlank { "--" } ?: "--"}",
-                    fontSize = 10.sp,
+                    fontSize = 9.5.sp,
                     color = Color.White.copy(alpha = 0.95f)
                 )
             }
@@ -469,32 +424,276 @@ private fun CampusCard(
     }
 }
 
+/**
+ * 右下角校园建筑剪影。
+ *
+ * 参考 E 卡通卡面：主楼 + 两侧副楼 + 窗户阵列 + 树，用比背景稍深的橙色画，
+ * 窗户用半透明白，整体压在卡面右下角，不抢文字。
+ */
+private fun DrawScope.drawCampusSkyline() {
+    val w = size.width
+    val h = size.height
+    val base = h
+
+    val body = Color(0xFFA94D0A).copy(alpha = 0.26f)
+    val bodyLight = Color(0xFFA94D0A).copy(alpha = 0.18f)
+    val win = Color.White.copy(alpha = 0.42f)
+
+    // 地面
+    drawRect(
+        color = bodyLight,
+        topLeft = Offset(0f, base - h * 0.06f),
+        size = Size(w, h * 0.06f)
+    )
+
+    // 左侧副楼
+    val lx = w * 0.06f
+    val lw = w * 0.17f
+    val lh = h * 0.42f
+    drawRect(bodyLight, Offset(lx, base - lh), Size(lw, lh))
+    repeat(3) { row ->
+        repeat(2) { col ->
+            drawRect(
+                win.copy(alpha = 0.32f),
+                Offset(
+                    lx + lw * (0.18f + col * 0.42f),
+                    base - lh + lh * (0.16f + row * 0.25f)
+                ),
+                Size(lw * 0.22f, lh * 0.14f)
+            )
+        }
+    }
+
+    // 主楼（带屋顶塔楼）
+    val mx = w * 0.30f
+    val mw = w * 0.40f
+    val mh = h * 0.74f
+    drawRect(body, Offset(mx, base - mh), Size(mw, mh))
+    // 塔楼
+    drawRect(
+        body,
+        Offset(mx + mw * 0.40f, base - mh - h * 0.14f),
+        Size(mw * 0.20f, h * 0.14f)
+    )
+    // 窗户阵列 4 列 x 4 行
+    val cols = 4
+    val rows = 4
+    val padX = mw * 0.10f
+    val cellW = (mw - padX * 2f) / cols
+    val cellH = (mh * 0.78f) / rows
+    for (r in 0 until rows) {
+        for (c in 0 until cols) {
+            drawRect(
+                win,
+                Offset(
+                    mx + padX + c * cellW + cellW * 0.18f,
+                    base - mh + mh * 0.09f + r * cellH
+                ),
+                Size(cellW * 0.62f, cellH * 0.46f)
+            )
+        }
+    }
+
+    // 右侧副楼
+    val rx = w * 0.74f
+    val rw = w * 0.18f
+    val rh = h * 0.50f
+    drawRect(bodyLight, Offset(rx, base - rh), Size(rw, rh))
+    repeat(3) { row ->
+        repeat(2) { col ->
+            drawRect(
+                win.copy(alpha = 0.32f),
+                Offset(
+                    rx + rw * (0.18f + col * 0.42f),
+                    base - rh + rh * (0.16f + row * 0.24f)
+                ),
+                Size(rw * 0.22f, rh * 0.13f)
+            )
+        }
+    }
+
+    // 树（靠左，在两栋楼之间）
+    val tx = w * 0.26f
+    drawRect(
+        body,
+        Offset(tx - w * 0.006f, base - h * 0.22f),
+        Size(w * 0.012f, h * 0.22f)
+    )
+    drawCircle(
+        color = bodyLight,
+        radius = h * 0.15f,
+        center = Offset(tx, base - h * 0.30f)
+    )
+    drawCircle(
+        color = bodyLight,
+        radius = h * 0.10f,
+        center = Offset(tx - h * 0.11f, base - h * 0.22f)
+    )
+}
+
 @Composable
 private fun CardStat(label: String, value: String) {
     Column {
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 9.5.sp,
             color = Color.White.copy(alpha = 0.8f)
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(1.dp))
         Text(
             text = value,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White
         )
     }
 }
 
-/** 简化校徽：白色双环 */
+// ══════════════════════════════════════════════════════════════
+// 明细页
+// ══════════════════════════════════════════════════════════════
+
 @Composable
-private fun SchoolBadge() {
-    Canvas(modifier = Modifier.size(32.dp)) {
-        val r = size.minDimension / 2f
-        drawCircle(Color.White, radius = r, style = Stroke(width = 1.8.dp.toPx()))
-        drawCircle(Color.White, radius = r * 0.52f, style = Stroke(width = 1.2.dp.toPx()))
-        drawCircle(Color.White, radius = r * 0.16f)
+private fun CardDetailScreen(
+    overview: PortalCardApi.Overview,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // 顶栏
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Text(
+                text = "一卡通明细",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        // 汇总条
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HyperSpacing.pageHorizontal)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "卡内余额",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = overview.balance?.let { PortalCardApi.formatMoney(it) } ?: "--",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "本月消费",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = PortalCardApi.formatMoney(overview.monthSpent),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "全部流水 · ${overview.records.size} 笔",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = HyperSpacing.pageHorizontal)
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        if (overview.records.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "本月还没有消费记录",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    start = HyperSpacing.pageHorizontal,
+                    end = HyperSpacing.pageHorizontal,
+                    bottom = 90.dp
+                )
+            ) {
+                items(overview.records) { r ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = r.merchant,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "${shortTime(r.time)} · 余额 ${
+                                    PortalCardApi.formatMoney(r.balance)
+                                }",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = PortalCardApi.formatMoney(r.amount, withSign = true),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (r.amount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -513,14 +712,14 @@ private fun QuickAction(
     Column(
         modifier = modifier
             .clickable { onClick() }
-            .padding(vertical = 4.dp),
+            .padding(vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         glyph(tint)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -529,7 +728,7 @@ private fun QuickAction(
 
 /** 扫码框：四角 + 中间扫描线 */
 @Composable
-private fun ScanGlyph(tint: Color, size: Dp = 28.dp) {
+private fun ScanGlyph(tint: Color, size: Dp = 24.dp) {
     Canvas(modifier = Modifier.size(size)) {
         val s = this.size.minDimension
         val sw = s * 0.085f
@@ -538,22 +737,17 @@ private fun ScanGlyph(tint: Color, size: Dp = 28.dp) {
         fun ln(x1: Float, y1: Float, x2: Float, y2: Float) =
             drawLine(tint, Offset(x1, y1), Offset(x2, y2), sw, StrokeCap.Round)
 
-        // 左上
         ln(o, c, o, o); ln(o, o, c, o)
-        // 右上
         ln(s - c, o, s - o, o); ln(s - o, o, s - o, c)
-        // 左下
         ln(o, s - c, o, s - o); ln(o, s - o, c, s - o)
-        // 右下
         ln(s - c, s - o, s - o, s - o); ln(s - o, s - o, s - o, s - c)
-        // 扫描线
         ln(s * 0.27f, s * 0.5f, s * 0.73f, s * 0.5f)
     }
 }
 
 /** 条形码 */
 @Composable
-private fun BarcodeGlyph(tint: Color, size: Dp = 28.dp) {
+private fun BarcodeGlyph(tint: Color, size: Dp = 24.dp) {
     Canvas(modifier = Modifier.size(size)) {
         val s = this.size.minDimension
         val widths = listOf(0.05f, 0.09f, 0.04f, 0.11f, 0.04f, 0.08f, 0.05f)
@@ -561,18 +755,13 @@ private fun BarcodeGlyph(tint: Color, size: Dp = 28.dp) {
         var x = s * 0.10f
         widths.forEach { w ->
             val bw = s * w
-            drawRect(
-                color = tint,
-                topLeft = Offset(x, s * 0.14f),
-                size = Size(bw, s * 0.58f)
-            )
+            drawRect(tint, Offset(x, s * 0.14f), Size(bw, s * 0.58f))
             x += bw + gap
         }
-        // 底部数字区示意
         drawRect(
-            color = tint.copy(alpha = 0.55f),
-            topLeft = Offset(s * 0.10f, s * 0.82f),
-            size = Size(s * 0.80f, s * 0.05f)
+            tint.copy(alpha = 0.55f),
+            Offset(s * 0.10f, s * 0.82f),
+            Size(s * 0.80f, s * 0.05f)
         )
     }
 }
@@ -598,8 +787,6 @@ private fun copyToClipboard(context: Context, text: String) {
 
 /**
  * 我的 Tab 占位页。
- *
- * 未来放：账号信息、设置、关于。
  */
 @Composable
 fun ProfileScreen(modifier: Modifier = Modifier) {
@@ -632,8 +819,6 @@ private fun PlaceholderScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            // 这几个页面没有 Scaffold，启用 edge-to-edge 后必须自己加 insets，
-            // 否则大标题会压到状态栏（手机时间/信号图标）上。
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
