@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,9 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.bistu.allthebistu.R
 import com.bistu.allthebistu.data.card.PortalCardApi
-import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.SettingsStore
-import com.bistu.allthebistu.ui.card.ElectricityScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
@@ -66,15 +63,19 @@ private val CardBadgeRed = Color(0xFF8E1B1B)
  * 生活 Tab。
  *
  * 卡面样式对齐学校「信息科大 E 卡通」：
- *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 余额 + 宿舍电费 + 网费
- *  - 卡片下方是「扫一扫」「校园码」两个入口（功能待接）
+ *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 余额 + 本月消费 + 网费充值
+ *  - 卡片下方是「扫一扫」「校园码」两个入口（都跳微信）
  *  - 流水不在本页展示，**点击卡片进入明细页** [CardDetailScreen]
  *
  * 刻意**不展示**姓名、学号、学院、班级、照片。
  *
- * 电费 / 网费：门户没有这两项的余额接口（`items` 里只有邮件/工资/手机号/一卡通/知会
- * 五张卡），所以改成从一卡通流水里识别「电费充值」「网费充值」的商户记录，
- * 显示本月充值合计。本月一笔都没有时显示「--」，不编 0。
+ * 网费：门户没有余额接口（`items` 里只有邮件/工资/手机号/一卡通/知会五张卡），
+ * 但网费充值会落进一卡通流水，所以从流水里按商户名识别，显示本月充值合计。
+ * 本月一笔都没有时显示「--」，不编 0。
+ *
+ * 电费：**已拆除**（2026-10-24）。E 卡通那套查询要微信企业号 OAuth 换的 openid，
+ * App 的 CAS 会话换不出来，实测校园网内外都一样被拦，详见交接文档 17.3。
+ * 为免误导，卡面不再摆电费，改由第一次进本页时弹一次说明。
  */
 @Composable
 fun LifeScreen(modifier: Modifier = Modifier) {
@@ -89,11 +90,10 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     var wxTip by remember { mutableStateOf<String?>(null) }
     /** 校园码指引弹层 */
     var showWxGuide by remember { mutableStateOf(false) }
-    /** 宿舍电费页 */
-    var showElectric by remember { mutableStateOf(false) }
+    /** 电费说明弹窗：第一次进生活页弹一次 */
+    var showElectricNotice by remember { mutableStateOf(false) }
 
     val settingsStore = remember { SettingsStore(context) }
-    val settings by settingsStore.settings.collectAsState(initial = AppSettings())
 
     fun load() {
         val auth = AuthHolder.auth ?: return
@@ -114,25 +114,19 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         }
     }
 
+    // 电费说明：只弹一次（标记在 DataStore，重装/清数据才会再弹）
+    LaunchedEffect(Unit) {
+        if (settingsStore.shouldShowElectricNotice()) {
+            showElectricNotice = true
+            settingsStore.markElectricNoticeShown()
+        }
+    }
+
     // 明细页：整页覆盖
     if (showDetail && overview != null) {
         CardDetailScreen(
             overview = overview!!,
             onBack = { showDetail = false },
-            modifier = modifier
-        )
-        return
-    }
-
-    // 宿舍电费页：整页覆盖。卡面上电费为「--」时点进去就是这里
-    if (showElectric) {
-        ElectricityScreen(
-            overview = overview,
-            building = settings.dormBuilding,
-            room = settings.dormRoom,
-            onSaveDorm = { b, r -> scope.launch { settingsStore.setDorm(b, r) } },
-            onClearDorm = { scope.launch { settingsStore.clearDorm() } },
-            onBack = { showElectric = false },
             modifier = modifier
         )
         return
@@ -195,7 +189,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "余额、电费、网费和消费流水都来自信息门户，需要先登录一次。",
+                        text = "余额、网费和消费流水都来自信息门户，需要先登录一次。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -215,8 +209,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 loading = loading,
                 onClick = {
                     if (overview != null) showDetail = true
-                },
-                onElectricClick = { showElectric = true }
+                }
             )
 
             // ── 扫一扫 / 校园码（压矮版）──
@@ -313,6 +306,57 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        )
+    }
+
+    // ── 电费说明：第一次进生活页弹一次，讲清楚为什么这里没有电费 ──
+    if (showElectricNotice) {
+        AlertDialog(
+            onDismissRequest = { showElectricNotice = false },
+            confirmButton = {
+                TextButton(onClick = { showElectricNotice = false }) { Text("知道了") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showElectricNotice = false
+                        if (!WeChatEntry.openWeChat(context)) WeChatEntry.openWeCom(context)
+                    }
+                ) { Text("去微信看看") }
+            },
+            title = {
+                Text(
+                    text = "关于电费",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "我们试过几种办法，想把宿舍电费也放进来，但暂时还没能做到——" +
+                            "电费余额只显示在微信企业号的「信息科大E卡通」里，" +
+                            "那套验证只认微信，App 这边进不去。",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "与其摆一个不准的数字，不如先不摆。",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "要看电费：微信 → 通讯录 → 我的企业 → 信息科大E卡通 → 购电入口。",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         )
     }
@@ -489,7 +533,6 @@ private fun CampusCard(
     overview: PortalCardApi.Overview?,
     loading: Boolean,
     onClick: () -> Unit,
-    onElectricClick: () -> Unit,
 ) {
     val balanceText = when {
         overview?.balance != null -> PortalCardApi.formatMoney(overview.balance)
@@ -584,40 +627,15 @@ private fun CampusCard(
 
             Spacer(Modifier.height(14.dp))
 
-            // 电费 / 网费：门户没有余额接口，但这两项充值都会落在一卡通流水里
-            // （实测商户名「网络中心网费（微信）」），所以这里显示的是**本月充值合计**。
-            // 电费那一格可点：进去绑宿舍（电费按房间结算，先把房间记下来）。
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onElectricClick() }
-                        .padding(vertical = 2.dp, horizontal = 1.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    InlineStat(
-                        label = "电费充值",
-                        value = overview?.electricityTopUp?.let {
-                            PortalCardApi.formatMoney(it.amount)
-                        } ?: "--"
-                    )
-                    if (overview?.electricityTopUp == null) {
-                        Spacer(Modifier.width(2.dp))
-                        Text(
-                            text = "›",
-                            fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(36.dp))
-                InlineStat(
-                    label = "网费充值",
-                    value = overview?.networkTopUp?.let {
-                        PortalCardApi.formatMoney(it.amount)
-                    } ?: "--"
-                )
-            }
+            // 网费充值：门户只给了一卡通消费流水，没有网费余额接口，
+            // 但充值会落进流水（实测商户名「网络中心网费（微信）」），
+            // 所以这里显示的是**本月充值合计**，不是余额。
+            InlineStat(
+                label = "网费充值",
+                value = overview?.networkTopUp?.let {
+                    PortalCardApi.formatMoney(it.amount)
+                } ?: "--"
+            )
 
             Spacer(Modifier.height(14.dp))
 

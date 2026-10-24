@@ -38,12 +38,15 @@ import kotlin.math.abs
  * ## 只读
  * 充值、挂失、缴费这些一律不碰，只查余额和流水。
  *
- * ## 电费 / 网费（2026-10-24 补）
+ * ## 网费充值（2026-10-24 补）
  * 门户 `items` 只返回 5 张数据卡（未读邮件 / 工资 / 手机号 / 一卡通消费 / 知会），
- * **没有**电费、网费的余额接口。但这两项充值都会写进一卡通流水
+ * **没有**网费的余额接口。但网费充值会写进一卡通流水
  * （实测：`2026-10-09 网络中心网费（微信） ¥20.00`），
  * 于是按商户关键词从流水中汇总「本月充值合计」，见 [findTopUp]。
- * 这是**充值金额**，不是余额，界面上也按「电费充值 / 网费充值」标注，不要混。
+ * 这是**充值金额**，不是余额，界面上按「网费充值」标注，不要混。
+ *
+ * 电费同类方案**已拆除**：E 卡通要微信企业号 OAuth 换的 openid，App 拿不到，
+ * 卡面摆了也只能显示「--」，见交接文档 17.3。
  */
 object PortalCardApi {
 
@@ -63,14 +66,6 @@ object PortalCardApi {
     /** 一页拿够一个月的量，先只取第一页 */
     private const val PAGE_SIZE = 30
 
-    /**
-     * 电费充值流水的商户关键词。
-     *
-     * 实测还没碰到电费记录，所以多列几种可能的叫法（自助购电 / 电控 / 能源 等），
-     * 命中任意一个就算。以后真抓到一笔，按实际商户名收敛这里。
-     */
-    private val ELECTRICITY_KEYWORDS = listOf("电费", "购电", "用电", "电控", "能源")
-
     /** 网费充值流水的商户关键词。实测商户名：「网络中心网费（微信）」 */
     private val NETWORK_KEYWORDS = listOf("网费", "网络中心", "校园网", "上网")
 
@@ -85,15 +80,15 @@ object PortalCardApi {
          * 原始交易金额（绝对值，元）。
          *
          * `amount` 是靠余额差推断方向的，可「网费（微信）」这类走第三方支付的缴费
-         * 卡内余额几乎不动，会被误判成支出。识别电费/网费充值要用这个原始值。
+         * 卡内余额几乎不动，会被误判成支出。识别网费充值要用这个原始值。
          */
         val rawAmount: Double = 0.0,
     )
 
     /**
-     * 一笔缴费充值（电费 / 网费）。
+     * 一笔缴费充值（网费）。
      *
-     * 门户没有电费、网费的余额接口，但这两项充值都会落在**一卡通流水**里
+     * 门户没有网费余额接口，但充值会落在**一卡通流水**里
      * （实测：`2026-10-09 网络中心网费（微信）`），所以从流水反推「本月充了多少」，
      * 这是真数据，不是余额。
      */
@@ -118,9 +113,7 @@ object PortalCardApi {
         val status: String = "",
         /** 有效期，如「2046-08-09」 */
         val expiry: String = "",
-        /** 本月电费充值（从流水识别，**不是余额**，门户没有余额接口） */
-        val electricityTopUp: UtilityTopUp? = null,
-        /** 本月网费充值（同上） */
+        /** 本月网费充值（从流水识别，**不是余额**，门户没有余额接口） */
         val networkTopUp: UtilityTopUp? = null,
         val rawItems: String = "",
         val rawDetail: String = "",
@@ -212,12 +205,9 @@ object PortalCardApi {
 
             val (records, totalPages) = parseRecords(rawRecords)
             val (status, expiry) = parseMeta(rawRecords)
-            val electricity = findTopUp(records, ELECTRICITY_KEYWORDS)
             val network = findTopUp(records, NETWORK_KEYWORDS)
             log.appendLine("解析到 ${records.size} 条流水，共 $totalPages 页，状态=$status 有效期=$expiry")
-            log.appendLine(
-                "电费充值=${electricity?.amount ?: "无"} 网费充值=${network?.amount ?: "无"}"
-            )
+            log.appendLine("网费充值=${network?.amount ?: "无"}")
 
             Overview(
                 balance = records.firstOrNull()?.balance,
@@ -227,7 +217,6 @@ object PortalCardApi {
                 log = log.toString(),
                 status = status,
                 expiry = expiry,
-                electricityTopUp = electricity,
                 networkTopUp = network,
                 rawItems = rawItems,
                 rawDetail = rawDetail,
@@ -317,7 +306,7 @@ object PortalCardApi {
     }
 
     /**
-     * 在流水里找电费/网费充值，汇总本月金额。
+     * 在流水里找网费充值，汇总本月金额。
      *
      * 返回 null 表示这个月没有这类记录（UI 显示「--」），不要编一个 0。
      * 金额用 [CardRecord.rawAmount]，因为「网费（微信）」这类走第三方支付的缴费

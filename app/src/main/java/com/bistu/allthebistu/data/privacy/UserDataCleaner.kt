@@ -102,11 +102,6 @@ class UserDataCleaner(private val context: Context) {
             .onSuccess { done += "学业报告" }
             .onFailure { Log.w(TAG, "清除学业报告失败: ${it.message}") }
 
-        // ②'' 宿舍绑定：房间号能定位到人，算个人信息，跟着登录态一起清
-        runCatching { SettingsStore(context).clearDorm() }
-            .onSuccess { done += "宿舍绑定" }
-            .onFailure { Log.w(TAG, "清除宿舍绑定失败: ${it.message}") }
-
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }
             .onSuccess { done += "临时文件" }
