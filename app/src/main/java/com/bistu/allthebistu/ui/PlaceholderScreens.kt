@@ -212,7 +212,8 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.weight(1f),
                         onClick = {
                             when {
-                                !WeChatEntry.isInstalled(context) ->
+                                !WeChatEntry.isInstalled(context) &&
+                                    !WeChatEntry.isWeComInstalled(context) ->
                                     wxTip = "没检测到微信。扫一扫要用微信的，装好后再点。"
 
                                 WeChatEntry.openScanner(context) -> Unit
@@ -234,7 +235,9 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         label = "校园码",
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            if (WeChatEntry.isInstalled(context)) {
+                            if (WeChatEntry.isInstalled(context) ||
+                                WeChatEntry.isWeComInstalled(context)
+                            ) {
                                 showWxGuide = true
                             } else {
                                 wxTip = "没检测到微信。校园码在微信企业号「信息科大E卡通」里。"
@@ -336,16 +339,23 @@ fun LifeScreen(modifier: Modifier = Modifier) {
 /**
  * 「校园码」为什么只能跳到微信门口。
  *
- * E 卡通是微信企业号里的应用，动态码由它的服务端按时间片下发，
- * 外部 App 既拿不到会话也算不出码；微信的 URL Scheme 也只开放到「扫一扫」这一级，
- * 没有「打开某个企业号某个页面」的入口（那个要 appid + path，得对方给）。
+ * E 卡通是学校**企业号**里的一个应用，校园码只是其中一项；码由它的服务端按时间段
+ * 实时下发，外部 App 既拿不到会话也算不出来。微信的 URL Scheme 只开放到「扫一扫」
+ * 这一级，没有「打开某个企业号某个应用某个页面」的入口（那要 appid + path，得对方给）。
  * 所以做指引：把微信拉起来 + 三步路径 + 一键复制名称。
+ *
+ * 企业微信只做**兜底**：没装微信时才引导去企业微信工作台。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CampusCodeSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+
+    val hasWeChat = remember { WeChatEntry.isInstalled(context) }
+    val hasWeCom = remember { WeChatEntry.isWeComInstalled(context) }
+    // 只有没微信的时候才切到企业微信路径
+    val onlyWeCom = !hasWeChat && hasWeCom
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -358,15 +368,15 @@ private fun CampusCodeSheet(onDismiss: () -> Unit) {
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = "校园码在微信里",
+                text = if (onlyWeCom) "校园码在企业微信里" else "校园码在微信企业号里",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "E 卡通是微信企业号里的应用，码由它的服务器实时下发，App 拿不到也生成不了。" +
-                    "点「打开微信」后按下面三步走。",
+                text = "E 卡通是学校企业号里的一个应用，校园码只是其中一项——码由它的服务器" +
+                    "实时下发，App 拿不到也生成不了，只能带你过去。",
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -374,19 +384,29 @@ private fun CampusCodeSheet(onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(18.dp))
 
-            WxStep("1", "微信 → 通讯录 → 我的企业 → 信息科大E卡通（搜不到就直接在微信搜索框搜）")
-            WxStep("2", "进首页点「校园码」，把码出示给扫码机")
-            WxStep("3", "充值、购电、网费也都在这个页面里")
+            if (onlyWeCom) {
+                WxStep("1", "企业微信 → 工作台 → 信息科大E卡通")
+            } else {
+                WxStep("1", "微信 → 通讯录 → 我的企业 → 信息科大E卡通（找不到就在微信里直接搜）")
+            }
+            WxStep("2", "进应用后点「校园码」，把码出示给扫码机")
+            WxStep("3", "充值、购电、网费也都在同一个应用里")
 
             Spacer(Modifier.height(20.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = { WeChatEntry.openWeChat(context) },
+                    onClick = {
+                        if (onlyWeCom) {
+                            WeChatEntry.openWeCom(context)
+                        } else {
+                            WeChatEntry.openWeChat(context)
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("打开微信", fontSize = 14.sp)
+                    Text(if (onlyWeCom) "打开企业微信" else "打开微信", fontSize = 14.sp)
                 }
                 OutlinedButton(
                     onClick = {

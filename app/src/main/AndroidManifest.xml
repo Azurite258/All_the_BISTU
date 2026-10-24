@@ -12,9 +12,14 @@
     -->
     <queries>
         <package android:name="com.tencent.mm" />
+        <package android:name="com.tencent.wework" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="weixin" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="wxwork" />
         </intent>
     </queries>
 
