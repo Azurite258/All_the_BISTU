@@ -3,7 +3,6 @@ package com.bistu.allthebistu.ui
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -50,6 +49,7 @@ import com.bistu.allthebistu.data.card.PortalCardApi
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.wechat.WeChatEntry
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 
@@ -81,6 +81,10 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(false) }
     var showRaw by remember { mutableStateOf(false) }
     var showDetail by remember { mutableStateOf(false) }
+    /** 微信相关提示（没装微信 / 调不起来） */
+    var wxTip by remember { mutableStateOf<String?>(null) }
+    /** 校园码指引弹层 */
+    var showWxGuide by remember { mutableStateOf(false) }
 
     fun load() {
         val auth = AuthHolder.auth ?: return
@@ -207,7 +211,15 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         label = "扫一扫",
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            Toast.makeText(context, "扫一扫还在接", Toast.LENGTH_SHORT).show()
+                            when {
+                                !WeChatEntry.isInstalled(context) ->
+                                    wxTip = "没检测到微信。扫一扫要用微信的，装好后再点。"
+
+                                WeChatEntry.openScanner(context) -> Unit
+
+                                else -> wxTip =
+                                    "微信没能直接打开扫一扫。手动进：微信 → 右上角 + → 扫一扫。"
+                            }
                         }
                     ) { tint -> ScanGlyph(tint = tint, size = 24.dp) }
 
@@ -222,7 +234,11 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         label = "校园码",
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            Toast.makeText(context, "校园码还在接", Toast.LENGTH_SHORT).show()
+                            if (WeChatEntry.isInstalled(context)) {
+                                showWxGuide = true
+                            } else {
+                                wxTip = "没检测到微信。校园码在微信企业号「信息科大E卡通」里。"
+                            }
                         }
                     ) { tint -> BarcodeGlyph(tint = tint, size = 24.dp) }
                 }
@@ -249,6 +265,29 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         }
 
         Spacer(Modifier.height(100.dp))
+    }
+
+    // ── 校园码指引（E 卡通在微信企业号里，外部只能送到微信门口）──
+    if (showWxGuide) {
+        CampusCodeSheet(onDismiss = { showWxGuide = false })
+    }
+
+    // ── 微信相关的失败提示 ──
+    wxTip?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { wxTip = null },
+            confirmButton = {
+                TextButton(onClick = { wxTip = null }) { Text("知道了") }
+            },
+            title = { Text("跳不到微信", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Text(
+                    text = msg,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        )
     }
 
     if (showRaw && overview != null) {
@@ -287,6 +326,113 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 校园码指引
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 「校园码」为什么只能跳到微信门口。
+ *
+ * E 卡通是微信企业号里的应用，动态码由它的服务端按时间片下发，
+ * 外部 App 既拿不到会话也算不出码；微信的 URL Scheme 也只开放到「扫一扫」这一级，
+ * 没有「打开某个企业号某个页面」的入口（那个要 appid + path，得对方给）。
+ * 所以做指引：把微信拉起来 + 三步路径 + 一键复制名称。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CampusCodeSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HyperSpacing.pageHorizontal)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "校园码在微信里",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "E 卡通是微信企业号里的应用，码由它的服务器实时下发，App 拿不到也生成不了。" +
+                    "点「打开微信」后按下面三步走。",
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(18.dp))
+
+            WxStep("1", "微信 → 通讯录 → 我的企业 → 信息科大E卡通（搜不到就直接在微信搜索框搜）")
+            WxStep("2", "进首页点「校园码」，把码出示给扫码机")
+            WxStep("3", "充值、购电、网费也都在这个页面里")
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = { WeChatEntry.openWeChat(context) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("打开微信", fontSize = 14.sp)
+                }
+                OutlinedButton(
+                    onClick = {
+                        copyToClipboard(context, "信息科大E卡通")
+                        copied = true
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(if (copied) "已复制" else "复制名称", fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+/** 指引里的一步：序号圆点 + 说明 */
+@Composable
+private fun WxStep(index: String, text: String) {
+    Row(
+        modifier = Modifier.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = index,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
