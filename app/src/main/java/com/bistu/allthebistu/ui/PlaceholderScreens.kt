@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -318,14 +319,14 @@ private fun CampusCard(
         Canvas(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 40.dp)
+                .padding(bottom = 44.dp)
                 .width(150.dp)
                 .height(76.dp)
         ) {
             drawCampusSkyline()
         }
 
-        Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 20.dp)) {
             // 卡头：真实校徽 + 校名 + 学生卡徽章
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
@@ -335,15 +336,19 @@ private fun CampusCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "北京信息科技大学",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                    // 校名用学校官方书法体（从 logo 里裁出来的），比排版字更贴原图
+                    Image(
+                        painter = painterResource(R.drawable.ic_school_name),
+                        contentDescription = "北京信息科技大学",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .height(19.dp)
+                            .aspectRatio(8.43f)
                     )
+                    // 英文紧跟中文，中间不留空
                     Text(
                         text = "BEIJING INFORMATION SCIENCE & TECHNOLOGY UNIVERSITY",
-                        fontSize = 5.sp,
+                        fontSize = 4.5.sp,
                         color = Color.White.copy(alpha = 0.78f),
                         maxLines = 1
                     )
@@ -358,46 +363,48 @@ private fun CampusCard(
                 }
             }
 
-            Spacer(Modifier.height(13.dp))
+            Spacer(Modifier.height(16.dp))
 
             // 余额
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = "余额",
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Spacer(Modifier.width(7.dp))
                 Text(
                     text = balanceText,
-                    fontSize = 27.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "本月 $monthText",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
             }
-            Text(
-                text = "本月消费 $monthText",
-                fontSize = 10.5.sp,
-                color = Color.White.copy(alpha = 0.85f)
-            )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            // 宿舍电费 / 网费
-            Row {
-                CardStat(
+            // 宿舍电费 / 网费（文字与数值横排，两者间距拉开）
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                InlineStat(
                     label = "宿舍电费",
                     value = overview?.electricity?.let { PortalCardApi.formatMoney(it) } ?: "--"
                 )
-                Spacer(Modifier.width(34.dp))
-                CardStat(
+                Spacer(Modifier.width(36.dp))
+                InlineStat(
                     label = "网费",
                     value = overview?.networkFee?.let { PortalCardApi.formatMoney(it) } ?: "--"
                 )
             }
 
-            Spacer(Modifier.height(11.dp))
+            Spacer(Modifier.height(14.dp))
 
             // 状态条
             Row(
@@ -405,7 +412,7 @@ private fun CampusCard(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(50))
                     .background(Color.White.copy(alpha = 0.22f))
-                    .padding(horizontal = 11.dp, vertical = 6.dp),
+                    .padding(horizontal = 11.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -531,18 +538,19 @@ private fun DrawScope.drawCampusSkyline() {
     )
 }
 
+/** 标签和数值排在同一行，省掉一整行高度 */
 @Composable
-private fun CardStat(label: String, value: String) {
-    Column {
+private fun InlineStat(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            fontSize = 9.5.sp,
-            color = Color.White.copy(alpha = 0.8f)
+            fontSize = 11.sp,
+            color = Color.White.copy(alpha = 0.85f)
         )
-        Spacer(Modifier.height(1.dp))
+        Spacer(Modifier.width(6.dp))
         Text(
             text = value,
-            fontSize = 14.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White
         )
