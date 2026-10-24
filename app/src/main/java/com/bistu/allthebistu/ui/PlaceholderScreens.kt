@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -14,6 +15,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,24 +36,40 @@ import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * 生活 Tab。
  *
- * 目前只有「一卡通数据抓取」这一张卡——这是一次性的调试入口：
- * 门户的接口字段还没验证过，先让用户在已登录状态下抓一次原始响应，
- * 拿到真实结构后再改造成正式的余额/流水界面。
+ * 目前上线：一卡通（余额 / 本月消费 / 近期流水），数据走信息门户，见 [PortalCardApi]。
+ * 其余规划功能还是占位。
  */
 @Composable
 fun LifeScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var overview by remember { mutableStateOf<PortalCardApi.Overview?>(null) }
     var loading by remember { mutableStateOf(false) }
-    var dump by remember { mutableStateOf<PortalCardApi.RawDump?>(null) }
-    var savedPath by remember { mutableStateOf<String?>(null) }
     var showRaw by remember { mutableStateOf(false) }
+
+    fun load() {
+        val auth = AuthHolder.auth ?: return
+        if (loading) return
+        loading = true
+        scope.launch {
+            overview = PortalCardApi.fetch(auth)
+            loading = false
+        }
+    }
+
+    // 已登录时自动拉一次；退出登录则清掉展示
+    LaunchedEffect(AuthHolder.isLoggedIn) {
+        if (AuthHolder.isLoggedIn) {
+            if (overview == null) load()
+        } else {
+            overview = null
+        }
+    }
 
     Column(
         modifier = modifier
@@ -80,50 +98,51 @@ fun LifeScreen(modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(8.dp))
 
-        // ── 一卡通数据抓取（调试）──
+        // ── 一卡通 ──
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = "一卡通",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    ) {
+                    Spacer(Modifier.weight(1f))
+                    if (loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (AuthHolder.isLoggedIn) {
                         Text(
-                            text = "数据抓取",
-                            fontSize = 10.sp,
+                            text = "刷新",
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier
+                                .clickable { load() }
+                                .padding(6.dp)
                         )
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "从信息门户抓一次原始数据，用来确认余额和消费流水的字段结构。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
 
                 Spacer(Modifier.height(14.dp))
 
                 if (!AuthHolder.isLoggedIn) {
                     Text(
-                        text = "需要先在教务登录，才能借用同一个 SSO 会话访问门户。",
+                        text = "登录后可以查看卡内余额和消费流水",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = {
                             context.startActivity(
@@ -133,87 +152,109 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("去登录") }
                 } else {
-                    Button(
-                        onClick = {
-                            val auth = AuthHolder.auth
-                            if (auth == null) {
-                                dump = PortalCardApi.RawDump(
-                                    log = "", itemsJson = "", detailId = null, detailJson = "",
-                                    error = "会话为空，请重新登录"
-                                )
-                                return@Button
-                            }
-                            loading = true
-                            scope.launch {
-                                val result = PortalCardApi.dump(auth)
-                                dump = result
-                                // 落盘一份，方便直接取文件回传
-                                runCatching {
-                                    val dir = context.getExternalFilesDir(null)
-                                    val f = File(dir, "portal_card_debug.txt")
-                                    f.writeText(result.toPlainText())
-                                    savedPath = f.absolutePath
-                                }
-                                loading = false
-                            }
-                        },
-                        enabled = !loading,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(if (loading) "抓取中…" else if (dump == null) "抓取数据" else "重新抓取")
-                    }
-                }
+                    val ov = overview
 
-                dump?.let { d ->
-                    Spacer(Modifier.height(14.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        text = if (d.error != null) "抓取失败" else "抓取完成",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (d.error != null) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.primary
-                    )
-                    d.error?.let {
-                        Spacer(Modifier.height(4.dp))
+                    // 余额 + 本月消费
+                    Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = it,
+                            text = ov?.balance?.let { PortalCardApi.formatMoney(it) } ?: "—",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "本月消费 ${
+                                PortalCardApi.formatMoney(ov?.monthSpent ?: 0.0)
+                            }",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+
+                    ov?.error?.let { err ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = err,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
 
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "items ${d.itemsJson.length} 字符 · detail ${d.detailJson.length} 字符 · id=${d.detailId ?: "未找到"}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = { showRaw = true },
-                            shape = RoundedCornerShape(10.dp)
-                        ) { Text("查看原始数据", fontSize = 12.sp) }
-
-                        OutlinedButton(
-                            onClick = {
-                                copyToClipboard(context, d.toPlainText())
-                            },
-                            shape = RoundedCornerShape(10.dp)
-                        ) { Text("复制全部", fontSize = 12.sp) }
-                    }
-
-                    savedPath?.let { path ->
-                        Spacer(Modifier.height(8.dp))
+                    val records = ov?.records.orEmpty()
+                    if (records.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        )
+                        Spacer(Modifier.height(10.dp))
                         Text(
-                            text = "已存到：$path",
-                            fontSize = 10.sp,
+                            text = "近期流水",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(6.dp))
+
+                        records.take(8).forEach { r ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = r.merchant,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = shortTime(r.time),
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    text = PortalCardApi.formatMoney(r.amount, withSign = true),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    // 充值是正数，用主色区分；消费保持中性
+                                    color = if (r.amount > 0) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        if (records.size > 8) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "仅显示最近 8 笔",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (ov != null && ov.error == null) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "本月还没有消费记录",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (ov != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { showRaw = true }) {
+                                Text("原始数据", fontSize = 11.sp)
+                            }
+                            TextButton(onClick = { copyToClipboard(context, ov.rawText()) }) {
+                                Text("复制调试信息", fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -267,7 +308,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     }
 
     // ── 原始数据弹窗 ──
-    if (showRaw && dump != null) {
+    if (showRaw && overview != null) {
         Dialog(onDismissRequest = { showRaw = false }) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -283,12 +324,11 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     Spacer(Modifier.height(10.dp))
                     SelectionContainer(
                         modifier = Modifier
-                            .weight(1f, fill = false)
-                            .heightIn(max = 480.dp)
+                            .heightIn(max = 460.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         Text(
-                            text = dump!!.toPlainText(),
+                            text = overview!!.rawText(),
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -300,7 +340,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(onClick = {
-                            copyToClipboard(context, dump!!.toPlainText())
+                            copyToClipboard(context, overview!!.rawText())
                         }) { Text("复制") }
                         TextButton(onClick = { showRaw = false }) { Text("关闭") }
                     }
@@ -310,9 +350,19 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     }
 }
 
+/** "2026-10-24 12:30:00" → "10-24 12:30"；格式不认识就原样返回 */
+private fun shortTime(raw: String): String {
+    val m = Regex("""(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})""").find(raw)
+    return if (m != null) {
+        "${m.groupValues[2]}-${m.groupValues[3]} ${m.groupValues[4]}:${m.groupValues[5]}"
+    } else {
+        raw
+    }
+}
+
 private fun copyToClipboard(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("portal_card_debug", text))
+    cm.setPrimaryClip(ClipData.newPlainText("portal_card", text))
 }
 
 /**
