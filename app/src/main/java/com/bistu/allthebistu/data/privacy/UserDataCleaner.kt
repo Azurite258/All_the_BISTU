@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.auth.SessionStore
+import com.bistu.allthebistu.data.prefs.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
@@ -100,6 +101,11 @@ class UserDataCleaner(private val context: Context) {
         runCatching { com.bistu.allthebistu.data.StudyReportStore(context).clear() }
             .onSuccess { done += "学业报告" }
             .onFailure { Log.w(TAG, "清除学业报告失败: ${it.message}") }
+
+        // ②'' 宿舍绑定：房间号能定位到人，算个人信息，跟着登录态一起清
+        runCatching { SettingsStore(context).clearDorm() }
+            .onSuccess { done += "宿舍绑定" }
+            .onFailure { Log.w(TAG, "清除宿舍绑定失败: ${it.message}") }
 
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }

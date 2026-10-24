@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.bistu.allthebistu.R
 import com.bistu.allthebistu.data.card.PortalCardApi
+import com.bistu.allthebistu.data.prefs.AppSettings
+import com.bistu.allthebistu.data.prefs.SettingsStore
+import com.bistu.allthebistu.ui.card.ElectricityScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
@@ -85,6 +89,11 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     var wxTip by remember { mutableStateOf<String?>(null) }
     /** 校园码指引弹层 */
     var showWxGuide by remember { mutableStateOf(false) }
+    /** 宿舍电费页 */
+    var showElectric by remember { mutableStateOf(false) }
+
+    val settingsStore = remember { SettingsStore(context) }
+    val settings by settingsStore.settings.collectAsState(initial = AppSettings())
 
     fun load() {
         val auth = AuthHolder.auth ?: return
@@ -110,6 +119,20 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         CardDetailScreen(
             overview = overview!!,
             onBack = { showDetail = false },
+            modifier = modifier
+        )
+        return
+    }
+
+    // 宿舍电费页：整页覆盖。卡面上电费为「--」时点进去就是这里
+    if (showElectric) {
+        ElectricityScreen(
+            overview = overview,
+            building = settings.dormBuilding,
+            room = settings.dormRoom,
+            onSaveDorm = { b, r -> scope.launch { settingsStore.setDorm(b, r) } },
+            onClearDorm = { scope.launch { settingsStore.clearDorm() } },
+            onBack = { showElectric = false },
             modifier = modifier
         )
         return
@@ -192,7 +215,8 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 loading = loading,
                 onClick = {
                     if (overview != null) showDetail = true
-                }
+                },
+                onElectricClick = { showElectric = true }
             )
 
             // ── 扫一扫 / 校园码（压矮版）──
@@ -465,6 +489,7 @@ private fun CampusCard(
     overview: PortalCardApi.Overview?,
     loading: Boolean,
     onClick: () -> Unit,
+    onElectricClick: () -> Unit,
 ) {
     val balanceText = when {
         overview?.balance != null -> PortalCardApi.formatMoney(overview.balance)
@@ -561,13 +586,30 @@ private fun CampusCard(
 
             // 电费 / 网费：门户没有余额接口，但这两项充值都会落在一卡通流水里
             // （实测商户名「网络中心网费（微信）」），所以这里显示的是**本月充值合计**。
+            // 电费那一格可点：进去绑宿舍（电费按房间结算，先把房间记下来）。
             Row(verticalAlignment = Alignment.CenterVertically) {
-                InlineStat(
-                    label = "电费充值",
-                    value = overview?.electricityTopUp?.let {
-                        PortalCardApi.formatMoney(it.amount)
-                    } ?: "--"
-                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onElectricClick() }
+                        .padding(vertical = 2.dp, horizontal = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    InlineStat(
+                        label = "电费充值",
+                        value = overview?.electricityTopUp?.let {
+                            PortalCardApi.formatMoney(it.amount)
+                        } ?: "--"
+                    )
+                    if (overview?.electricityTopUp == null) {
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            text = "›",
+                            fontSize = 14.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
                 Spacer(Modifier.width(36.dp))
                 InlineStat(
                     label = "网费充值",
