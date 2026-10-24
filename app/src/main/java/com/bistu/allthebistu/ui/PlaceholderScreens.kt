@@ -1,5 +1,8 @@
 package com.bistu.allthebistu.ui
 
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -7,40 +10,309 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bistu.allthebistu.ui.navigation.MainTab
+import androidx.compose.ui.window.Dialog
+import com.bistu.allthebistu.data.card.PortalCardApi
+import com.bistu.allthebistu.ui.login.AuthHolder
+import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import kotlinx.coroutines.launch
+import java.io.File
 
 /**
- * 生活 Tab 占位页。
+ * 生活 Tab。
  *
- * 由原「校园」板块改名而来，定位从「教务相关」放宽到「校园生活服务」。
- * 未来放：一卡通余额、电费、图书馆、空教室、校园通知、校历。
+ * 目前只有「一卡通数据抓取」这一张卡——这是一次性的调试入口：
+ * 门户的接口字段还没验证过，先让用户在已登录状态下抓一次原始响应，
+ * 拿到真实结构后再改造成正式的余额/流水界面。
  */
 @Composable
 fun LifeScreen(modifier: Modifier = Modifier) {
-    PlaceholderScreen(
-        title = "生活",
-        subtitle = "校园里的吃穿住行，一站搞定",
-        plannedItems = listOf(
-            "一卡通余额与消费流水",
-            "宿舍电费余额与用量",
-            "图书馆座位查询",
-            "空教室查询",
-            "校园通知聚合",
-            "校历与节假日"
-        ),
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var loading by remember { mutableStateOf(false) }
+    var dump by remember { mutableStateOf<PortalCardApi.RawDump?>(null) }
+    var savedPath by remember { mutableStateOf<String?>(null) }
+    var showRaw by remember { mutableStateOf(false) }
+
+    Column(
         modifier = modifier
-    )
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .verticalScroll(rememberScrollState())
+            .padding(
+                start = HyperSpacing.pageHorizontal,
+                end = HyperSpacing.pageHorizontal,
+                top = 16.dp
+            ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "生活",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "校园里的吃穿住行，一站搞定",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        // ── 一卡通数据抓取（调试）──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "一卡通",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = "数据抓取",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "从信息门户抓一次原始数据，用来确认余额和消费流水的字段结构。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                if (!AuthHolder.isLoggedIn) {
+                    Text(
+                        text = "需要先在教务登录，才能借用同一个 SSO 会话访问门户。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            context.startActivity(
+                                Intent(context, NativeLoginActivity::class.java)
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("去登录") }
+                } else {
+                    Button(
+                        onClick = {
+                            val auth = AuthHolder.auth
+                            if (auth == null) {
+                                dump = PortalCardApi.RawDump(
+                                    log = "", itemsJson = "", detailId = null, detailJson = "",
+                                    error = "会话为空，请重新登录"
+                                )
+                                return@Button
+                            }
+                            loading = true
+                            scope.launch {
+                                val result = PortalCardApi.dump(auth)
+                                dump = result
+                                // 落盘一份，方便直接取文件回传
+                                runCatching {
+                                    val dir = context.getExternalFilesDir(null)
+                                    val f = File(dir, "portal_card_debug.txt")
+                                    f.writeText(result.toPlainText())
+                                    savedPath = f.absolutePath
+                                }
+                                loading = false
+                            }
+                        },
+                        enabled = !loading,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (loading) "抓取中…" else if (dump == null) "抓取数据" else "重新抓取")
+                    }
+                }
+
+                dump?.let { d ->
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        text = if (d.error != null) "抓取失败" else "抓取完成",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (d.error != null) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+                    )
+                    d.error?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = it,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "items ${d.itemsJson.length} 字符 · detail ${d.detailJson.length} 字符 · id=${d.detailId ?: "未找到"}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { showRaw = true },
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("查看原始数据", fontSize = 12.sp) }
+
+                        OutlinedButton(
+                            onClick = {
+                                copyToClipboard(context, d.toPlainText())
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("复制全部", fontSize = 12.sp) }
+                    }
+
+                    savedPath?.let { path ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "已存到：$path",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── 规划中 ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "规划中的功能",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(12.dp))
+                listOf(
+                    "宿舍电费余额与用量",
+                    "图书馆座位查询",
+                    "空教室查询",
+                    "校园通知聚合",
+                    "校历与节假日"
+                ).forEach { item ->
+                    Row(
+                        modifier = Modifier.padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                    RoundedCornerShape(50)
+                                )
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = item,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(100.dp))
+    }
+
+    // ── 原始数据弹窗 ──
+    if (showRaw && dump != null) {
+        Dialog(onDismissRequest = { showRaw = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "原始响应",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SelectionContainer(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .heightIn(max = 480.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = dump!!.toPlainText(),
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = {
+                            copyToClipboard(context, dump!!.toPlainText())
+                        }) { Text("复制") }
+                        TextButton(onClick = { showRaw = false }) { Text("关闭") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("portal_card_debug", text))
 }
 
 /**
