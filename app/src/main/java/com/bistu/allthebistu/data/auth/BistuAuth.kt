@@ -99,22 +99,49 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
      */
     private var cachedFlowKey: String = ""
 
+    /**
+     * Cookie 发生变化时的回调（在写入 CookieJar 的那个线程上调）。
+     *
+     * 存在的理由：换票（[casLoginDetailed]）会从 Set-Cookie 拿到**新的**
+     * 教务会话，但以前这份新会话只留在内存里，只有「同步成功」后才跟着
+     * [AuthHolder.persist] 一起落盘。于是出现这条很隐蔽的路径：
+     *
+     *   冷启动恢复旧 Cookie → 探活失败（服务端会话早废了）→ 换票成功
+     *   → 用户这时杀掉进程 / 同步恰好失败 → 新会话丢失
+     *   → 下次冷启动又拿旧 Cookie 重新探活、重新换票
+     *
+     * 表现出来就是「过一会儿重进要转好久」「有时刷不出来」。
+     * 挂上回调后，任何一个 Set-Cookie 都会立刻触发落盘。
+     */
+    var onCookiesChanged: (() -> Unit)? = null
+
     private val cookieJar = object : CookieJar {
         override fun loadForRequest(url: HttpUrl): List<Cookie> =
-            cookieStore.filter { it.matches(url) }
+            synchronized(cookieStore) { cookieStore.filter { it.matches(url) } }
 
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            cookies.forEach { newCookie ->
-                // 同名但不同域/路径的 Cookie 必须共存：
-                // 早期只按 name 去重，sso 的 JSESSIONID 会被 jwxt 的顶掉，会话直接断
-                cookieStore.removeAll {
-                    it.name == newCookie.name &&
-                            it.domain == newCookie.domain &&
-                            it.path == newCookie.path
+            if (cookies.isEmpty()) return
+            synchronized(cookieStore) {
+                cookies.forEach { newCookie ->
+                    // 同名但不同域/路径的 Cookie 必须共存：
+                    // 早期只按 name 去重，sso 的 JSESSIONID 会被 jwxt 的顶掉，会话直接断
+                    cookieStore.removeAll {
+                        it.name == newCookie.name &&
+                                it.domain == newCookie.domain &&
+                                it.path == newCookie.path
+                    }
+                    cookieStore.add(newCookie)
                 }
-                cookieStore.add(newCookie)
             }
+            // 回调放锁外：落盘是 IO，不要抱着 cookieStore 的锁做
+            notifyCookiesChanged()
         }
+    }
+
+    /** 安全地触发变更回调：回调里抛异常绝不能影响正常的网络请求 */
+    private fun notifyCookiesChanged() {
+        runCatching { onCookiesChanged?.invoke() }
+            .onFailure { logger("onCookiesChanged 回调异常: ${it.message}") }
     }
 
     /** 跟随重定向的客户端（用于 CAS 跳转链） */
@@ -685,18 +712,25 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
 
     /** 清空所有 Cookie */
     fun clearCookies() {
-        cookieStore.clear()
+        synchronized(cookieStore) { cookieStore.clear() }
         cachedFlowKey = ""
         logger("clearCookies: 已清空")
+        notifyCookiesChanged()
     }
 
     // ══════════════════════════════════════════════════════════
     // 会话持久化：导出 / 还原
     // ══════════════════════════════════════════════════════════
 
-    /** 导出当前所有 Cookie 快照（用于落盘） */
-    fun exportCookies(): List<StoredCookie> =
+    /**
+     * 导出当前所有 Cookie 快照（用于落盘）。
+     *
+     * 加锁：写发生在 OkHttp 的网络线程，读可能来自 UI/WorkManager 线程，
+     * 不同步的话 ArrayList 并发改会抛 ConcurrentModificationException。
+     */
+    fun exportCookies(): List<StoredCookie> = synchronized(cookieStore) {
         cookieStore.map { StoredCookie.from(it) }
+    }
 
     /** 当前持有的 Cookie 数量（调试用） */
     fun cookieCount(): Int = cookieStore.size
@@ -708,7 +742,7 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
      * 已过期的条目自动跳过。返回实际还原成功的数量。
      */
     fun restoreCookies(stored: List<StoredCookie>): Int {
-        cookieStore.clear()
+        synchronized(cookieStore) { cookieStore.clear() }
         cachedFlowKey = ""
         var restored = 0
         stored.forEach { s ->
@@ -720,7 +754,7 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
             if (cookie == null) {
                 logger("restoreCookies: 还原失败 ${s.name}")
             } else {
-                cookieStore.add(cookie)
+                synchronized(cookieStore) { cookieStore.add(cookie) }
                 restored++
             }
         }

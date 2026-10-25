@@ -2,6 +2,8 @@ package com.bistu.allthebistu.ui.login
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import com.bistu.allthebistu.data.log.AppLog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -63,8 +65,11 @@ object AuthHolder {
      */
     fun setAuth(newAuth: BistuAuth, context: Context? = null) {
         auth = newAuth
+        attachPersistence(newAuth)
         isLoggedIn = newAuth.isLoggedIn()
         restoredFromDisk = false
+        // 记下 Context：Cookie 变更回调是异步触发的，那时拿不到调用方的 context
+        if (context != null) appContext = context.applicationContext
         // 落盘：保存 Cookie 供下次冷启动使用
         val ctx = context ?: appContext
         if (ctx != null && isLoggedIn) {
@@ -99,6 +104,7 @@ object AuthHolder {
         }
 
         auth = newAuth
+        attachPersistence(newAuth)
         isLoggedIn = newAuth.isLoggedIn()
         restoredFromDisk = isLoggedIn
         AppLog.d("AuthHolder", "restore: 还原 $count 个 Cookie, isLoggedIn=$isLoggedIn")
@@ -114,6 +120,41 @@ object AuthHolder {
         if (a.isLoggedIn()) {
             SessionStore(ctx).save(a.exportCookies())
         }
+    }
+
+    // ── Cookie 变更自动落盘 ──
+    //
+    // 为什么需要：换票会从 Set-Cookie 拿到**新的**教务会话，但在加上这段之前，
+    // 新会话只存在于内存，要等「同步成功」才跟着 persist() 一起落盘。
+    // 于是「强杀」就成了一个丢失窗口：
+    //   冷启动恢复旧 Cookie → 探活失败 → 换票成功 → 用户这时杀进程
+    //   → 新会话没落盘 → 下次又是同一套旧 Cookie，再探活、再换票。
+    // 看着像「用一会儿就变慢/刷不出来」，实际是每次都在重走一遍换票链。
+
+    private val persistHandler by lazy { Handler(Looper.getMainLooper()) }
+    private var persistScheduled = false
+
+    /** 给 [BistuAuth] 挂上「Cookie 一变就落盘」的监听 */
+    private fun attachPersistence(a: BistuAuth) {
+        a.onCookiesChanged = { schedulePersist() }
+    }
+
+    /**
+     * 合并短时间内的多次变更，只写一次盘。
+     *
+     * 一次换票会连跳好几跳（sso → cas → jwxt），每跳都可能带 Set-Cookie，
+     * 逐个写盘没必要；合并成一次既不会漏（真要杀进程时通常早已落盘），
+     * 也不会把磁盘 IO 打满。
+     */
+    private fun schedulePersist() {
+        synchronized(this) {
+            if (persistScheduled) return
+            persistScheduled = true
+        }
+        persistHandler.postDelayed({
+            synchronized(this) { persistScheduled = false }
+            persist()
+        }, PERSIST_DEBOUNCE_MS)
     }
 
     /**
@@ -157,6 +198,7 @@ object AuthHolder {
 
         // ③ 装上即可，不阻塞首屏。有效性交给后续请求判定。
         auth = newAuth
+        attachPersistence(newAuth)
         isLoggedIn = newAuth.isLoggedIn()
         restoredFromDisk = isLoggedIn
         AppLog.d("AuthHolder", "autoLogin: 恢复 $count 个 Cookie，isLoggedIn=$isLoggedIn")
@@ -169,6 +211,9 @@ object AuthHolder {
 
     /** 退出登录：清内存 + 清磁盘 */
     fun clear(context: Context? = null) {
+        // 先摘掉监听：否则 clearCookies() 会触发一次「变更落盘」，
+        // 在退出流程里多写一遍盘（而且是在会话刚被清空之后）
+        auth?.onCookiesChanged = null
         auth?.clearCookies()
         auth = null
         isLoggedIn = false
@@ -182,6 +227,9 @@ object AuthHolder {
 
     /** Application Context（由 restore / setAuth 注入） */
     private var appContext: Context? = null
+
+    /** Cookie 变更后延迟多久落盘（合并一次换票里的多跳 Set-Cookie） */
+    private const val PERSIST_DEBOUNCE_MS = 400L
 }
 
 /** 自动登录结果 */

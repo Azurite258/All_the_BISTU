@@ -101,7 +101,17 @@ class SessionStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** 保存 Cookie 快照（覆盖旧的） */
+    /**
+     * 保存 Cookie 快照（覆盖旧的）。
+     *
+     * 用 commit() 而不是 apply()：apply() 只保证「内存立即生效、磁盘异步写」，
+     * 进程被 force-stop / 从最近任务划掉时，队列里没落完的部分会直接丢。
+     * 而这份数据恰恰就是「下次冷启动还能不能免登录」的全部依据——
+     * 用户强杀后重进发现自己被登出，有一部分就是这么丢的。
+     *
+     * 代价可以接受：一次只写 2~3 KB，commit 在毫秒级；写盘频率也只有
+     * 登录成功、同步成功、Cookie 变更（已去抖）这几种。
+     */
     fun save(cookies: List<StoredCookie>) {
         if (cookies.isEmpty()) {
             clear()
@@ -109,11 +119,15 @@ class SessionStore(context: Context) {
         }
         val arr = JSONArray()
         cookies.forEach { arr.put(it.toJson()) }
-        prefs.edit()
+        val started = System.currentTimeMillis()
+        val ok = prefs.edit()
             .putString(KEY_COOKIES, arr.toString())
-            .putLong(KEY_SAVED_AT, System.currentTimeMillis())
-            .apply()
-        AppLog.d(TAG, "save: 已保存 ${cookies.size} 个 Cookie")
+            .putLong(KEY_SAVED_AT, started)
+            .commit()
+        AppLog.d(
+            TAG,
+            "save: 已保存 ${cookies.size} 个 Cookie (commit=$ok, ${System.currentTimeMillis() - started}ms)"
+        )
     }
 
     /**
@@ -165,10 +179,12 @@ class SessionStore(context: Context) {
 
     /** 清空会话 */
     fun clear() {
+        // 同样用 commit：清空不能「排队等异步」，否则退出登录后立刻被杀，
+        // Cookie 可能还留在磁盘上，下次启动又自动登进去（属于隐私问题）
         prefs.edit()
             .remove(KEY_COOKIES)
             .remove(KEY_SAVED_AT)
-            .apply()
+            .commit()
         AppLog.d(TAG, "clear: 会话已清除")
     }
 
@@ -178,7 +194,7 @@ class SessionStore(context: Context) {
             .remove(KEY_COOKIES)
             .remove(KEY_SAVED_AT)
             .remove(KEY_USERNAME)
-            .apply()
+            .commit()
         AppLog.d(TAG, "clearAll: 会话与学号已清除")
     }
 
