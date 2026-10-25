@@ -600,7 +600,13 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     private suspend fun probeJwxt(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             redirectClient.newCall(
-                Request.Builder().url(JwxtApi.ENTRY_SCHEDULE).get().build()
+                Request.Builder()
+                    .url(JwxtApi.ENTRY_SCHEDULE)
+                    // 必须带 UA：教务前面有 WAF，空 UA 会被直接拦成 403，
+                    // 那就把「校内正常」也误判成「教务连不上」了
+                    .addHeader("User-Agent", JwxtApi.UA)
+                    .get()
+                    .build()
             ).execute().use { r ->
                 val host = r.request.url.host
                 val body = r.body?.string().orEmpty()
