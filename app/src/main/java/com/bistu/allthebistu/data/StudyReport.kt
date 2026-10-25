@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.data
 
 import android.content.Context
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
@@ -108,7 +108,7 @@ class StudyReportStore(private val context: Context) {
 
     fun save(report: StudyReport) {
         runCatching { file.writeText(json.encodeToString(StudyReport.serializer(), report)) }
-            .onFailure { Log.w(TAG, "保存学业报告失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "保存学业报告失败: ${it.message}") }
     }
 
     fun load(): StudyReport? {
@@ -116,7 +116,7 @@ class StudyReportStore(private val context: Context) {
         return runCatching {
             json.decodeFromString(StudyReport.serializer(), file.readText())
         }.getOrElse {
-            Log.w(TAG, "读取学业报告失败: ${it.message}")
+            AppLog.w(TAG, "读取学业报告失败: ${it.message}")
             null
         }
     }

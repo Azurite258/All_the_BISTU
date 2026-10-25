@@ -1,6 +1,6 @@
 package com.bistu.allthebistu.data.auth
 
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -37,7 +37,7 @@ import com.tencent.kona.crypto.KonaCryptoProvider
  *  5. GET  /login?service=xxx    → 302 拿 ST ticket
  *  6. 带 ticket 访问教务系统 casLogin.do → 建立 session
  */
-class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
+class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
 
     companion object {
         private const val TAG = "BistuAuth"
@@ -631,7 +631,11 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
      */
     fun hasJwxtSession(): Boolean {
         val url = JWXT_BASE.toHttpUrlOrNull() ?: return false
-        return cookieStore.any { it.name == "JSESSIONID" && it.matches(url) }
+        // 正方新版（jwapp）用 GS_SESSIONID，老版才是 JSESSIONID。
+        // 只认 JSESSIONID 会一直报 `jwxt会话=false`，日志看着像没登录上，实际是好的
+        return cookieStore.any {
+            (it.name == "JSESSIONID" || it.name == "GS_SESSIONID") && it.matches(url)
+        }
     }
 
     // ══════════════════════════════════════════════════════════

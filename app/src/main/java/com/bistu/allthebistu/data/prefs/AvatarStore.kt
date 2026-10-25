@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import java.io.File
 import java.io.FileOutputStream
 
@@ -93,7 +93,7 @@ object AvatarStore {
         decoded.recycle()
 
         true
-    }.onFailure { Log.w(TAG, "保存头像失败: ${it.message}") }
+    }.onFailure { AppLog.w(TAG, "保存头像失败: ${it.message}") }
         .getOrDefault(false)
 
     fun clear(context: Context) {

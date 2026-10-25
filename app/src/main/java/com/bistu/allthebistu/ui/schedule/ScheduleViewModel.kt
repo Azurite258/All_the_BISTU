@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.ui.schedule
 
 import android.app.Application
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bistu.allthebistu.data.LoadResult
@@ -106,7 +106,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
 
             // ② 恢复登录态
             val result = AuthHolder.autoLogin(getApplication())
-            Log.d(TAG, "自动登录结果: $result")
+            AppLog.d(TAG, "自动登录结果: $result")
             AuthHolder.auth?.let(repository::setAuth)
             lastKnownLoggedIn = AuthHolder.isLoggedIn
 
@@ -252,7 +252,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val cleared = UserDataCleaner(getApplication()).wipeAll()
-            Log.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
+            AppLog.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
 
             val loaded = repository.loadSchedule()
             _uiState.update {
@@ -275,11 +275,11 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess { report ->
                     reportStore.save(report)
                     _uiState.update { it.copy(studyReport = report, reportLoading = false) }
-                    Log.d(TAG, "学业报告: 已修 ${report.creditsEarned}/${report.creditsRequired}，" +
+                    AppLog.d(TAG, "学业报告: 已修 ${report.creditsEarned}/${report.creditsRequired}，" +
                             "已选 ${report.creditsSelection}")
                 }
                 .onFailure { e ->
-                    Log.w(TAG, "学业报告获取失败: ${e.message}")
+                    AppLog.w(TAG, "学业报告获取失败: ${e.message}")
                     _uiState.update { it.copy(reportLoading = false) }
                 }
         }
@@ -304,8 +304,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         //    于是界面变成「已经退出登录，头像还是本人的照片」——看起来像没退干净。
         //    手动点「退出登录」走 UserDataCleaner 是干净的，自动过期这条路径漏了。
         runCatching { UserDataCleaner(getApplication()).wipeAll() }
-            .onSuccess { Log.d(TAG, "会话过期：已清理 ${it.joinToString("、")}") }
-            .onFailure { Log.w(TAG, "会话过期：清理个人数据失败 ${it.message}") }
+            .onSuccess { AppLog.d(TAG, "会话过期：已清理 ${it.joinToString("、")}") }
+            .onFailure { AppLog.w(TAG, "会话过期：清理个人数据失败 ${it.message}") }
 
         // ③ 明确告诉用户「为什么掉线」，而不是静默变成未登录
         _uiState.update {

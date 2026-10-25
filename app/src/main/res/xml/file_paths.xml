@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只把「诊断日志导出」用的缓存目录暴露给 FileProvider。
+  注意：filesDir/logs 本身不对外，分享的是复制到 cacheDir/diagnostics 的那份，
+  避免外部应用拿到 URI 后翻其他私有文件。
+-->
+<paths>
+    <cache-path name="diagnostics" path="diagnostics/" />
+</paths>

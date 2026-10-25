@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.CompositionLocalProvider
+import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.AvatarStore
 import com.bistu.allthebistu.data.prefs.BottomBarStyle
@@ -207,6 +208,14 @@ fun ProfileScreen(
                 trailing = "后续开放",
                 enabled = false,
                 onClick = {}
+            )
+            Divider()
+            // 登录出问题时不用连电脑：日志一直在 filesDir/logs 里滚，
+            // 点这里把最近两份打包分享出去，直接发给我就能定位
+            ActionRow(
+                title = "诊断日志",
+                trailing = "导出并分享",
+                onClick = { AppLog.share(context) }
             )
         }
 

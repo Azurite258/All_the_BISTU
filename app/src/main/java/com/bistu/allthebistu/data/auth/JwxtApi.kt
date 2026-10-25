@@ -1,6 +1,6 @@
 package com.bistu.allthebistu.data.auth
 
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.ScheduleParser
 import com.bistu.allthebistu.data.StudyReport
@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
  */
 class JwxtApi(
     private val auth: BistuAuth,
-    private val logger: (String) -> Unit = { Log.d(TAG, it) }
+    private val logger: (String) -> Unit = { AppLog.d(TAG, it) }
 ) {
 
     companion object {
@@ -223,6 +223,10 @@ class JwxtApi(
                 logger("ensureSession: 入口落点=$host, HTTP ${r.code}")
                 host == BistuAuth.JWXT_HOST
             }
+        }.onFailure {
+            // 以前这里是静默失败：探活一抛异常就当成「会话没了」，
+            // 日志里连一行的痕迹都不留，排查时完全看不出是网络还是逻辑问题
+            logger("ensureSession: 入口探活异常 ${it.javaClass.simpleName}: ${it.message}")
         }.getOrDefault(false)
 
         if (alive) return@withContext CasResult.Ok

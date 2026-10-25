@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.data.auth
 
 import android.content.Context
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import okhttp3.Cookie
 import org.json.JSONArray
 import org.json.JSONObject
@@ -43,7 +43,7 @@ data class StoredCookie(
             .apply { if (httpOnly) httpOnly() }
             .build()
     }.onFailure {
-        Log.w(TAG, "还原 Cookie 失败 name=$name domain=$domain: ${it.message}")
+        AppLog.w(TAG, "还原 Cookie 失败 name=$name domain=$domain: ${it.message}")
     }.getOrNull()
 
     fun toJson(): JSONObject = JSONObject().apply {
@@ -113,7 +113,7 @@ class SessionStore(context: Context) {
             .putString(KEY_COOKIES, arr.toString())
             .putLong(KEY_SAVED_AT, System.currentTimeMillis())
             .apply()
-        Log.d(TAG, "save: 已保存 ${cookies.size} 个 Cookie")
+        AppLog.d(TAG, "save: 已保存 ${cookies.size} 个 Cookie")
     }
 
     /**
@@ -129,16 +129,16 @@ class SessionStore(context: Context) {
                 arr.optJSONObject(i)?.let { StoredCookie.fromJson(it) }
             }
         }.getOrElse {
-            Log.w(TAG, "load: 解析失败，清空存储: ${it.message}")
+            AppLog.w(TAG, "load: 解析失败，清空存储: ${it.message}")
             emptyList()
         }
 
         val alive = list.filterNot { it.isExpired() }
         if (alive.isEmpty() && list.isNotEmpty()) {
-            Log.d(TAG, "load: 全部 ${list.size} 个 Cookie 已过期")
+            AppLog.d(TAG, "load: 全部 ${list.size} 个 Cookie 已过期")
             clear()
         }
-        Log.d(TAG, "load: 读取 ${list.size} 个，有效 ${alive.size} 个")
+        AppLog.d(TAG, "load: 读取 ${list.size} 个，有效 ${alive.size} 个")
         return alive
     }
 
@@ -157,7 +157,7 @@ class SessionStore(context: Context) {
     fun saveUsername(username: String) {
         if (username.isBlank()) return
         prefs.edit().putString(KEY_USERNAME, username).apply()
-        Log.d(TAG, "saveUsername: 已记住学号")
+        AppLog.d(TAG, "saveUsername: 已记住学号")
     }
 
     /** 读取上次登录的学号（用于登录页预填） */
@@ -169,7 +169,7 @@ class SessionStore(context: Context) {
             .remove(KEY_COOKIES)
             .remove(KEY_SAVED_AT)
             .apply()
-        Log.d(TAG, "clear: 会话已清除")
+        AppLog.d(TAG, "clear: 会话已清除")
     }
 
     /** 清空会话 + 学号（退出登录时用） */
@@ -179,7 +179,7 @@ class SessionStore(context: Context) {
             .remove(KEY_SAVED_AT)
             .remove(KEY_USERNAME)
             .apply()
-        Log.d(TAG, "clearAll: 会话与学号已清除")
+        AppLog.d(TAG, "clearAll: 会话与学号已清除")
     }
 
     companion object {

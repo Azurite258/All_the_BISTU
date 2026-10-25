@@ -3,7 +3,7 @@ package com.bistu.allthebistu.ui.login
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -272,14 +272,14 @@ class WebViewLoginActivity : ComponentActivity() {
                                             url: String
                                         ) {
                                             super.onPageFinished(view, url)
-                                            Log.d(TAG, "页面加载完成: $url")
+                                            AppLog.d(TAG, "页面加载完成: $url")
                                             statusText = "当前页面: $url"
 
                                             // ── 关键：注入高度修复 CSS ──
                                             // 学校登录页把表单放在 iframe 里，
                                             // 但 #app 父容器高度为 0，导致 iframe 不可见（白屏）
                                             view.evaluateJavascript(FIX_HEIGHT_CSS) { r ->
-                                                Log.d(TAG, "高度修复结果: $r")
+                                                AppLog.d(TAG, "高度修复结果: $r")
                                             }
 
                                             // ── 诊断：检查 DOM 是否渲染出内容 ──
@@ -320,7 +320,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                                 })()
                                                 """.trimIndent()
                                             ) { result ->
-                                                Log.d(TAG, "DOM 诊断: $result")
+                                                AppLog.d(TAG, "DOM 诊断: $result")
 
                                                 val bodyLen = Regex("\"bodyLen\":(\\d+)")
                                                     .find(result)?.groupValues?.get(1)?.toIntOrNull()
@@ -330,10 +330,10 @@ class WebViewLoginActivity : ComponentActivity() {
 
                                                 // 再取一次 HTML 结构和可见性
                                                 view.evaluateJavascript("window.__dsh_dom") { dom ->
-                                                    Log.d(TAG, "DOM 前 500 字符: $dom")
+                                                    AppLog.d(TAG, "DOM 前 500 字符: $dom")
                                                 }
                                                 view.evaluateJavascript("window.__dsh_vis") { vis ->
-                                                    Log.d(TAG, "子元素可见性: $vis")
+                                                    AppLog.d(TAG, "子元素可见性: $vis")
                                                 }
                                             }
 
@@ -341,7 +341,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                             if (url.contains(TARGET_HOST)) {
                                                 val cookie = CookieManager.getInstance()
                                                     .getCookie(url)
-                                                Log.d(TAG, "Cookie: ${cookie?.take(200)}")
+                                                AppLog.d(TAG, "Cookie: ${cookie?.take(200)}")
 
                                                 if (!cookie.isNullOrBlank()) {
                                                     cookieResult = cookie
@@ -357,7 +357,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                             request: WebResourceRequest
                                         ): Boolean {
                                             val url = request.url.toString()
-                                            Log.d(TAG, "跳转: $url")
+                                            AppLog.d(TAG, "跳转: $url")
                                             // 让 WebView 自己处理所有跳转
                                             return false
                                         }
@@ -368,7 +368,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                             handler: android.webkit.SslErrorHandler,
                                             error: android.net.http.SslError
                                         ) {
-                                            Log.e(TAG, "SSL 错误: ${error.url} - ${error.primaryError}")
+                                            AppLog.e(TAG, "SSL 错误: ${error.url} - ${error.primaryError}")
                                             handler.proceed()   // 测试用：忽略证书错误
                                         }
 
@@ -378,7 +378,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                             request: WebResourceRequest,
                                             errorResponse: android.webkit.WebResourceResponse
                                         ) {
-                                            Log.e(
+                                            AppLog.e(
                                                 TAG,
                                                 "HTTP 错误: ${request.url} -> ${errorResponse.statusCode}"
                                             )
@@ -390,7 +390,7 @@ class WebViewLoginActivity : ComponentActivity() {
                                         override fun onConsoleMessage(
                                             consoleMessage: android.webkit.ConsoleMessage
                                         ): Boolean {
-                                            Log.d(
+                                            AppLog.d(
                                                 TAG,
                                                 "Console[${consoleMessage.messageLevel()}]: " +
                                                         "${consoleMessage.message()} " +

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  jwxt / info / sso 这几个站点的服务器**只发叶子证书，不发中间证书**
+  （openssl 实测：Verify return code 21 unable to verify the first certificate），
+  属于学校侧 TLS 配置缺陷。Android 部分机型/部分 TLS 版本构建不出完整链，
+  随机抛 SSLHandshakeException: Trust anchor for certification path not found，
+  表现就是「时好时坏、偶尔刷新不出来」。
+
+  这里只给 bistu.edu.cn 补一张缺失的 GlobalSign 中间证书作为额外信任锚：
+  证书链仍然要验到 GlobalSign 根、hostname 校验照常，不是关掉校验。
+  证书有效期至 2028-11-21，换证书时同步更新 res/raw 里的文件。
+-->
+<network-security-config>
+    <domain-config>
+        <domain includeSubdomains="true">bistu.edu.cn</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/globalsign_rsa_ov_ssl_ca_2018" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

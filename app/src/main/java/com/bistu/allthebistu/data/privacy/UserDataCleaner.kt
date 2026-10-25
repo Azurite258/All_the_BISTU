@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.data.privacy
 
 import android.content.Context
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.auth.SessionStore
 import com.bistu.allthebistu.data.prefs.AvatarStore
@@ -91,42 +91,42 @@ class UserDataCleaner(private val context: Context) {
         // ① 登录凭据：Cookie + 记住的学号
         runCatching { SessionStore(context).clearAll() }
             .onSuccess { done += "登录状态" }
-            .onFailure { Log.w(TAG, "清除登录状态失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除登录状态失败: ${it.message}") }
 
         // ② 课表缓存（顺带清掉学期元信息里的姓名 / 学号 / 专业 / 班级）
         runCatching { repository.clearCache() }
             .onSuccess { done += "课表缓存" }
-            .onFailure { Log.w(TAG, "清除课表缓存失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除课表缓存失败: ${it.message}") }
 
         // ②' 学业报告（含要求/已修学分，属于个人学籍数据）
         runCatching { com.bistu.allthebistu.data.StudyReportStore(context).clear() }
             .onSuccess { done += "学业报告" }
-            .onFailure { Log.w(TAG, "清除学业报告失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除学业报告失败: ${it.message}") }
 
         // ②''0 自建头像与昵称。
         // 头像可能是真人照片、昵称可能是真名，都算个人信息，跟着登录态一起清。
         // 注意头像在 filesDir 而不是 cacheDir：③ 那个 wipeCacheDirs 清不到它。
         runCatching { AvatarStore.clear(context) }
             .onSuccess { done += "头像" }
-            .onFailure { Log.w(TAG, "清除头像失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除头像失败: ${it.message}") }
 
         runCatching { SettingsStore(context).clearNickname() }
             .onSuccess { done += "昵称" }
-            .onFailure { Log.w(TAG, "清除昵称失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除昵称失败: ${it.message}") }
 
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }
             .onSuccess { done += "临时文件" }
-            .onFailure { Log.w(TAG, "清除临时文件失败: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "清除临时文件失败: ${it.message}") }
 
         // ④ 扩展模块（校园卡 / 学籍 / 缴费…）
         val extra = UserDataWipers.runAll()
         done += extra.cleared
         if (extra.failed.isNotEmpty()) {
-            Log.w(TAG, "部分模块清除失败: ${extra.failed}")
+            AppLog.w(TAG, "部分模块清除失败: ${extra.failed}")
         }
 
-        Log.d(TAG, "退出登录已清除: ${done.joinToString("、")}")
+        AppLog.d(TAG, "退出登录已清除: ${done.joinToString("、")}")
         done.distinct()
     }
 

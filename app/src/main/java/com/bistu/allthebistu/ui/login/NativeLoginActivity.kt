@@ -2,7 +2,7 @@ package com.bistu.allthebistu.ui.login
 
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -70,7 +70,7 @@ object AuthHolder {
         if (ctx != null && isLoggedIn) {
             val count = newAuth.exportCookies().size
             SessionStore(ctx).save(newAuth.exportCookies())
-            Log.d("AuthHolder", "setAuth: 已持久化 $count 个 Cookie")
+            AppLog.d("AuthHolder", "setAuth: 已持久化 $count 个 Cookie")
         }
     }
 
@@ -86,14 +86,14 @@ object AuthHolder {
 
         val stored = SessionStore(context).load()
         if (stored.isEmpty()) {
-            Log.d("AuthHolder", "restore: 没有可恢复的会话")
+            AppLog.d("AuthHolder", "restore: 没有可恢复的会话")
             return false
         }
 
         val newAuth = BistuAuth()
         val count = newAuth.restoreCookies(stored)
         if (count == 0) {
-            Log.d("AuthHolder", "restore: Cookie 全部还原失败，清理存储")
+            AppLog.d("AuthHolder", "restore: Cookie 全部还原失败，清理存储")
             SessionStore(context).clear()
             return false
         }
@@ -101,7 +101,7 @@ object AuthHolder {
         auth = newAuth
         isLoggedIn = newAuth.isLoggedIn()
         restoredFromDisk = isLoggedIn
-        Log.d("AuthHolder", "restore: 还原 $count 个 Cookie, isLoggedIn=$isLoggedIn")
+        AppLog.d("AuthHolder", "restore: 还原 $count 个 Cookie, isLoggedIn=$isLoggedIn")
         return isLoggedIn
     }
 
@@ -136,21 +136,21 @@ object AuthHolder {
         // ① 内存里已经有可用会话 → 直接复用
         val existing = auth
         if (existing != null && existing.isLoggedIn()) {
-            Log.d("AuthHolder", "autoLogin: 内存会话可用，直接复用")
+            AppLog.d("AuthHolder", "autoLogin: 内存会话可用，直接复用")
             return AutoLoginResult.Success(reusedFromMemory = true)
         }
 
         // ② 尝试从磁盘恢复
         val stored = SessionStore(context).load()
         if (stored.isEmpty()) {
-            Log.d("AuthHolder", "autoLogin: 没有持久化会话，需要手动登录")
+            AppLog.d("AuthHolder", "autoLogin: 没有持久化会话，需要手动登录")
             return AutoLoginResult.NeedManual(reason = "没有保存的登录状态")
         }
 
         val newAuth = BistuAuth()
         val count = newAuth.restoreCookies(stored)
         if (count == 0) {
-            Log.d("AuthHolder", "autoLogin: Cookie 还原失败，需要手动登录")
+            AppLog.d("AuthHolder", "autoLogin: Cookie 还原失败，需要手动登录")
             SessionStore(context).clear()
             return AutoLoginResult.NeedManual(reason = "登录状态已损坏")
         }
@@ -159,7 +159,7 @@ object AuthHolder {
         auth = newAuth
         isLoggedIn = newAuth.isLoggedIn()
         restoredFromDisk = isLoggedIn
-        Log.d("AuthHolder", "autoLogin: 恢复 $count 个 Cookie，isLoggedIn=$isLoggedIn")
+        AppLog.d("AuthHolder", "autoLogin: 恢复 $count 个 Cookie，isLoggedIn=$isLoggedIn")
         return if (isLoggedIn) {
             AutoLoginResult.Success(reusedFromMemory = false)
         } else {
@@ -177,7 +177,7 @@ object AuthHolder {
         restored = false
         val ctx = context ?: appContext
         if (ctx != null) SessionStore(ctx).clearAll()
-        Log.d("AuthHolder", "clear: 已退出登录")
+        AppLog.d("AuthHolder", "clear: 已退出登录")
     }
 
     /** Application Context（由 restore / setAuth 注入） */
@@ -367,7 +367,7 @@ fun NativeLoginScreen(
                             }
                         } catch (e: Exception) {
                             addLog("❌ 异常: ${e.javaClass.simpleName}: ${e.message}")
-                            android.util.Log.e("NativeLogin", "登录异常", e)
+                            AppLog.e("NativeLogin", "登录异常", e)
                         } finally {
                             loading = false
                         }

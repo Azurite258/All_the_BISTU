@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.data
 
 import android.content.Context
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.auth.BistuAuth
 import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.auth.SessionExpiredException
@@ -81,7 +81,7 @@ class ScheduleRepository(private val context: Context) {
             } catch (e: Exception) {
                 // 鉴权失效（401 / 登录过期）→ 通知上层清掉持久化会话
                 if (isAuthFailure(e)) {
-                    Log.w(TAG, "会话已失效，通知上层清理登录态: ${e.message}")
+                    AppLog.w(TAG, "会话已失效，通知上层清理登录态: ${e.message}")
                     auth = null
                     runCatching { onSessionExpired?.invoke() }
                 }
@@ -120,7 +120,7 @@ class ScheduleRepository(private val context: Context) {
         val data = ScheduleParser.parse(rawJson, termCode ?: DEFAULT_TERM)
         LoadResult(data, Source.ASSETS, System.currentTimeMillis(), cause)
     } catch (e: Exception) {
-        Log.w(TAG, "读取示例课表失败: ${e.message}")
+        AppLog.w(TAG, "读取示例课表失败: ${e.message}")
         null
     }
 

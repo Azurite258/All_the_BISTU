@@ -1,6 +1,6 @@
 package com.bistu.allthebistu.data.card
 
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.auth.BistuAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -156,7 +156,7 @@ object PortalCardApi {
                 Request.Builder().url(PORTAL_BASE + CAS_LOGIN_PATH).get().build()
             ).execute().use { resp ->
                 log.appendLine("CAS ${resp.code} → ${resp.request.url}")
-                Log.d(TAG, "CAS ${resp.code} → ${resp.request.url}")
+                AppLog.d(TAG, "CAS ${resp.code} → ${resp.request.url}")
             }
 
             // ── 1. 卡片列表，找一卡通那张的 id ──
@@ -223,7 +223,7 @@ object PortalCardApi {
                 rawRecords = rawRecords
             )
         } catch (e: Exception) {
-            Log.e(TAG, "fetch 失败", e)
+            AppLog.e(TAG, "fetch 失败", e)
             Overview(
                 balance = null, monthSpent = 0.0, records = emptyList(), totalPages = 0,
                 log = log.toString(),

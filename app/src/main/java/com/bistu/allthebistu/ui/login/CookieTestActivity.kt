@@ -1,7 +1,7 @@
 package com.bistu.allthebistu.ui.login
 
 import android.os.Bundle
-import android.util.Log
+import com.bistu.allthebistu.data.log.AppLog
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -73,7 +73,7 @@ class CookieTestActivity : ComponentActivity() {
                         // 从 WebView CookieManager 读取
                         cookie = android.webkit.CookieManager.getInstance()
                             .getCookie(BASE) ?: ""
-                        Log.d(TAG, "读取 Cookie: ${cookie.take(100)}")
+                        AppLog.d(TAG, "读取 Cookie: ${cookie.take(100)}")
                     }) {
                         Text("读取 Cookie")
                     }
@@ -141,8 +141,8 @@ class CookieTestActivity : ComponentActivity() {
             val response = client.newCall(request).execute()
             val text = response.body?.string() ?: ""
 
-            Log.d(TAG, "HTTP ${response.code}, 响应长度 ${text.length}")
-            Log.d(TAG, "响应前 500 字符: ${text.take(500)}")
+            AppLog.d(TAG, "HTTP ${response.code}, 响应长度 ${text.length}")
+            AppLog.d(TAG, "响应前 500 字符: ${text.take(500)}")
 
             buildString {
                 appendLine("HTTP ${response.code}")
@@ -172,7 +172,7 @@ class CookieTestActivity : ComponentActivity() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "请求失败", e)
+            AppLog.e(TAG, "请求失败", e)
             "❌ 请求失败: ${e.message}"
         }
     }
