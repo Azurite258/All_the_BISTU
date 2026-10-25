@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.auth.SessionStore
+import com.bistu.allthebistu.data.prefs.AvatarStore
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -101,6 +102,17 @@ class UserDataCleaner(private val context: Context) {
         runCatching { com.bistu.allthebistu.data.StudyReportStore(context).clear() }
             .onSuccess { done += "学业报告" }
             .onFailure { Log.w(TAG, "清除学业报告失败: ${it.message}") }
+
+        // ②''0 自建头像与昵称。
+        // 头像可能是真人照片、昵称可能是真名，都算个人信息，跟着登录态一起清。
+        // 注意头像在 filesDir 而不是 cacheDir：③ 那个 wipeCacheDirs 清不到它。
+        runCatching { AvatarStore.clear(context) }
+            .onSuccess { done += "头像" }
+            .onFailure { Log.w(TAG, "清除头像失败: ${it.message}") }
+
+        runCatching { SettingsStore(context).clearNickname() }
+            .onSuccess { done += "昵称" }
+            .onFailure { Log.w(TAG, "清除昵称失败: ${it.message}") }
 
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }

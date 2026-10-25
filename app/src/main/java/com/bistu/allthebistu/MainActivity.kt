@@ -25,15 +25,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import com.bistu.allthebistu.data.prefs.AppFontScale
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.prefs.ThemeMode
 import com.bistu.allthebistu.ui.LifeScreen
-import com.bistu.allthebistu.ui.ProfileScreen
+import com.bistu.allthebistu.ui.profile.ProfileScreen
 import com.bistu.allthebistu.ui.study.StudyScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
@@ -41,7 +44,6 @@ import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
 import com.bistu.allthebistu.ui.navigation.MainTab
 import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
-import com.bistu.allthebistu.ui.settings.SettingsScreen
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.Study1Theme
 import kotlinx.coroutines.launch
@@ -77,12 +79,28 @@ class MainActivity : ComponentActivity() {
             val settings by settingsStore.settings.collectAsState(initial = AppSettings())
 
             Study1Theme(themeMode = settings.themeMode) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(
-                        viewModel = scheduleViewModel,
-                        settings = settings,
-                        settingsStore = settingsStore
+                // 全局字体缩放：把「字体档位」翻译成 fontScale 乘到系统的 fontScale 上。
+                // 用 CompositionLocal 而不是逐个改 sp，是因为全项目有几百处 fontSize，
+                // 逐个改既不现实也必然会漏；这样一处覆盖，所有 sp 一起生效。
+                val baseDensity = LocalDensity.current
+                val appDensity = remember(
+                    baseDensity.density,
+                    baseDensity.fontScale,
+                    settings.fontLevel
+                ) {
+                    Density(
+                        density = baseDensity.density,
+                        fontScale = baseDensity.fontScale * AppFontScale.of(settings.fontLevel)
                     )
+                }
+                CompositionLocalProvider(LocalDensity provides appDensity) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AppRoot(
+                            viewModel = scheduleViewModel,
+                            settings = settings,
+                            settingsStore = settingsStore
+                        )
+                    }
                 }
             }
         }
@@ -101,7 +119,6 @@ private fun AppRoot(
 
     // ── 纯界面状态：不属于课表数据，留在 Compose 里 ──
     var currentTab by rememberSaveable { mutableStateOf(MainTab.SCHEDULE) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
     // 顶栏「添加日程」「日程提醒」的提示弹窗（功能尚未实现，先给明确反馈）
     var pendingFeature by remember { mutableStateOf<String?>(null) }
 
@@ -121,23 +138,6 @@ private fun AppRoot(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
         else -> systemDark
-    }
-
-    // ── 设置页：独立整页，覆盖在其他内容之上 ──
-    if (showSettings) {
-        SettingsScreen(
-            settings = settings,
-            onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
-            onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
-            onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
-            onBack = { showSettings = false },
-            isLoggedIn = uiState.isLoggedIn,
-            onLogout = {
-                viewModel.logout()
-                showSettings = false
-            }
-        )
-        return
     }
 
     // 未实现功能的统一提示，避免点了没反应
@@ -163,7 +163,6 @@ private fun AppRoot(
                 onRefresh = viewModel::refresh,
                 onAddEvent = { pendingFeature = "添加日程" },
                 onReminderSettings = { pendingFeature = "日程提醒" },
-                onOpenSettings = { showSettings = true },
                 onOpenLogin = { openLogin() }
             )
 
@@ -175,7 +174,16 @@ private fun AppRoot(
             )
 
             MainTab.LIFE -> LifeScreen()
-            MainTab.PROFILE -> ProfileScreen()
+            MainTab.PROFILE -> ProfileScreen(
+                settings = settings,
+                isLoggedIn = uiState.isLoggedIn,
+                onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
+                onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
+                onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
+                onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
+                onLogin = { openLogin() },
+                onLogout = { viewModel.logout() }
+            )
         }
 
         // 未登录 → 每次启动在底部提示一次（不记忆、不打扰已登录用户）

@@ -8,14 +8,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -97,8 +100,50 @@ private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
  * @param paletteIndex 课程名 → 色板索引，保证同屏课程颜色互不相同
  * @param onCourseClick 点击课程块的回调；为 null 时课程块不可点击
  */
+/**
+ * 课表网格。
+ *
+ * 外面这层只做一件事：把全局字体缩放**关掉**。
+ *
+ * 课程块里的字号是 [CourseTypography] 按真实列宽反算出来的，目的是保证
+ * 「课名一行正好放 5/4/3 个字」。如果它再吃一遍全局 fontScale（我的页面里
+ * 那个字体档位），字会被二次放大，「大」档下一条 7 列的行会直接装不下课名。
+ * 所以课表里固定 fontScale = 1，只保留 dp 密度。
+ */
 @Composable
 fun ScheduleGrid(
+    data: ScheduleData,
+    weekNumber: Int,
+    todayDayOfWeek: Int = -1,
+    colorScheme: Int = CourseColorScheme.SCHOOL,
+    isDark: Boolean = false,
+    termStartDate: String? = null,
+    fontLevel: Int = FontLevel.MEDIUM,
+    paletteIndex: Map<String, Int> = emptyMap(),
+    onCourseClick: ((Course) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val base = LocalDensity.current
+    CompositionLocalProvider(
+        LocalDensity provides Density(density = base.density, fontScale = 1f)
+    ) {
+        ScheduleGridBody(
+            data = data,
+            weekNumber = weekNumber,
+            todayDayOfWeek = todayDayOfWeek,
+            colorScheme = colorScheme,
+            isDark = isDark,
+            termStartDate = termStartDate,
+            fontLevel = fontLevel,
+            paletteIndex = paletteIndex,
+            onCourseClick = onCourseClick,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun ScheduleGridBody(
     data: ScheduleData,
     weekNumber: Int,
     todayDayOfWeek: Int = -1,

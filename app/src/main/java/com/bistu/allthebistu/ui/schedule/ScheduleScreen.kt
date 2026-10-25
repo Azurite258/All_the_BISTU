@@ -18,7 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
+
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
@@ -68,7 +68,6 @@ fun ScheduleScreen(
     onRefresh: () -> Unit,
     onAddEvent: () -> Unit,
     onReminderSettings: () -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -89,7 +88,6 @@ fun ScheduleScreen(
             onRefresh = onRefresh,
             onAddEvent = onAddEvent,
             onReminderSettings = onReminderSettings,
-            onOpenSettings = onOpenSettings,
             onOpenLogin = onOpenLogin,
             modifier = modifier
         )
@@ -113,7 +111,6 @@ private fun ScheduleContent(
     onRefresh: () -> Unit,
     onAddEvent: () -> Unit,
     onReminderSettings: () -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenLogin: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -216,7 +213,7 @@ private fun ScheduleContent(
                 }
 
                 // 圆形图标按钮（HyperOS 风格）
-                // 顺序：添加日程 → 日程提醒 → 设置（设置固定在最右）
+                // 顺序：添加日程 → 日程提醒（设置已并入「我的」页，顶栏不再有齿轮）
                 HyperIconButton(
                     icon = Icons.Default.Add,
                     contentDescription = "添加日程",
@@ -227,12 +224,6 @@ private fun ScheduleContent(
                     icon = Icons.Default.Notifications,
                     contentDescription = "日程提醒",
                     onClick = onReminderSettings
-                )
-                Spacer(Modifier.width(8.dp))
-                HyperIconButton(
-                    icon = Icons.Default.Settings,
-                    contentDescription = "设置",
-                    onClick = onOpenSettings
                 )
             }
         }
