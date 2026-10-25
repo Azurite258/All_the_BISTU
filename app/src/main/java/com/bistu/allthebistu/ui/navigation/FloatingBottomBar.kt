@@ -5,8 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bistu.allthebistu.ui.components.liquidGlass
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -95,11 +94,9 @@ fun FloatingBottomBar(
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val hairline = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
 
     // 深色下药丸要更亮一点才看得出来，浅色下则要淡，否则像块灰砖
     val isDarkSurface = surfaceColor.luminance() < 0.5f
-    val pillColor = primaryColor.copy(alpha = if (isDarkSurface) 0.22f else 0.12f)
 
     val scope = rememberCoroutineScope()
 
@@ -133,14 +130,17 @@ fun FloatingBottomBar(
     Box(
         modifier = modifier
             .padding(horizontal = 20.dp, vertical = 12.dp)
+            // 玻璃要「浮」起来：elevation 拉高、颜色压淡。
+            // 阴影画在玻璃体下面，半透明会让它透出一点灰——这正是厚度感的一部分，
+            // 但颜色太浓就变脏了，所以这里是 0x14 / 0x26 而不是之前的 0x22 / 0x33。
             .shadow(
-                elevation = 14.dp,
+                elevation = 22.dp,
                 shape = barShape,
-                ambientColor = Color(0x22000000),
-                spotColor = Color(0x33000000)
+                clip = false,
+                ambientColor = Color(0x1A000000),
+                spotColor = Color(0x30000000)
             )
-            .background(surfaceColor, barShape)
-            .border(0.5.dp, hairline, barShape)
+            .liquidGlass(shape = barShape, isDark = isDarkSurface)
             .height(barHeight)
     ) {
         BoxWithConstraints(
@@ -159,14 +159,23 @@ fun FloatingBottomBar(
                 }
             }
 
-            // ── 选中药丸：与容器同弧度的全胶囊 ──
+            // ── 选中药丸：与容器同弧度的全胶囊，也是一小块玻璃 ──
+            // 比底栏本身再亮一档，才有「小玻璃浮在大玻璃上」的层次；
+            // 选中语义同时由「图标文字变蓝 + 字重加粗」承担，不只靠这个色块。
             Box(
                 modifier = Modifier
                     .offset { IntOffset((displayPos * itemWidthPx).roundToInt(), 0) }
                     .width(itemWidth)
                     .fillMaxHeight()
                     .padding(horizontal = 3.dp)
-                    .background(pillColor, pillShape)
+                    .liquidGlass(
+                        shape = pillShape,
+                        isDark = isDarkSurface,
+                        // 药丸是纯白 —— 底栏体是冷灰，这块纯白才有「浮在玻璃上的另一层玻璃」
+                        bodyColor = if (isDarkSurface) Color(0xFF4C4C57) else Color.White,
+                        bodyAlpha = if (isDarkSurface) 0.90f else 0.88f,
+                        edgeWidth = 0.8.dp
+                    )
             )
 
             // ── 四个 Tab ──
