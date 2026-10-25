@@ -2,6 +2,7 @@ package com.bistu.allthebistu.data.auth
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -52,6 +53,24 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         /** 登录成功码（学校自定义） */
         const val SUCCESS_CODE = 666666
 
+        /** 180040：Flowkey未找到 —— flowKey 为空，或不属于当前 SSO 会话 */
+        const val CODE_FLOWKEY_MISSING = 180040
+
+        /** 170002：用户名或密码错误 */
+        const val CODE_WRONG_PASSWORD = 170002
+
+        /** 600901：没找到 TGC（SSO 侧无登录态） */
+        const val CODE_NO_TGC = 600901
+
+        /** 建立会话（拿 flowKey）的最大尝试次数 */
+        private const val FLOWKEY_MAX_ATTEMPTS = 3
+
+        /** 每次重试间隔 */
+        private const val FLOWKEY_RETRY_DELAY_MS = 400L
+
+        /** 登录遇到 180040 后，最多重建几次会话重试 */
+        private const val LOGIN_MAX_RETRIES = 2
+
         private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         init {
@@ -67,13 +86,27 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     // ── Cookie 管理 ──
     private val cookieStore = mutableListOf<Cookie>()
 
+    /**
+     * 直接从 Set-Cookie 头解析出来的 flowKey。
+     *
+     * 不能只靠 cookieStore：sso / uc / jwxt 三个域会下发同名 Cookie，
+     * CookieJar 去重时可能把 COOKIE_INFO 顶掉，导致读出来是空。
+     */
+    private var cachedFlowKey: String = ""
+
     private val cookieJar = object : CookieJar {
         override fun loadForRequest(url: HttpUrl): List<Cookie> =
             cookieStore.filter { it.matches(url) }
 
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
             cookies.forEach { newCookie ->
-                cookieStore.removeAll { it.name == newCookie.name }
+                // 同名但不同域/路径的 Cookie 必须共存：
+                // 早期只按 name 去重，sso 的 JSESSIONID 会被 jwxt 的顶掉，会话直接断
+                cookieStore.removeAll {
+                    it.name == newCookie.name &&
+                            it.domain == newCookie.domain &&
+                            it.path == newCookie.path
+                }
                 cookieStore.add(newCookie)
             }
         }
@@ -100,25 +133,122 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         cookieStore.firstOrNull { it.name == name }?.value
 
     /**
+     * 取 SSO 域下的 Cookie。
+     *
+     * COOKIE_INFO / TGC 只有 sso.bistu.edu.cn 下发的才算数：
+     * CookieJar 里可能同时存在 uc / jwxt 域的同名条目，
+     * [getCookie] 按插入顺序取第一个，很容易取到别的域上的旧值。
+     */
+    fun getSsoCookie(name: String): String? =
+        cookieStore.lastOrNull { it.name == name && it.domain.endsWith("sso.bistu.edu.cn") }?.value
+            ?: getCookie(name)
+
+    /**
      * 从 COOKIE_INFO cookie 解析 flowKey。
      *
      * 学校 SSO 的会话标识，登录和信息查询都必须带上。
      * COOKIE_INFO 是 URL 编码的 JSON，形如 {"data":{"flowKey":"xxx"}}
+     *
+     * ⚠️ 必须以 CookieJar 里的**当前值**为准，不能先看缓存：
+     * 服务端会在 `info-query`、登录失败等时刻换发/作废 COOKIE_INFO，
+     * 一旦拿着缓存里的旧 flowKey 去登录，服务端只会回 180040 Flowkey未找到。
+     * （这就是「别人的账号一登就 180040」的直接原因。）
      */
     fun getFlowKey(): String {
-        val raw = getCookie("COOKIE_INFO") ?: run {
-            logger("getFlowKey: COOKIE_INFO 不存在")
-            return ""
+        // ① 实时值优先：只要 jar 里有 COOKIE_INFO，就以它为准（哪怕解析为空）
+        val raw = getSsoCookie("COOKIE_INFO")
+        val key = resolveFlowKey(raw, cachedFlowKey)
+
+        if (raw != null && key != cachedFlowKey) {
+            logger(
+                "getFlowKey: 缓存${if (cachedFlowKey.isBlank()) "为空" else "已过期"}，" +
+                        "改用当前 COOKIE_INFO（${if (key.isBlank()) "解析为空" else "${key.length} 字符"}）"
+            )
+        } else if (raw == null && cachedFlowKey.isNotBlank()) {
+            logger("getFlowKey: jar 无 COOKIE_INFO，使用缓存 (${cachedFlowKey.length} 字符)")
+        } else if (key.isBlank()) {
+            logger("getFlowKey: COOKIE_INFO 不存在或解析为空")
         }
-        return try {
-            val decoded = java.net.URLDecoder.decode(raw, "UTF-8")
-            val key = JSONObject(decoded).optJSONObject("data")?.optString("flowKey") ?: ""
-            logger("getFlowKey: ${if (key.isNotBlank()) "成功 (${key.length} 字符)" else "解析为空"}")
-            key
-        } catch (e: Exception) {
-            logger("getFlowKey 解析失败: ${e.message}")
-            ""
+
+        cachedFlowKey = key
+        return key
+    }
+
+    /**
+     * 从响应头同步 flowKey。
+     *
+     * SSO 换发会话时会重新下发 COOKIE_INFO，必须当场跟上，
+     * 否则下一次请求（登录）带的就是上一轮的 flowKey → 180040。
+     */
+    private fun syncFlowKeyFromHeaders(setCookies: List<String>) {
+        val fresh = parseFlowKeyFromSetCookies(setCookies)
+        if (fresh.isBlank()) return
+        if (fresh != cachedFlowKey) {
+            logger("flowKey 已随响应刷新 (${fresh.length} 字符)")
+            cachedFlowKey = fresh
         }
+    }
+
+    /**
+     * 确保拿到可用的 flowKey —— 登录前的守门人。
+     *
+     * 为什么必须有这一步：
+     *  - `/api/reset/rules` 是**无状态**接口，没有会话也照样 200 返回公钥；
+     *  - 所以「会话没建立」不会在这里暴露，只能等登录接口回 180040；
+     *  - 180040 的唯一含义就是 flowKey 为空或不属于当前会话。
+     *
+     * 处网络抖动外，常见原因是校园网未完成上网认证、或挂了 VPN 被劫持。
+     */
+    suspend fun ensureFlowKey(force: Boolean = false): String = withContext(Dispatchers.IO) {
+        if (!force) {
+            val existing = getFlowKey()
+            if (existing.isNotBlank()) {
+                logger("ensureFlowKey: 复用已有 flowKey (${existing.length} 字符)")
+                return@withContext existing
+            }
+        }
+
+        repeat(FLOWKEY_MAX_ATTEMPTS) { attempt ->
+            // 重建会话前先扔掉旧的 COOKIE_INFO：
+            // 它属于上一个会话，带着它去 GET /login 只会让新会话被旧会话污染，
+            // 拿回来的 flowKey 依旧对不上 → 还是 180040
+            cookieStore.removeAll { it.name == "COOKIE_INFO" }
+            cachedFlowKey = ""
+            val encodedService = java.net.URLEncoder.encode(UC_SERVICE, "UTF-8")
+            val initUrl = "$SSO_BASE/login?service=$encodedService"
+            logger("ensureFlowKey: 第 ${attempt + 1} 次建立会话")
+
+            val key = runCatching {
+                // 用不跟随重定向的 client：302 响应本身就带齐 JSESSIONID + COOKIE_INFO
+                client.newCall(Request.Builder().url(initUrl).get().build()).execute().use { resp ->
+                    val setCookies = resp.headers.values("Set-Cookie")
+                    logger("ensureFlowKey: HTTP ${resp.code}, Set-Cookie ${setCookies.size} 条")
+                    val fromHeader = parseFlowKeyFromSetCookies(setCookies)
+                    if (fromHeader.isNotBlank()) fromHeader
+                    else parseFlowKeyValue(getSsoCookie("COOKIE_INFO").orEmpty())
+                }
+            }.getOrElse {
+                logger("ensureFlowKey: 请求异常 ${it.javaClass.simpleName}: ${it.message}")
+                ""
+            }
+
+            if (key.isNotBlank()) {
+                cachedFlowKey = key
+                logger("ensureFlowKey: 成功（第 ${attempt + 1} 次，${key.length} 字符）")
+                return@withContext key
+            }
+
+            logger("ensureFlowKey: 第 ${attempt + 1} 次没拿到 flowKey")
+            if (attempt < FLOWKEY_MAX_ATTEMPTS - 1) delay(FLOWKEY_RETRY_DELAY_MS)
+        }
+
+        throw AuthException(
+            "无法建立统一身份认证会话（flowKey 为空）。\n" +
+                    "请依次检查：\n" +
+                    "1. 网络是否通畅；连校园网时先完成上网认证；\n" +
+                    "2. 关闭 VPN / 代理后重试；\n" +
+                    "3. 稍后再试，或换一个网络（如手机流量）。"
+        )
     }
 
     /** 取所有 Cookie（拼成请求头格式） */
@@ -159,50 +289,21 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     suspend fun getPublicKey(): String = withContext(Dispatchers.IO) {
         logger("getPublicKey: 开始")
 
-        // ① 先访问登录入口，建立 session 并拿 COOKIE_INFO
-        val encodedService = java.net.URLEncoder.encode(UC_SERVICE, "UTF-8")
-        val initUrl = "$SSO_BASE/login?service=$encodedService"
-        logger("getPublicKey: 访问入口 $initUrl")
+        // ① 先建立 SSO 会话并拿到 flowKey。
+        //    这一步以前是 runCatching 静默执行的，失败也不会中断，
+        //    结果公钥照样拿到、登录时 flowKey 却是空的 → 180040。
+        val flowKey = ensureFlowKey()
+        logger("getPublicKey: 会话就绪，flowKey ${flowKey.length} 字符")
 
-        runCatching {
-            redirectClient.newCall(
-                Request.Builder().url(initUrl).get().build()
-            ).execute().use { resp ->
-                logger("getPublicKey: 入口 HTTP ${resp.code}")
-                logger("getPublicKey: 入口最终 URL = ${resp.request.url}")
-
-                // 打印响应头里的 Set-Cookie
-                val setCookies = resp.headers.values("Set-Cookie")
-                setCookies.forEach { c ->
-                    logger("getPublicKey: Set-Cookie = ${c.take(120)}")
-                }
-                // 打印响应体（可能是登录页 HTML，含 flowKey）
-                val bodyText = resp.body?.string() ?: ""
-                logger("getPublicKey: 入口响应长度 ${bodyText.length}")
-
-                // 尝试从 HTML 里找 flowKey
-                val flowKeyRegex = Regex("""flowKey["']?\s*[:=]\s*["']([A-Za-z0-9_\-]+)["']""")
-                flowKeyRegex.find(bodyText)?.let {
-                    logger("getPublicKey: ⭐ HTML 里找到 flowKey = ${it.groupValues[1]}")
-                }
-            }
-        }
-
-        logger("getPublicKey: 入口访问后 Cookie = [${cookieStore.joinToString(", ") { it.name }}]")
-
-        // ② 请求公钥
+        // ② 请求公钥（该接口无状态，不能拿它的成功与否判断会话是否建立）
         val req = Request.Builder().url("$SSO_BASE/api/reset/rules").get().build()
         val body = client.newCall(req).execute().use { resp ->
             logger("getPublicKey: rules HTTP ${resp.code}")
-            resp.headers.values("Set-Cookie").forEach { c ->
-                logger("getPublicKey: rules Set-Cookie = ${c.take(120)}")
-            }
             if (!resp.isSuccessful) throw AuthException("获取公钥失败: HTTP ${resp.code}")
             resp.body?.string() ?: throw AuthException("公钥响应为空")
         }
 
         logger("getPublicKey: rules 响应 = ${body.take(300)}")
-        logger("getPublicKey: 当前 Cookie = [${cookieStore.joinToString(", ") { it.name }}]")
 
         val json = JSONObject(body)
         if (json.optInt("code") != 200) {
@@ -212,13 +313,6 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         val publicKey = json.getJSONObject("data")
             .getJSONObject("encrypt")
             .getString("publicKey")
-
-        val flowKey = getFlowKey()
-        if (flowKey.isBlank()) {
-            logger("⚠️ 未拿到 flowKey（COOKIE_INFO 缺失）")
-        } else {
-            logger("✅ flowKey 已获取 (${flowKey.length} 字符)")
-        }
 
         logger("getPublicKey: 成功，公钥长度 ${publicKey.length}")
         publicKey
@@ -244,6 +338,9 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
 
         val respBody = client.newCall(req).execute().use { resp ->
             logger("infoQuery: HTTP ${resp.code}")
+            // 这一步服务端可能换发 COOKIE_INFO，必须当场同步，
+            // 否则后面登录带的还是旧 flowKey
+            syncFlowKeyFromHeaders(resp.headers.values("Set-Cookie"))
             resp.body?.string() ?: "{}"
         }
 
@@ -357,7 +454,42 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     // ══════════════════════════════════════════════════════════
     // 步骤 4：提交登录
     // ══════════════════════════════════════════════════════════
+
+    /**
+     * 提交登录。
+     *
+     * 180040（Flowkey未找到）会自动重建一次会话后重试 ——
+     * 这是最容易踩的坑：用户手上的旧 JSESSIONID 早就过期，
+     * 但 CookieJar 里还留着一条过期的 COOKIE_INFO，读出来不为空，
+     * 于是一直拿着不属于当前会话的 flowKey 去登录。
+     */
     suspend fun login(
+        username: String,
+        password: String,
+        publicKey: String
+    ): LoginResult {
+        var result = submitLogin(username, password, publicKey)
+        var key = publicKey
+
+        // 180040 说明「本次请求带的 flowKey 不属于当前 SSO 会话」。
+        // 唯一可靠的解法是把会话整个丢掉重建：换发公钥也算重建的一部分，
+        // 因为公钥和 flowKey 必须来自同一个会话。
+        var attempt = 0
+        while (result.code == CODE_FLOWKEY_MISSING && attempt < LOGIN_MAX_RETRIES) {
+            attempt++
+            logger("login: 180040 Flowkey未找到 → 丢弃旧会话重建（第 $attempt 次）")
+            clearCookies()
+            key = runCatching { getPublicKey() }.getOrElse {
+                logger("login: 重建会话失败: ${it.message}")
+                return result
+            }
+            result = submitLogin(username, password, key)
+            logger("login: 第 $attempt 次重试结果 code=${result.code}")
+        }
+        return result
+    }
+
+    private suspend fun submitLogin(
         username: String,
         password: String,
         publicKey: String
@@ -369,6 +501,16 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
 
         val flowKey = getFlowKey()
         logger("login: flowKey=${if (flowKey.isBlank()) "(空)" else "${flowKey.length}字符"}")
+        if (flowKey.isBlank()) {
+            // 直接不发：空 flowKey 必然 180040，发出去只是浪费一次请求
+            logger("login: flowKey 为空，中止提交")
+            return@withContext LoginResult(
+                code = CODE_FLOWKEY_MISSING,
+                message = "Flowkey未找到（本地未建立 SSO 会话）",
+                rawJson = JSONObject(),
+                local = true
+            )
+        }
 
         // 关键：必须是 JSON body，且带 flowKey
         val body = JSONObject().apply {
@@ -384,6 +526,7 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
 
         val respBody = client.newCall(req).execute().use { resp ->
             logger("login: HTTP ${resp.code}")
+            syncFlowKeyFromHeaders(resp.headers.values("Set-Cookie"))
             resp.body?.string() ?: ""
         }
 
@@ -432,8 +575,22 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     suspend fun fullLogin(username: String, password: String): LoginResult {
         logger("=== fullLogin 开始 ===")
 
-        // ① 拿公钥
-        val publicKey = getPublicKey()
+        // 0️⃣ 每次登录都从零建会话。
+        //    残留的 COOKIE_INFO / TGC 属于上一个会话（上一个人、或上一次失败的尝试），
+        //    拿它去登录，服务端只会回 180040 —— 这也是「换个人登录就失败」的主因。
+        clearCookies()
+
+        // ① 拿公钥（内部会先确保 SSO 会话已建立、flowKey 可用）
+        val publicKey = try {
+            getPublicKey()
+        } catch (e: AuthException) {
+            logger("=== fullLogin 中断: ${e.message} ===")
+            return LoginResult(
+                code = CODE_FLOWKEY_MISSING,
+                message = e.message ?: "SSO 会话建立失败",
+                rawJson = JSONObject()
+            )
+        }
 
         // ② 查验证码（失败不阻塞）
         runCatching { infoQuery() }
@@ -457,6 +614,7 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     /** 清空所有 Cookie */
     fun clearCookies() {
         cookieStore.clear()
+        cachedFlowKey = ""
         logger("clearCookies: 已清空")
     }
 
@@ -479,6 +637,7 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
      */
     fun restoreCookies(stored: List<StoredCookie>): Int {
         cookieStore.clear()
+        cachedFlowKey = ""
         var restored = 0
         stored.forEach { s ->
             if (s.isExpired()) {
@@ -502,10 +661,87 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
 data class LoginResult(
     val code: Int,
     val message: String,
-    val rawJson: JSONObject
+    val rawJson: JSONObject,
+    /** true 表示请求压根没发出去（本机 flowKey 为空），而不是被服务端拒绝 */
+    val local: Boolean = false
 ) {
     /** 学校用 666666 表示成功 */
     val isSuccess: Boolean get() = code == BistuAuth.SUCCESS_CODE
+
+    /** 会话/网络类问题（值得让用户先检查网络再重试，而不是以为密码错了） */
+    val isSessionIssue: Boolean
+        get() = code == BistuAuth.CODE_FLOWKEY_MISSING || code == BistuAuth.CODE_NO_TGC
+
+    /** 给用户看的文案：服务端的 msg 有时太技术化，甚至为空 */
+    val friendlyMessage: String
+        get() = when (code) {
+            BistuAuth.SUCCESS_CODE -> "登录成功"
+            BistuAuth.CODE_WRONG_PASSWORD -> "学号或密码错误，请检查后重试"
+            BistuAuth.CODE_FLOWKEY_MISSING ->
+                if (local) {
+                    "没能建立统一身份认证会话（flowKey 为空），登录请求没有发出。\n" +
+                            "多半是网络被拦：连校园网请先完成上网认证，挂了 VPN/代理请先关闭。"
+                } else {
+                    "学校 SSO 拒绝了这个会话（180040 Flowkey未找到），已自动重建会话重试仍不成功。\n" +
+                            "请退出到登录页重新登录一次；若只有某个账号一直失败、" +
+                            "其他人的账号正常，说明该账号在统一身份认证侧本身异常，请先在浏览器里登录确认。"
+                }
+            BistuAuth.CODE_NO_TGC -> "登录状态已失效，请在浏览器里确认账号正常后重试"
+            else -> message.ifBlank { "登录失败（code=$code）" }
+        }
 }
 
 class AuthException(message: String) : Exception(message)
+
+// ══════════════════════════════════════════════════════════════
+// flowKey 解析（抽成顶层函数，便于单元测试）
+//
+// 180040「Flowkey未找到」的全部来源都在这两个函数里：
+// 要么响应头里根本没有 COOKIE_INFO，要么它的值解析不出 flowKey。
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 解析 COOKIE_INFO 的原始值（URL 编码的 JSON）→ flowKey。
+ *
+ * 形如 `%7B%22data%22%3A%7B%22flowKey%22%3A%22flow.abc%22%7D%7D`，
+ * 注意是「一次」URL 编码，解码后才能当 JSON 读。
+ */
+internal fun parseFlowKeyValue(rawCookieValue: String): String {
+    if (rawCookieValue.isBlank()) return ""
+    return try {
+        val decoded = java.net.URLDecoder.decode(rawCookieValue, "UTF-8")
+        JSONObject(decoded).optJSONObject("data")?.optString("flowKey").orEmpty()
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+/**
+ * 决定这次请求该带哪个 flowKey。
+ *
+ * 规则只有一条：**jar 里有 COOKIE_INFO 就以 jar 为准**，哪怕它解析出来是空的。
+ * 因为服务端作废会话时会下发 `COOKIE_INFO=; Max-Age=0`，
+ * 此时若还退回缓存里的旧 flowKey，登录必然 180040。
+ * 缓存只在「jar 里压根没有这条 cookie」时兜底。
+ *
+ * @param rawCookieValue jar 中 COOKIE_INFO 的原始值；null 表示不存在
+ * @param cachedFlowKey 上一次解析到的 flowKey
+ */
+internal fun resolveFlowKey(rawCookieValue: String?, cachedFlowKey: String): String =
+    if (rawCookieValue != null) parseFlowKeyValue(rawCookieValue) else cachedFlowKey
+
+/**
+ * 从响应头里的 Set-Cookie 列表取出 COOKIE_INFO 的 flowKey。
+ *
+ * 值里可能含 `=`（URL 编码后一般不会，但别假设），所以只按第一个 `=` 切。
+ * 找不到 COOKIE_INFO 或解析失败都返回空串，由调用方决定重试还是报错。
+ */
+internal fun parseFlowKeyFromSetCookies(setCookies: List<String>): String {
+    setCookies.forEach { line ->
+        val pair = line.substringBefore(';')
+        if (pair.substringBefore('=').trim() == "COOKIE_INFO") {
+            return parseFlowKeyValue(pair.substringAfter('=', "").trim())
+        }
+    }
+    return ""
+}

@@ -313,8 +313,18 @@ fun NativeLoginScreen(
                     logs = emptyList()
                     scope.launch {
                         try {
-                            val result = auth.fullLogin(username, password.trim())
+                            addLog("正在建立 SSO 会话…")
+                            // 学号去掉首尾空白（复制粘贴常带空格）；
+                            // 密码不能 trim —— 有的密码本身就以空格开头/结尾，
+                            // 一 trim 就变成「密码错误」，而用户看不出问题在哪
+                            val result = auth.fullLogin(username.trim(), password)
                             addLog("登录返回: code=${result.code} ${result.message}")
+                            addLog(
+                                "会话状态: flowKey " +
+                                        auth.getFlowKey().let {
+                                            if (it.isBlank()) "缺失" else "${it.length} 字符"
+                                        }
+                            )
 
                             if (result.isSuccess) {
                                 addLog("✅ 登录成功！")
@@ -337,7 +347,10 @@ fun NativeLoginScreen(
                                 addLog("✅ 会话已保存，下次启动免登录")
                                 success = true
                             } else {
-                                addLog("❌ 登录失败: ${result.message}")
+                                addLog("❌ ${result.friendlyMessage}")
+                                if (result.isSessionIssue) {
+                                    addLog("提示: 若连校园网，请先在浏览器完成上网认证；关闭 VPN/代理后再试")
+                                }
                             }
                         } catch (e: Exception) {
                             addLog("❌ 异常: ${e.javaClass.simpleName}: ${e.message}")
