@@ -313,7 +313,21 @@ class JwxtApi(
      * @param termCode 学期代码，null 表示自动获取当前学期
      */
     suspend fun fetchSchedule(termCode: String? = null): ScheduleData {
-        ensureSession()
+        // 续期失败就**不要**再往下发了：
+        // 硬着头皮请求只会拿到统一身份认证的登录页，被 validateJsonBody
+        // 判成 SessionExpiredException，把用户直接踢下线并清掉 Cookie。
+        // 校外访问、教务临时故障都会走到这里，但它们都不该导致登出。
+        if (!ensureSession()) {
+            // 只有「统一身份认证凭据本身也没了」才算真的登录过期；
+            // 其余情况一律按普通错误报出来，保住登录态。
+            if (shouldExpireSession(auth.getSsoCookie("TGC"), auth.hasJwxtSession())) {
+                throw SessionExpiredException("统一身份认证会话已过期，请重新登录")
+            }
+            throw AuthException(
+                "教务系统会话没能建立起来（统一身份认证仍然有效）。" +
+                        "校内请下拉重试；校外需先连校园网或学校 VPN。"
+            )
+        }
 
         // ① 确定学期
         val (actualTermCode, termName) = if (termCode != null) {
@@ -428,6 +442,20 @@ internal fun isLikelyLoginPage(body: String): Boolean {
             head.contains("login", ignoreCase = true) ||
             head.contains("service=", ignoreCase = true)
 }
+
+/**
+ * 教务会话续期失败时，是否应该判定为「登录过期」。
+ *
+ * 这是「为什么我啥都没干就被退出登录」的判定线：
+ *  - 统一身份认证凭据（TGC）还在 → 账号是好的，只是这台设备现在进不去教务
+ *    （校外、教务维护、临时超时），**不能**清登录态
+ *  - TGC 也没了 → 真的需要重新输密码
+ *
+ * 以前不区分这两种，一律按会话失效处理，于是校外刷新一次就被踢下线，
+ * 而且头像昵称还留在本地，界面变成「已退出登录但头像还是本人」。
+ */
+internal fun shouldExpireSession(tgc: String?, hasJwxtSession: Boolean): Boolean =
+    tgc.isNullOrBlank() && !hasJwxtSession
 
 /**
  * 从 getMyScheduledCampus.do 的响应里提取校区代码。

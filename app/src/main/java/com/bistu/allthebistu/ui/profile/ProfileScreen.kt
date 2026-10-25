@@ -115,7 +115,11 @@ fun ProfileScreen(
 
     // 换完头像文件已变，靠这个版本号把「重新解码」这件事推给重组
     var avatarVersion by remember { mutableIntStateOf(0) }
-    val avatar = remember(avatarVersion) { AvatarStore.load(context) }
+    // 未登录时**不读**头像：会话过期后个人资料会被一起清掉，
+    // 但万一清理中途失败，也不能让「已退出登录」的界面还顶着本人的照片
+    val avatar = remember(avatarVersion, isLoggedIn) {
+        if (isLoggedIn) AvatarStore.load(context) else null
+    }
 
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 

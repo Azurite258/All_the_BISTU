@@ -294,10 +294,32 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     // 内部
     // ───────────────────────────────────────────────────────────
     private suspend fun handleSessionExpired() {
+        // ① 先断内存登录态：后面清理磁盘即使出问题，界面也不会停留在「已登录」
         AuthHolder.clear(getApplication())
         repository.clearAuth()
         lastKnownLoggedIn = false
-        _uiState.update { it.copy(isLoggedIn = false) }
+
+        // ② 个人信息必须和登录态一起清。
+        //    以前这里只清了 Cookie，头像 / 昵称 / 学业报告 / 课表缓存全留在磁盘上，
+        //    于是界面变成「已经退出登录，头像还是本人的照片」——看起来像没退干净。
+        //    手动点「退出登录」走 UserDataCleaner 是干净的，自动过期这条路径漏了。
+        runCatching { UserDataCleaner(getApplication()).wipeAll() }
+            .onSuccess { Log.d(TAG, "会话过期：已清理 ${it.joinToString("、")}") }
+            .onFailure { Log.w(TAG, "会话过期：清理个人数据失败 ${it.message}") }
+
+        // ③ 明确告诉用户「为什么掉线」，而不是静默变成未登录
+        _uiState.update {
+            it.copy(
+                isLoggedIn = false,
+                loadResult = null,
+                studyReport = null,
+                reportLoading = false,
+                autoLoginHint = "登录已过期，请重新登录",
+                showLoginPrompt = true,
+                isLoading = false,
+                isRefreshing = false
+            )
+        }
     }
 
     companion object {
