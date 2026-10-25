@@ -80,7 +80,7 @@ class JwxtApi(
         client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
             val body = resp.body?.string() ?: ""
             logger("GET 响应: HTTP ${resp.code}, 长度 ${body.length}")
-            if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${body.take(200)}")
+            if (!resp.isSuccessful) throw httpError(resp.code, body)
             body
         }
     }
@@ -96,10 +96,23 @@ class JwxtApi(
             client.newCall(requestBuilder(url).post(body).build()).execute().use { resp ->
                 val text = resp.body?.string() ?: ""
                 logger("POST 响应: HTTP ${resp.code}, 长度 ${text.length}")
-                if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
+                if (!resp.isSuccessful) throw httpError(resp.code, text)
                 validateJsonBody(text, resp.code)
                 text
             }
+        }
+
+    /**
+     * 把 HTTP 失败翻译成异常。
+     *
+     * 只有 401/403 才代表「会话没了」，必须用 [SessionExpiredException]，
+     * 否则上层会把它和「没排课」「接口报错」混为一谈，把用户的登录态清掉。
+     */
+    private fun httpError(code: Int, body: String): Exception =
+        if (code == 401 || code == 403) {
+            SessionExpiredException("教务接口返回 $code，登录态已失效")
+        } else {
+            AuthException("HTTP $code: ${body.take(200)}")
         }
 
     /**
@@ -123,7 +136,7 @@ class JwxtApi(
         client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
             val text = resp.body?.string() ?: ""
             logger("GET 响应: HTTP ${resp.code}, 长度 ${text.length}")
-            if (!resp.isSuccessful) throw AuthException("HTTP ${resp.code}: ${text.take(200)}")
+            if (!resp.isSuccessful) throw httpError(resp.code, text)
             validateJsonBody(text, resp.code)
             text
         }
@@ -138,7 +151,7 @@ class JwxtApi(
      */
     private fun validateJsonBody(text: String, httpCode: Int) {
         if (isLikelyLoginPage(text)) {
-            throw AuthException("接口返回登录页，会话已失效（HTTP $httpCode）")
+            throw SessionExpiredException("接口返回登录页，会话已失效（HTTP $httpCode）")
         }
         val head = text.trimStart()
         if (!head.startsWith("{") && !head.startsWith("[")) {
@@ -149,17 +162,19 @@ class JwxtApi(
     /**
      * 建立课表模块的 session。
      * 有些接口需要先访问模块入口页，否则返回 401。
+     *
+     * ⚠️ 这里**不要**手动加 Cookie 头。
+     * OkHttp 的规则是「请求自带 Cookie 头时就不再问 CookieJar」，
+     * 而 [BistuAuth.getAllCookiesHeader] 在匹配不足 3 条时会「全部发送」，
+     * 于是 sso 域下的 JSESSIONID 也会被塞给 jwxt，服务端取到哪一条全看实现，
+     * 部分账号就会因此 401 —— 这正是「有的人登得上却拉不到课表」的另一条路径。
+     * 统一交给同一个 CookieJar 按域匹配即可。
      */
     suspend fun ensureSession() = withContext(Dispatchers.IO) {
         logger("ensureSession: 访问课表模块入口")
         runCatching {
             client.newCall(
-                Request.Builder()
-                    .url(ENTRY_SCHEDULE)
-                    .addHeader("Cookie", auth.getAllCookiesHeader())
-                    .addHeader("User-Agent", UA)
-                    .get()
-                    .build()
+                requestBuilder(ENTRY_SCHEDULE).get().build()
             ).execute().close()
         }
     }
@@ -183,15 +198,22 @@ class JwxtApi(
         return term.getString("XNXQDM") to term.getString("XNXQMC")
     }
 
-    /** 获取校区列表 */
+    /**
+     * 获取校区列表。
+     *
+     * ⚠️ 这里以前是「解析失败就退回 listOf("10")」—— 而 10 是**沙河校区**。
+     * 小营等其他校区的学生于是永远只查沙河，拿回来空列表，
+     * 上层再把它当「登录过期」，登录态被清掉，表现就是「登得上但没课表」。
+     * 现在解析不出来就返回空，由 [fetchSchedule] 决定怎么降级。
+     */
     suspend fun getCampusCodes(termCode: String): List<String> {
-        val json = get("$API_CAMPUS?termCode=$termCode")
-        val obj = org.json.JSONObject(json)
-        val datas = obj.optJSONArray("datas") ?: return listOf("10")
+        val json = runCatching { get("$API_CAMPUS?termCode=$termCode") }
+            .onFailure { logger("getCampusCodes 失败: ${it.message}") }
+            .getOrNull() ?: return emptyList()
 
-        return (0 until datas.length()).mapNotNull { i ->
-            datas.getJSONObject(i).optString("id").takeIf { it.isNotBlank() }
-        }.ifEmpty { listOf("10") }
+        val codes = parseCampusIds(json)
+        logger("getCampusCodes: 解析到 ${codes.size} 个校区 $codes")
+        return codes
     }
 
     /**
@@ -239,45 +261,76 @@ class JwxtApi(
         }
         logger("学期: $actualTermCode ($termName)")
 
-        // ② 拿校区列表
+        // ② 拿校区列表；拿不到就退化成「不带 XQDM 查一次」
         val campusCodes = getCampusCodes(actualTermCode)
-        logger("校区: $campusCodes")
+        logger("校区: ${campusCodes.ifEmpty { listOf("(未知)") }}")
 
         // ③ 每个校区拉课表，合并原始 JSON
         val mergedCourses = mutableListOf<org.json.JSONObject>()
         var subTitles: org.json.JSONArray? = null
+        var okQueries = 0
+        var failCode = ""
 
-        campusCodes.forEach { campusCode ->
-            val json = post(API_SCHEDULE, mapOf(
-                "XNXQDM" to actualTermCode,
-                "XQDM" to campusCode
-            ))
-
+        suspend fun queryCampus(campusCode: String) {
+            val params = buildMap {
+                put("XNXQDM", actualTermCode)
+                // 校区未知时不带 XQDM：多数正方实例会返回全校数据
+                if (campusCode.isNotBlank()) put("XQDM", campusCode)
+            }
+            val json = post(API_SCHEDULE, params)
             val obj = org.json.JSONObject(json)
             val code = obj.optString("code")
+            val label = campusCode.ifBlank { "(不限校区)" }
             if (code != "0") {
-                logger("校区 $campusCode 返回失败: code=$code")
-                return@forEach
+                failCode = code
+                logger("校区 $label 返回失败: code=$code")
+                return
             }
 
-            val detail = obj.getJSONObject("datas").getJSONObject("getMyScheduleDetail")
-            if (subTitles == null) {
-                subTitles = detail.optJSONArray("subTitles")
+            val detail = obj.optJSONObject("datas")?.optJSONObject("getMyScheduleDetail")
+            if (detail == null) {
+                failCode = "缺少 getMyScheduleDetail"
+                logger("校区 $label 响应里没有 getMyScheduleDetail")
+                return
             }
 
-            val list = detail.optJSONArray("arrangedList") ?: return@forEach
+            okQueries++
+            if (subTitles == null) subTitles = detail.optJSONArray("subTitles")
+
+            val list = detail.optJSONArray("arrangedList") ?: return
             (0 until list.length()).forEach { i ->
                 mergedCourses.add(list.getJSONObject(i))
             }
         }
 
-        logger("总共拉取 ${mergedCourses.size} 条原始课程")
-
-        if (mergedCourses.isEmpty()) {
-            throw AuthException("没有获取到课程数据（可能登录已过期）")
+        if (campusCodes.isEmpty()) {
+            queryCampus("")
+        } else {
+            campusCodes.forEach { queryCampus(it) }
         }
 
-        // ④ 重新组装成完整 JSON，交给已有的 ScheduleParser 解析
+        // ④ 各校区都空、但接口本身是通的 → 再不带 XQDM 兜底查一次
+        if (mergedCourses.isEmpty() && okQueries > 0 && campusCodes.isNotEmpty()) {
+            logger("各校区均无课程，改为不带 XQDM 再查一次")
+            runCatching { queryCampus("") }
+                .onFailure { logger("不带 XQDM 查询失败: ${it.message}") }
+        }
+
+        logger("总共拉取 ${mergedCourses.size} 条原始课程")
+
+        // ⑤ 一次都没成功说明是接口/参数问题，不能伪装成「本学期没课」
+        if (okQueries == 0) {
+            throw AuthException("课表接口返回失败（code=$failCode），请稍后重试")
+        }
+
+        // 注意：接口成功但课程为空是**正常情况**（新生未排课、大四没课）。
+        // 以前这里抛 AuthException("...登录已过期")，被上层按「登录失效」处理，
+        // 直接把用户的登录态清掉 —— 这就是「登得上却拿不到课表、还被踢回登录页」的来源。
+        if (mergedCourses.isEmpty()) {
+            logger("接口成功但本学期没有排课")
+        }
+
+        // ⑥ 重新组装成完整 JSON，交给已有的 ScheduleParser 解析
         val rebuilt = org.json.JSONObject().apply {
             put("code", "0")
             put("datas", org.json.JSONObject().apply {
@@ -312,4 +365,32 @@ internal fun isLikelyLoginPage(body: String): Boolean {
             head.contains("CASTGC") ||
             head.contains("login", ignoreCase = true) ||
             head.contains("service=", ignoreCase = true)
+}
+
+/**
+ * 从 getMyScheduledCampus.do 的响应里提取校区代码。
+ *
+ * 正方这套接口的返回包法并不统一，至少见过两种：
+ *   {"code":"0","datas":[{"id":"10","name":"沙河校区"}]}
+ *   {"code":"0","datas":{"rows":[{"XQDM":"10"}]}}
+ * 两种都认；认不出来就返回空列表，**绝不猜一个默认校区** ——
+ * 猜成 10（沙河）正是「别的校区学生永远拉不到课表」的根源。
+ */
+internal fun parseCampusIds(rawJson: String): List<String> {
+    val obj = runCatching { org.json.JSONObject(rawJson) }.getOrNull() ?: return emptyList()
+
+    val candidates = buildList {
+        obj.optJSONArray("datas")?.let { add(it) }
+        obj.optJSONObject("datas")?.let { datas ->
+            datas.optJSONArray("rows")?.let { add(it) }
+            datas.optJSONArray("datas")?.let { add(it) }
+        }
+    }
+
+    val arr = candidates.firstOrNull { it.length() > 0 } ?: return emptyList()
+    return (0 until arr.length()).mapNotNull { i ->
+        val row = arr.optJSONObject(i) ?: return@mapNotNull null
+        listOf("XQDM", "xqdm", "id", "code", "dqdm")
+            .firstNotNullOfOrNull { key -> row.optString(key).takeIf { it.isNotBlank() } }
+    }.distinct()
 }

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -292,25 +293,50 @@ private fun ScheduleContent(
                         .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        // 边界不回弹，避免误以为还能继续滑
-                        overscrollEffect = null
-                    ) { page ->
-                        val weekNumber = weeks.getOrNull(page) ?: return@HorizontalPager
-                        Box(modifier = Modifier.verticalScroll(vScroll)) {
-                            ScheduleGrid(
-                                data = data,
-                                weekNumber = weekNumber,
-                                todayDayOfWeek = DateUtils.todayDayOfWeek(),
-                                colorScheme = settings.colorScheme,
-                                isDark = isDark,
-                                termStartDate = TERM_START_DATE,
-                                fontLevel = settings.fontLevel,
-                                paletteIndex = paletteIndex,
-                                onCourseClick = { selectedCourse = it }
+                    if (data.courses.isEmpty()) {
+                        // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。
+                        // 以前这种情况会被报成「登录已过期」，人直接被踢回登录页。
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 32.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "本学期还没有排课",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "教务系统里这个学期暂时没有课程。排课后下拉刷新就会出现。",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            // 边界不回弹，避免误以为还能继续滑
+                            overscrollEffect = null
+                        ) { page ->
+                            val weekNumber = weeks.getOrNull(page) ?: return@HorizontalPager
+                            Box(modifier = Modifier.verticalScroll(vScroll)) {
+                                ScheduleGrid(
+                                    data = data,
+                                    weekNumber = weekNumber,
+                                    todayDayOfWeek = DateUtils.todayDayOfWeek(),
+                                    colorScheme = settings.colorScheme,
+                                    isDark = isDark,
+                                    termStartDate = TERM_START_DATE,
+                                    fontLevel = settings.fontLevel,
+                                    paletteIndex = paletteIndex,
+                                    onCourseClick = { selectedCourse = it }
+                                )
+                            }
                         }
                     }
                 }

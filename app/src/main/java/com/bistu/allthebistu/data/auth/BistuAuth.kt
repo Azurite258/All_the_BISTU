@@ -693,6 +693,16 @@ data class LoginResult(
 
 class AuthException(message: String) : Exception(message)
 
+/**
+ * 登录态**真的**失效了（HTTP 401/403，或接口直接返回了 SSO 登录页）。
+ *
+ * 单独分一个类型，是因为以前靠 `message.contains("登录")` 判断，
+ * 把「没有获取到课程数据（可能登录已过期）」这种业务失败也算成掉登录，
+ * 结果用户一进课表就被清掉 Cookie、踢回登录页。
+ * 只有这个类型的异常才允许触发登出。
+ */
+class SessionExpiredException(message: String) : Exception(message)
+
 // ══════════════════════════════════════════════════════════════
 // flowKey 解析（抽成顶层函数，便于单元测试）
 //

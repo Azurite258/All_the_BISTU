@@ -1,6 +1,7 @@
 package com.bistu.allthebistu
 
 import com.bistu.allthebistu.data.auth.AuthException
+import com.bistu.allthebistu.data.auth.SessionExpiredException
 import com.bistu.allthebistu.ui.schedule.LoadErrorText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,9 +21,22 @@ class LoadErrorTextTest {
 
     @Test
     fun `会话失效提示重新登录`() {
-        val e = AuthException("接口返回登录页，会话已失效（HTTP 200）")
+        val e = SessionExpiredException("接口返回登录页，会话已失效（HTTP 200）")
         assertEquals("登录已失效，请重新登录", LoadErrorText.describe(e))
         assertTrue(LoadErrorText.needsRelogin(e))
+    }
+
+    @Test
+    fun `业务失败不能被当成掉登录`() {
+        // 以前按 message.contains("登录") 判断，
+        // 「没有获取到课程数据（可能登录已过期）」这类文案会被误判成会话失效，
+        // 结果一进课表就被清 Cookie、踢回登录页。
+        val noCourse = AuthException("没有获取到课程数据（可能登录已过期）")
+        assertFalse(LoadErrorText.needsRelogin(noCourse))
+        assertFalse(LoadErrorText.describe(noCourse).contains("重新登录"))
+
+        val apiFail = AuthException("课表接口返回失败（code=500），请稍后重试")
+        assertFalse(LoadErrorText.needsRelogin(apiFail))
     }
 
     @Test

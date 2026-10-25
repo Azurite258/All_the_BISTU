@@ -2,9 +2,9 @@ package com.bistu.allthebistu.data
 
 import android.content.Context
 import android.util.Log
-import com.bistu.allthebistu.data.auth.AuthException
 import com.bistu.allthebistu.data.auth.BistuAuth
 import com.bistu.allthebistu.data.auth.JwxtApi
+import com.bistu.allthebistu.data.auth.SessionExpiredException
 import com.bistu.allthebistu.data.db.AppDatabase
 import com.bistu.allthebistu.data.db.toCourse
 import com.bistu.allthebistu.data.db.toEntity
@@ -153,17 +153,13 @@ class ScheduleRepository(private val context: Context) {
         return LoadResult(data, Source.CACHE, meta.lastSyncAt)
     }
 
-    /** 判断异常是否属于「登录态失效」，需要清会话 */
-    private fun isAuthFailure(e: Exception): Boolean {
-        if (e !is AuthException) return false
-        val msg = e.message.orEmpty()
-        return msg.contains("401") ||
-                msg.contains("403") ||
-                msg.contains("登录") ||
-                msg.contains("过期") ||
-                msg.contains("session", ignoreCase = true) ||
-                msg.contains("Cookie", ignoreCase = true)
-    }
+    /**
+     * 判断异常是否属于「登录态真的失效」，只有这种才允许清会话。
+     *
+     * 以前是按 `message.contains("登录")` 猜，结果「本学期没排课」这类
+     * 业务失败也被判成掉登录，把用户的 Cookie 一起清了。
+     */
+    private fun isAuthFailure(e: Exception): Boolean = e is SessionExpiredException
 
     /** 保存到数据库（覆盖同一学期的旧数据） */
     suspend fun saveSchedule(data: ScheduleData) = withContext(Dispatchers.IO) {

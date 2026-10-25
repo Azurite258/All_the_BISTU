@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.schedule
 
 import com.bistu.allthebistu.data.auth.AuthException
+import com.bistu.allthebistu.data.auth.SessionExpiredException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -20,7 +21,7 @@ object LoadErrorText {
         val msg = e.message.orEmpty()
 
         return when {
-            e is AuthException && (msg.contains("登录") || msg.contains("会话")) ->
+            e is SessionExpiredException ->
                 "登录已失效，请重新登录"
 
             e is UnknownHostException ->
@@ -38,6 +39,10 @@ object LoadErrorText {
             msg.contains("非 JSON") ->
                 "接口返回了非预期内容，可能是教务系统维护中"
 
+            // 业务失败（例如接口全部报错）：直接展示教务的原始语义，别套「登录失效」
+            e is AuthException ->
+                msg.ifBlank { "教务系统返回错误" }
+
             else -> "同步失败：${msg.take(80).ifBlank { e.javaClass.simpleName }}"
         }
     }
@@ -52,7 +57,5 @@ object LoadErrorText {
     }
 
     /** 是否是「需要重新登录」这类问题 */
-    fun needsRelogin(e: Throwable?): Boolean =
-        e is AuthException && (e.message.orEmpty().contains("登录") ||
-                e.message.orEmpty().contains("会话"))
+    fun needsRelogin(e: Throwable?): Boolean = e is SessionExpiredException
 }
