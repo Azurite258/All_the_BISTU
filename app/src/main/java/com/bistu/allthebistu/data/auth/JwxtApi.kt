@@ -124,7 +124,7 @@ class JwxtApi(
         if (!host.endsWith("bistu.edu.cn")) return null
         return OffCampusException(
             "教务系统把请求转到了 $host，说明这台设备现在进不去教务系统。" +
-                    "连校园网请先完成上网认证；校外访问需要连校园网或学校 VPN。"
+                    "校外访问需要连校园网或学校 VPN；若已在校园网，请退出登录后重新登一次。"
         )
     }
 
@@ -197,13 +197,48 @@ class JwxtApi(
      * 部分账号就会因此 401 —— 这正是「有的人登得上却拉不到课表」的另一条路径。
      * 统一交给同一个 CookieJar 按域匹配即可。
      */
-    suspend fun ensureSession() = withContext(Dispatchers.IO) {
-        logger("ensureSession: 访问课表模块入口")
-        runCatching {
+    /**
+     * 确保教务系统的会话可用；失效时**主动用 TGC 换票重建**。
+     *
+     * 这是「已登录却一直未能刷新」的根因所在：
+     * 以前这里只是 `runCatching { 访问入口页 }.close()`，结果直接丢掉 ——
+     * 教务把请求 302 到统一身份认证时，代码根本不知道，也不会去换票。
+     * jwxt 的 JSESSIONID 在服务端一过期，就永远刷不出数据。
+     *
+     * 校园卡模块（PortalCardApi）从一开始就是「每次现场换票」，
+     * 所以它的刷新从来没出过问题 —— 这里对齐它的做法。
+     *
+     * ⚠️ 不要手动加 Cookie 头。OkHttp 的规则是请求自带 Cookie 头就不再问
+     * CookieJar，会把 sso 域的 JSESSIONID 也塞给 jwxt，部分账号因此 401。
+     *
+     * @return true 表示教务会话可用
+     */
+    suspend fun ensureSession(): Boolean = withContext(Dispatchers.IO) {
+        // ① 先直接探业务入口：会话还在时省掉一次 CAS 往返
+        val alive = runCatching {
             client.newCall(
                 requestBuilder(ENTRY_SCHEDULE).get().build()
-            ).execute().close()
+            ).execute().use { r ->
+                val host = r.request.url.host
+                logger("ensureSession: 入口落点=$host, HTTP ${r.code}")
+                host == BistuAuth.JWXT_HOST
+            }
+        }.getOrDefault(false)
+
+        if (alive) return@withContext true
+
+        // ② 被踢回认证了 → 拿 TGC 换一张票，把 jwxt 会话重建起来。
+        //    直接复用登录时那套 [BistuAuth.casLogin]：它走的是
+        //    sso/login?service=casLogin.do，登录流程已经验证过这条路能换到票，
+        //    而且内部会探活确认「真的落在 jwxt 且不是登录页」。
+        logger("ensureSession: 会话已失效，尝试用 TGC 换票")
+        val renewed = runCatching { auth.casLogin() }.getOrElse {
+            logger("ensureSession: 换票异常 ${it.message}")
+            false
         }
+
+        logger("ensureSession: 换票结果=$renewed, jwxt会话=${auth.hasJwxtSession()}")
+        renewed
     }
 
     /** 获取当前学期代码 */

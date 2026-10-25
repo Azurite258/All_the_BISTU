@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
+import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.privacy.UserDataCleaner
 import com.bistu.allthebistu.ui.login.AuthHolder
@@ -122,6 +123,11 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     // 已登录 → 跳过缓存读，直接拉最新；失败会自动回退到刚显示的缓存
                     val loaded = repository.loadSchedule(forceRefresh = true)
+                    // 这次同步可能刚用 TGC 换过新票（JwxtApi.ensureSession 会静默续期），
+                    // 把新 Cookie 落盘，下次冷启动就不用再换一遍
+                    if (loaded.source == Source.NETWORK) {
+                        runCatching { AuthHolder.persist(getApplication()) }
+                    }
                     _uiState.update {
                         it.copy(loadResult = loaded, isLoading = false, isRefreshing = false)
                     }
