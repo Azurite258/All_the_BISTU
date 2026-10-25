@@ -5,6 +5,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bistu.allthebistu.data.prefs.BottomBarStyle
 import com.bistu.allthebistu.ui.components.liquidGlass
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -82,13 +85,14 @@ import kotlin.math.roundToInt
 fun FloatingBottomBar(
     currentTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
+    style: Int = BottomBarStyle.DEFAULT,
     modifier: Modifier = Modifier
 ) {
     val tabs = MainTab.entries
     val count = tabs.size
     val selectedIndex = tabs.indexOf(currentTab).coerceAtLeast(0)
 
-    // 坑 2：手势协程活得比一次重组久，必须拿最新的选中项，不能靠闭包捕获
+    // 坑 2：手势协程活得比一次提交久，必须拿最新的选中项，不能靠闭包捕获
     val latestSelectedIndex by rememberUpdatedState(selectedIndex)
 
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -97,6 +101,12 @@ fun FloatingBottomBar(
 
     // 深色下药丸要更亮一点才看得出来，浅色下则要淡，否则像块灰砖
     val isDarkSurface = surfaceColor.luminance() < 0.5f
+
+    val isGlass = style == BottomBarStyle.GLASS
+    val hairline = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+    // 扁平模式的选中块。比最初那版（浅色 0.12 / 深色 0.22）深一档——
+    // 底栏本身是纯白，选中块太淡等于没选
+    val flatPillColor = primaryColor.copy(alpha = if (isDarkSurface) 0.28f else 0.20f)
 
     val scope = rememberCoroutineScope()
 
@@ -130,17 +140,43 @@ fun FloatingBottomBar(
     Box(
         modifier = modifier
             .padding(horizontal = 20.dp, vertical = 12.dp)
-            // 玻璃要「浮」起来：elevation 拉高、颜色压淡。
-            // 阴影画在玻璃体下面，半透明会让它透出一点灰——这正是厚度感的一部分，
-            // 但颜色太浓就变脏了，所以这里是 0x14 / 0x26 而不是之前的 0x22 / 0x33。
-            .shadow(
-                elevation = 22.dp,
-                shape = barShape,
-                clip = false,
-                ambientColor = Color(0x1A000000),
-                spotColor = Color(0x30000000)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        // 玻璃要「浮」起来：elevation 拉高、颜色压淡。
+                        // 阴影画在玻璃体下面，半透明会让它透出一点灰——这正是厚度感的一部分，
+                        // 但颜色太浓就变脏了。
+                        .shadow(
+                            elevation = 22.dp,
+                            shape = barShape,
+                            clip = false,
+                            ambientColor = Color(0x1A000000),
+                            spotColor = Color(0x30000000)
+                        )
+                        .liquidGlass(
+                            shape = barShape,
+                            isDark = isDarkSurface,
+                            // 浅色体色比 LiquidGlass 的默认值再深一档（#E6EBF3 → #DDE4EF）：
+                            // 默认值算出来约 #E9ECF2，和纯白卡片只差 6 个色阶，
+                            // 用户反馈「对比度不够」，所以这里显式压深。
+                            // 深色模式没动——它本来就靠「比黑底亮」来分离，加深反而消失。
+                            bodyColor = if (isDarkSurface) null else Color(0xFFDDE4EF),
+                            bodyAlpha = if (isDarkSurface) 0.78f else 0.80f
+                        )
+                } else {
+                    // 扁平：不透明实心胶囊 + 发丝描边。就是液态玻璃之前的做法
+                    Modifier
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = barShape,
+                            clip = false,
+                            ambientColor = Color(0x22000000),
+                            spotColor = Color(0x33000000)
+                        )
+                        .background(surfaceColor, barShape)
+                        .border(0.5.dp, hairline, barShape)
+                }
             )
-            .liquidGlass(shape = barShape, isDark = isDarkSurface)
             .height(barHeight)
     ) {
         BoxWithConstraints(
@@ -159,22 +195,27 @@ fun FloatingBottomBar(
                 }
             }
 
-            // ── 选中药丸：与容器同弧度的全胶囊，也是一小块玻璃 ──
-            // 比底栏本身再亮一档，才有「小玻璃浮在大玻璃上」的层次；
-            // 选中语义同时由「图标文字变蓝 + 字重加粗」承担，不只靠这个色块。
+            // ── 选中药丸：与容器同弧度的全胶囊 ──
+            // 光效模式：比底栏再亮一档的另一块玻璃（小玻璃浮在大玻璃上）
+            // 扁平模式：一块淡色底，选中语义主要由「图标文字变蓝 + 字重加粗」承担
             Box(
                 modifier = Modifier
                     .offset { IntOffset((displayPos * itemWidthPx).roundToInt(), 0) }
                     .width(itemWidth)
                     .fillMaxHeight()
                     .padding(horizontal = 3.dp)
-                    .liquidGlass(
-                        shape = pillShape,
-                        isDark = isDarkSurface,
-                        // 药丸是纯白 —— 底栏体是冷灰，这块纯白才有「浮在玻璃上的另一层玻璃」
-                        bodyColor = if (isDarkSurface) Color(0xFF4C4C57) else Color.White,
-                        bodyAlpha = if (isDarkSurface) 0.90f else 0.88f,
-                        edgeWidth = 0.8.dp
+                    .then(
+                        if (isGlass) {
+                            Modifier.liquidGlass(
+                                shape = pillShape,
+                                isDark = isDarkSurface,
+                                bodyColor = if (isDarkSurface) Color(0xFF4C4C57) else Color.White,
+                                bodyAlpha = if (isDarkSurface) 0.90f else 0.88f,
+                                edgeWidth = 0.8.dp
+                            )
+                        } else {
+                            Modifier.background(flatPillColor, pillShape)
+                        }
                     )
             )
 

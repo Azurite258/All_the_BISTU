@@ -21,7 +21,9 @@ data class AppSettings(
     /** 字体挡位：0=小 1=中 2=大。既决定课表一行几个字，也决定全局 fontScale */
     val fontLevel: Int = FontLevel.MEDIUM,
     /** 自建昵称。空字符串 = 没设，账号卡上退回显示「点击设置昵称」 */
-    val nickname: String = ""
+    val nickname: String = "",
+    /** 底部导航风格：[BottomBarStyle.FLAT] / [BottomBarStyle.GLASS] */
+    val bottomBarStyle: Int = BottomBarStyle.DEFAULT
 ) {
     /** 有没有设过昵称 */
     val hasNickname: Boolean get() = nickname.isNotBlank()
@@ -55,6 +57,9 @@ class SettingsStore(private val context: Context) {
         /** 自建昵称（只存本机，不跟学校系统同步） */
         val NICKNAME = stringPreferencesKey("nickname")
 
+        /** 底部导航风格（扁平 / 光效） */
+        val BOTTOM_BAR_STYLE = intPreferencesKey("bottom_bar_style")
+
         /** 生活页「电费说明」弹窗是否已经看过（只弹一次） */
         val ELECTRIC_NOTICE_SHOWN = booleanPreferencesKey("electric_notice_shown")
     }
@@ -65,7 +70,10 @@ class SettingsStore(private val context: Context) {
             themeMode = prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM,
             colorScheme = prefs[Keys.COLOR_SCHEME] ?: CourseColorScheme.SCHOOL,
             fontLevel = FontLevel.sanitize(prefs[Keys.FONT_LEVEL] ?: FontLevel.MEDIUM),
-            nickname = prefs[Keys.NICKNAME].orEmpty()
+            nickname = prefs[Keys.NICKNAME].orEmpty(),
+            bottomBarStyle = BottomBarStyle.sanitize(
+                prefs[Keys.BOTTOM_BAR_STYLE] ?: BottomBarStyle.DEFAULT
+            )
         )
     }
 
@@ -82,6 +90,11 @@ class SettingsStore(private val context: Context) {
     /** 设置字体挡位（课表排版 + 全局字体一起变） */
     suspend fun setFontLevel(level: Int) {
         context.dataStore.edit { it[Keys.FONT_LEVEL] = FontLevel.sanitize(level) }
+    }
+
+    /** 设置底部导航风格 */
+    suspend fun setBottomBarStyle(style: Int) {
+        context.dataStore.edit { it[Keys.BOTTOM_BAR_STYLE] = BottomBarStyle.sanitize(style) }
     }
 
     /**
