@@ -554,41 +554,45 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
     // ══════════════════════════════════════════════════════════
     // 步骤 5：CAS 登录教务系统（用 TGC 换 session）
     // ══════════════════════════════════════════════════════════
-    suspend fun casLogin(casLoginUrl: String = JWXT_CAS_LOGIN): Boolean =
+    suspend fun casLoginDetailed(casLoginUrl: String = JWXT_CAS_LOGIN): CasResult =
         withContext(Dispatchers.IO) {
             logger("casLogin: 开始 $casLoginUrl")
 
             val encodedService = java.net.URLEncoder.encode(casLoginUrl, "UTF-8")
             val url = "$SSO_BASE/login?service=$encodedService"
 
-            val resp = redirectClient.newCall(
-                Request.Builder().url(url).get().build()
-            ).execute()
+            val resp = runCatching {
+                redirectClient.newCall(Request.Builder().url(url).get().build()).execute()
+            }.getOrElse {
+                // 连 sso 都请求不出去：纯网络问题，登录态不能动
+                logger("casLogin: 请求异常 ${it.message}")
+                return@withContext CasResult.Unreachable
+            }
 
-            // 跟完 302 之后，request.url 才是真实落点：
-            // 换到票据 → 落在 jwxt；没有 TGC → 被踢回 sso 登录页
-            val finalHost = resp.request.url.host
+            // 跟完 302 之后，request.url 才是真实落点
+            val finalUrl = resp.request.url
+            val finalHost = finalUrl.host
             val httpCode = resp.code
             resp.close()
 
-            logger("casLogin: 最终 host=$finalHost, HTTP $httpCode")
+            logger(
+                "casLogin: 最终落点=$finalUrl ($httpCode), " +
+                        "TGC=${if (getSsoCookie("TGC").isNullOrBlank()) "无" else "有"}"
+            )
 
-            if (finalHost != JWXT_HOST) {
-                logger("casLogin: 落点不是教务系统（$finalHost），没有拿到教务会话")
-                return@withContext false
-            }
-
-            // 旧实现是 `isLoggedIn() || getAllCookiesHeader().contains("JSESSIONID")`，
-            // 这个判定**永远为 true**：SSO 域自己就有一个 JSESSIONID，
-            // 而 isLoggedIn() 只看「有没有 TGC」。于是日志一直显示「CAS 成功」，
-            // 实际教务会话根本没建立 —— 校外「登得上但看不到课表」就藏在这。
-            logger("casLogin: jwxt 域 JSESSIONID=${hasJwxtSession()}")
-
-            // 真正的判据只有一个：拿教务的接口试一次，看它认不认这个会话
-            val alive = probeJwxt()
-            logger("casLogin: 探活=$alive, Cookie 数=${cookieStore.size}")
-            alive
+            // 落在教务才需要探活；其余落点探活结果没意义
+            val probeOk = if (finalHost == JWXT_HOST) probeJwxt() else false
+            val result = resolveCasLanding(finalHost, probeOk)
+            logger(
+                "casLogin: 落点=$finalHost, 探活=$probeOk → $result, " +
+                        "Cookie 数=${cookieStore.size}"
+            )
+            result
         }
+
+    /** 只要「换到票且教务认账」这一个结论，见 [casLoginDetailed] */
+    suspend fun casLogin(casLoginUrl: String = JWXT_CAS_LOGIN): Boolean =
+        casLoginDetailed(casLoginUrl) == CasResult.Ok
 
     /**
      * 探活：拿教务模块入口试一次。
@@ -793,6 +797,39 @@ class SessionExpiredException(message: String) : Exception(message)
  * 被踢到 sso / uc 域，就说明这次请求根本没被教务系统接住。
  */
 class OffCampusException(message: String) : Exception(message)
+
+/**
+ * CAS 换票的三种结论。
+ *
+ * 以前只回 true/false，上层没法区分「TGC 已经失效」和「这会儿网络/教务不通」，
+ * 只能二选一：要么一律当过期（校外或教务抖动时把人误踢下线、清掉数据），
+ * 要么一律当网络问题（TGC 真死了还一直显示「查询失败」，永远好不了）。
+ * 这就是「用过一会儿就自己退出登录」「退出去重进又一直失败」两个现象的共同根源。
+ */
+sealed interface CasResult {
+    /** 换到票，教务也认这个会话 */
+    data object Ok : CasResult
+
+    /** 被踢回统一身份认证首页：TGC 已失效，只能重新登录 */
+    data object NoTicket : CasResult
+
+    /** 压根没走到教务（校外 / WAF / 维护 / 超时）：登录态是好的，别清 */
+    data object Unreachable : CasResult
+}
+
+/**
+ * 换票落点 → 结论。抽成纯函数，单测可以直接覆盖「掉线」判定。
+ *
+ * 实测依据（2026-10，`curl -L` 无 TGC 请求 sso/login?service=...）：
+ * 没有有效 TGC 时服务端 302 到 `https://sso.bistu.edu.cn/?timestamp=...&service=...`，
+ * 即**统一身份认证首页**；有 TGC 时才会带着 ticket 落到 jwxt。
+ * 所以「落在 sso 首页」是唯一能确定凭据真没了的信号，其余落点一律按网络问题处理。
+ */
+internal fun resolveCasLanding(finalHost: String, probeOk: Boolean): CasResult = when {
+    finalHost == BistuAuth.JWXT_HOST -> if (probeOk) CasResult.Ok else CasResult.Unreachable
+    finalHost.endsWith("sso.bistu.edu.cn") -> CasResult.NoTicket
+    else -> CasResult.Unreachable
+}
 
 // ══════════════════════════════════════════════════════════════
 // flowKey 解析（抽成顶层函数，便于单元测试）

@@ -213,7 +213,7 @@ class JwxtApi(
      *
      * @return true 表示教务会话可用
      */
-    suspend fun ensureSession(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun ensureSession(): CasResult = withContext(Dispatchers.IO) {
         // ① 先直接探业务入口：会话还在时省掉一次 CAS 往返
         val alive = runCatching {
             client.newCall(
@@ -225,19 +225,22 @@ class JwxtApi(
             }
         }.getOrDefault(false)
 
-        if (alive) return@withContext true
+        if (alive) return@withContext CasResult.Ok
 
         // ② 被踢回认证了 → 拿 TGC 换一张票，把 jwxt 会话重建起来。
-        //    直接复用登录时那套 [BistuAuth.casLogin]：它走的是
+        //    直接复用登录时那套 [BistuAuth.casLoginDetailed]：它走的是
         //    sso/login?service=casLogin.do，登录流程已经验证过这条路能换到票，
         //    而且内部会探活确认「真的落在 jwxt 且不是登录页」。
         logger("ensureSession: 会话已失效，尝试用 TGC 换票")
-        val renewed = runCatching { auth.casLogin() }.getOrElse {
+        val renewed = runCatching { auth.casLoginDetailed() }.getOrElse {
             logger("ensureSession: 换票异常 ${it.message}")
-            false
+            CasResult.Unreachable
         }
 
-        logger("ensureSession: 换票结果=$renewed, jwxt会话=${auth.hasJwxtSession()}")
+        logger(
+            "ensureSession: 换票结果=$renewed, " +
+                    "jwxt会话=${auth.hasJwxtSession()}, TGC=${auth.getSsoCookie("TGC") != null}"
+        )
         renewed
     }
 
@@ -316,15 +319,16 @@ class JwxtApi(
         // 续期失败就**不要**再往下发了：
         // 硬着头皮请求只会拿到统一身份认证的登录页，被 validateJsonBody
         // 判成 SessionExpiredException，把用户直接踢下线并清掉 Cookie。
-        // 校外访问、教务临时故障都会走到这里，但它们都不该导致登出。
-        if (!ensureSession()) {
-            // 只有「统一身份认证凭据本身也没了」才算真的登录过期；
-            // 其余情况一律按普通错误报出来，保住登录态。
-            if (shouldExpireSession(auth.getSsoCookie("TGC"), auth.hasJwxtSession())) {
+        //
+        // 三种结论要分开处理，这是「掉线」误判的唯一出口：
+        //  - NoTicket：服务端明确说没有有效 TGC → 才是真的过期，请用户重登
+        //  - Unreachable：校外 / WAF / 维护 / 超时 → 账号本身是好的，绝不能清登录态
+        when (ensureSession()) {
+            CasResult.Ok -> Unit
+            CasResult.NoTicket ->
                 throw SessionExpiredException("统一身份认证会话已过期，请重新登录")
-            }
-            throw AuthException(
-                "教务系统会话没能建立起来（统一身份认证仍然有效）。" +
+            CasResult.Unreachable -> throw OffCampusException(
+                "教务系统没接住这次请求（校外访问、上网认证未完成或教务维护）。" +
                         "校内请下拉重试；校外需先连校园网或学校 VPN。"
             )
         }
@@ -442,20 +446,6 @@ internal fun isLikelyLoginPage(body: String): Boolean {
             head.contains("login", ignoreCase = true) ||
             head.contains("service=", ignoreCase = true)
 }
-
-/**
- * 教务会话续期失败时，是否应该判定为「登录过期」。
- *
- * 这是「为什么我啥都没干就被退出登录」的判定线：
- *  - 统一身份认证凭据（TGC）还在 → 账号是好的，只是这台设备现在进不去教务
- *    （校外、教务维护、临时超时），**不能**清登录态
- *  - TGC 也没了 → 真的需要重新输密码
- *
- * 以前不区分这两种，一律按会话失效处理，于是校外刷新一次就被踢下线，
- * 而且头像昵称还留在本地，界面变成「已退出登录但头像还是本人」。
- */
-internal fun shouldExpireSession(tgc: String?, hasJwxtSession: Boolean): Boolean =
-    tgc.isNullOrBlank() && !hasJwxtSession
 
 /**
  * 从 getMyScheduledCampus.do 的响应里提取校区代码。
