@@ -180,10 +180,14 @@ private fun ScheduleContent(
                             // 不显示班级/姓名等个人信息，只显示数据来源状态
                             append(sourceLabel(source, timestamp))
                             if (isLoggedIn) {
-                                // 已登录却仍在展示示例数据 → 说明本次同步失败
+                                // 已登录却还在展示示例数据 / 刷新失败 → 必须明说，
+                                // 否则用户会把上次的旧课表当成「刚同步的」
                                 append(
-                                    if (source == Source.ASSETS) " · 同步失败"
-                                    else " · 已登录"
+                                    when {
+                                        source == Source.ASSETS -> " · 同步失败"
+                                        source == Source.CACHE && error != null -> " · 未能刷新"
+                                        else -> " · 已登录"
+                                    }
                                 )
                             }
                         },
@@ -192,6 +196,9 @@ private fun ScheduleContent(
                         overflow = TextOverflow.Ellipsis,
                         color = when {
                             source == Source.ASSETS && isLoggedIn -> Color(0xFFE65100)
+                            // 缓存 + 刷新失败：橙色，和「已同步」的绿色拉开距离。
+                            // 以前这里不分情况一律绿色，看起来像「一切正常」
+                            source == Source.CACHE && error != null -> Color(0xFFE65100)
                             isLoggedIn -> Color(0xFF2E7D32)
                             else -> sourceColor(source)
                         },

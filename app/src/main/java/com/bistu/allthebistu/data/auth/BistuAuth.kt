@@ -46,9 +46,14 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         const val UC_SERVICE =
             "https://uc.bistu.edu.cn/api/login?target=https://uc.bistu.edu.cn/user/login"
 
+        const val JWXT_BASE = "https://jwxt.bistu.edu.cn"
+
+        /** 教务系统域名：判断「请求有没有被踢回统一身份认证」就靠它 */
+        const val JWXT_HOST = "jwxt.bistu.edu.cn"
+
         /** 教务系统 CAS 登录端点 */
         const val JWXT_CAS_LOGIN =
-            "https://jwxt.bistu.edu.cn/jwapp/sys/yjsrzfwapp/bistuLogin/casLogin.do"
+            "$JWXT_BASE/jwapp/sys/yjsrzfwapp/bistuLogin/casLogin.do"
 
         /** 登录成功码（学校自定义） */
         const val SUCCESS_CODE = 666666
@@ -560,14 +565,64 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
                 Request.Builder().url(url).get().build()
             ).execute()
 
-            logger("casLogin: 最终 URL=${resp.request.url}")
-            logger("casLogin: HTTP ${resp.code}")
+            // 跟完 302 之后，request.url 才是真实落点：
+            // 换到票据 → 落在 jwxt；没有 TGC → 被踢回 sso 登录页
+            val finalHost = resp.request.url.host
+            val httpCode = resp.code
             resp.close()
 
-            val success = isLoggedIn() || getAllCookiesHeader().contains("JSESSIONID")
-            logger("casLogin: 结果=$success, Cookie 数=${cookieStore.size}")
-            success
+            logger("casLogin: 最终 host=$finalHost, HTTP $httpCode")
+
+            if (finalHost != JWXT_HOST) {
+                logger("casLogin: 落点不是教务系统（$finalHost），没有拿到教务会话")
+                return@withContext false
+            }
+
+            // 旧实现是 `isLoggedIn() || getAllCookiesHeader().contains("JSESSIONID")`，
+            // 这个判定**永远为 true**：SSO 域自己就有一个 JSESSIONID，
+            // 而 isLoggedIn() 只看「有没有 TGC」。于是日志一直显示「CAS 成功」，
+            // 实际教务会话根本没建立 —— 校外「登得上但看不到课表」就藏在这。
+            logger("casLogin: jwxt 域 JSESSIONID=${hasJwxtSession()}")
+
+            // 真正的判据只有一个：拿教务的接口试一次，看它认不认这个会话
+            val alive = probeJwxt()
+            logger("casLogin: 探活=$alive, Cookie 数=${cookieStore.size}")
+            alive
         }
+
+    /**
+     * 探活：拿教务模块入口试一次。
+     *
+     * 只认「最终落在 jwxt 域 + HTTP 成功 + 不是统一身份认证登录页」。
+     * 返回 false 基本等于「这台设备现在进不了教务系统」——
+     * 校外没连校园网时就是这结果，属正常现象，不该清登录态。
+     */
+    private suspend fun probeJwxt(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            redirectClient.newCall(
+                Request.Builder().url(JwxtApi.ENTRY_SCHEDULE).get().build()
+            ).execute().use { r ->
+                val host = r.request.url.host
+                val body = r.body?.string().orEmpty()
+                val loginPage = body.contains("统一身份认证") || body.contains("CASTGC")
+                host == JWXT_HOST && r.isSuccessful && !loginPage
+            }
+        }.getOrElse {
+            logger("casLogin: 探活异常 ${it.message}")
+            false
+        }
+    }
+
+    /**
+     * 教务系统（jwxt 域）是否真的有会话。
+     *
+     * 必须按域判断：CookieJar 里同时存在 sso / uc / jwxt 三个域的 JSESSIONID，
+     * 用 `getCookie("JSESSIONID")` 取第一个，命中的往往是 sso 的。
+     */
+    fun hasJwxtSession(): Boolean {
+        val url = JWXT_BASE.toHttpUrlOrNull() ?: return false
+        return cookieStore.any { it.name == "JSESSIONID" && it.matches(url) }
+    }
 
     // ══════════════════════════════════════════════════════════
     // 完整登录流程
@@ -600,12 +655,15 @@ class BistuAuth(private val logger: (String) -> Unit = { Log.d(TAG, it) }) {
         logger("=== fullLogin 结果: code=${result.code} ===")
 
         if (result.isSuccess) {
-            // ④ CAS 登录教务系统
+            // ④ CAS 登录教务系统（用 TGC 换票据，建 jwxt 域会话）
             val casOk = runCatching { casLogin() }.getOrElse {
                 logger("casLogin 失败: ${it.message}")
                 false
             }
             logger("=== fullLogin CAS 结果: $casOk ===")
+            // 如实带出去：SSO 登录成功 ≠ 教务系统连得上。
+            // 校外没连校园网时就是 casOk=false，但账号密码本身是对的。
+            return result.copy(jwxtReady = casOk)
         }
 
         return result
@@ -663,10 +721,21 @@ data class LoginResult(
     val message: String,
     val rawJson: JSONObject,
     /** true 表示请求压根没发出去（本机 flowKey 为空），而不是被服务端拒绝 */
-    val local: Boolean = false
+    val local: Boolean = false,
+    /**
+     * 教务系统（jwxt）的会话是不是真的建起来了。
+     *
+     * SSO 登录成功（666666）只代表账号密码对了，不代表教务系统能访问：
+     * 校外没连校园网时，教务会把人踢回统一身份认证，这里就是 false。
+     * 这种情况**不该**报「登录失败」，而是「已登录，但教务连不上」。
+     */
+    val jwxtReady: Boolean = true
 ) {
     /** 学校用 666666 表示成功 */
     val isSuccess: Boolean get() = code == BistuAuth.SUCCESS_CODE
+
+    /** 账号密码对了，但进不了教务系统（通常就是校外没连校园网） */
+    val isLoggedInButNoJwxt: Boolean get() = isSuccess && !jwxtReady
 
     /** 会话/网络类问题（值得让用户先检查网络再重试，而不是以为密码错了） */
     val isSessionIssue: Boolean
@@ -675,7 +744,10 @@ data class LoginResult(
     /** 给用户看的文案：服务端的 msg 有时太技术化，甚至为空 */
     val friendlyMessage: String
         get() = when (code) {
-            BistuAuth.SUCCESS_CODE -> "登录成功"
+            BistuAuth.SUCCESS_CODE ->
+                if (jwxtReady) "登录成功"
+                else "已登录统一身份认证，但没连上教务系统。\n" +
+                        "校外访问需要先连校园网（或学校 VPN）；连着校园网请先完成上网认证。"
             BistuAuth.CODE_WRONG_PASSWORD -> "学号或密码错误，请检查后重试"
             BistuAuth.CODE_FLOWKEY_MISSING ->
                 if (local) {
@@ -702,6 +774,19 @@ class AuthException(message: String) : Exception(message)
  * 只有这个类型的异常才允许触发登出。
  */
 class SessionExpiredException(message: String) : Exception(message)
+
+/**
+ * 请求被统一身份认证拦下了，教务系统的数据拿不到。
+ *
+ * 和 [SessionExpiredException] 的区别很关键：
+ *  - SessionExpiredException：真的是会话过期了 → 应该清登录态，请用户重登
+ *  - OffCampusException：网络路径走不通（绝大多数是校外没连校园网 / VPN），
+ *    账号和会话都是好的 → **绝不能清登录态**，清了用户重登也一样进不去
+ *
+ * 判定依据不是猜文案，而是 OkHttp 跟完 302 之后的最终落点：
+ * 被踢到 sso / uc 域，就说明这次请求根本没被教务系统接住。
+ */
+class OffCampusException(message: String) : Exception(message)
 
 // ══════════════════════════════════════════════════════════════
 // flowKey 解析（抽成顶层函数，便于单元测试）

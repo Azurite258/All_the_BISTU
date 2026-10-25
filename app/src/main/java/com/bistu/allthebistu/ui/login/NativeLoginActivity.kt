@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.auth.BistuAuth
 import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.auth.SessionStore
+import com.bistu.allthebistu.ui.schedule.LoadErrorText
 import com.bistu.allthebistu.ui.theme.Study1Theme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -327,18 +328,30 @@ fun NativeLoginScreen(
                             )
 
                             if (result.isSuccess) {
-                                addLog("✅ 登录成功！")
+                                addLog("✅ 统一身份认证登录成功！")
 
-                                // 立即验证能否拉课表
-                                addLog("正在获取课表…")
-                                val api = JwxtApi(auth)
-                                val schedule = api.fetchSchedule()
-
-                                addLog("✅ 课表获取成功！")
-                                addLog("共 ${schedule.courses.size} 条课程")
-                                addLog("学生: ${schedule.studentName}")
-                                addLog("班级: ${schedule.className}")
-                                addLog("学期: ${schedule.termCode}")
+                                // 立即验证能否拉课表。
+                                // 注意：这一步失败**不能**让整次登录算失败 ——
+                                // 校外连不上教务是常态（教务只对校园网开放），
+                                // 但 SSO 会话是有效的，存下来，连上校园网后能自动同步。
+                                if (result.jwxtReady) {
+                                    addLog("教务系统会话已建立，正在获取课表…")
+                                    runCatching { JwxtApi(auth).fetchSchedule() }
+                                        .onSuccess { schedule ->
+                                            addLog("✅ 课表获取成功！")
+                                            addLog("共 ${schedule.courses.size} 条课程")
+                                            addLog("学生: ${schedule.studentName}")
+                                            addLog("班级: ${schedule.className}")
+                                            addLog("学期: ${schedule.termCode}")
+                                        }
+                                        .onFailure { e ->
+                                            addLog("⚠️ 课表暂时没拉到：${LoadErrorText.describe(e)}")
+                                        }
+                                } else {
+                                    addLog("⚠️ 已登录，但教务系统没连上")
+                                    addLog("提示: 教务系统只对校园网开放，校外请先连校园网或学校 VPN。")
+                                    addLog("登录状态已保存，连上校园网后打开 App 会自动同步。")
+                                }
 
                                 // 保存到全局并持久化，供主界面使用 & 下次免登录
                                 AuthHolder.setAuth(auth, context)

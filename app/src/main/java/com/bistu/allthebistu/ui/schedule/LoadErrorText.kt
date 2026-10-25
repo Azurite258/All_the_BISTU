@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.schedule
 
 import com.bistu.allthebistu.data.auth.AuthException
+import com.bistu.allthebistu.data.auth.OffCampusException
 import com.bistu.allthebistu.data.auth.SessionExpiredException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -23,6 +24,11 @@ object LoadErrorText {
         return when {
             e is SessionExpiredException ->
                 "登录已失效，请重新登录"
+
+            // 校外最常见的一条：教务把人踢回统一身份认证。
+            // 文案必须和「登录失效」分开，否则用户会反复重登，怎么都进不去。
+            e is OffCampusException ->
+                "教务系统连不上：校外访问需要先连校园网或学校 VPN"
 
             e is UnknownHostException ->
                 "连不上教务系统域名，请检查网络"
@@ -58,4 +64,11 @@ object LoadErrorText {
 
     /** 是否是「需要重新登录」这类问题 */
     fun needsRelogin(e: Throwable?): Boolean = e is SessionExpiredException
+
+    /**
+     * 是不是「换个网络就能解决」的问题。
+     *
+     * 这类错误**不能**清登录态：账号好好的，只是这台设备现在进不去教务系统。
+     */
+    fun isNetworkBlocked(e: Throwable?): Boolean = e is OffCampusException
 }

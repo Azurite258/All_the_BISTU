@@ -79,8 +79,14 @@ class JwxtApi(
         logger("Cookie 详情:\n${auth.dumpCookies()}")
         client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
             val body = resp.body?.string() ?: ""
-            logger("GET 响应: HTTP ${resp.code}, 长度 ${body.length}")
+            logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${body.length}")
+            // 先判「是不是被认证拦了」：这种情况可能是 200 + 登录页，
+            // 也可能被转成 302，必须排在 HTTP 状态判断前面
+            offCampusError(resp)?.let { throw it }
             if (!resp.isSuccessful) throw httpError(resp.code, body)
+            // 这条以前漏了：校外返回的登录页 HTML 会一路走到 JSONObject() 才炸，
+            // 抛的是 JSONException，被当成「普通解析错误」，会话失效反而看不出来
+            validateJsonBody(body, resp.code)
             body
         }
     }
@@ -95,12 +101,32 @@ class JwxtApi(
 
             client.newCall(requestBuilder(url).post(body).build()).execute().use { resp ->
                 val text = resp.body?.string() ?: ""
-                logger("POST 响应: HTTP ${resp.code}, 长度 ${text.length}")
+                logger("POST 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
+                offCampusError(resp)?.let { throw it }
                 if (!resp.isSuccessful) throw httpError(resp.code, text)
                 validateJsonBody(text, resp.code)
                 text
             }
         }
+
+    /**
+     * 这次响应是不是被统一身份认证截走了。
+     *
+     * 教务接口在校外（或会话失效）时不回 401，而是 302 到 `casLogin.do`，
+     * 再被踢到 `sso.bistu.edu.cn` 的登录页。OkHttp 跟完重定向后，
+     * `resp.request.url` 就是**最终落点**，所以「host 不是 jwxt」
+     * 是一个确定信号——不用猜 IP、也不用猜返回文案。
+     */
+    private fun offCampusError(resp: okhttp3.Response): OffCampusException? {
+        val host = resp.request.url.host
+        if (host == BistuAuth.JWXT_HOST) return null
+        // 只认校内域，避免 DNS 劫持 / 运营商插页时误报成「校外限制」
+        if (!host.endsWith("bistu.edu.cn")) return null
+        return OffCampusException(
+            "教务系统把请求转到了 $host，说明这台设备现在进不去教务系统。" +
+                    "连校园网请先完成上网认证；校外访问需要连校园网或学校 VPN。"
+        )
+    }
 
     /**
      * 把 HTTP 失败翻译成异常。
@@ -135,7 +161,8 @@ class JwxtApi(
         logger("GET $url")
         client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
             val text = resp.body?.string() ?: ""
-            logger("GET 响应: HTTP ${resp.code}, 长度 ${text.length}")
+            logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
+            offCampusError(resp)?.let { throw it }
             if (!resp.isSuccessful) throw httpError(resp.code, text)
             validateJsonBody(text, resp.code)
             text
