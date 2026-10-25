@@ -723,6 +723,49 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
     // ══════════════════════════════════════════════════════════
 
     /**
+     * 诊断用：把教务会话「弄坏」，模拟服务端闲置过久已经作废的状态。
+     *
+     * 只改 jwxt 域的会话 Cookie，**不动 TGC** —— 这恰好就是
+     * 「统一身份认证还好、教务会话已死」的状态，也正是
+     * 「放一会儿再进就刷不出来」的真实前提。
+     *
+     * 之所以需要它：直接验证这个场景要真的把手机闲置到教务超时（半小时级），
+     * 而连续快杀反而每次都给服务端会话续命，根本复现不了。
+     * 弄坏之后立刻冷启动，就能确定「探活失败 → 换票 → 新会话落盘」这条链是否可靠。
+     *
+     * @return 被作废的 Cookie 个数（0 表示当前压根没有教务会话）
+     */
+    fun invalidateJwxtSession(): Int {
+        val jwxt = JWXT_BASE.toHttpUrlOrNull() ?: return 0
+        var broken = 0
+        synchronized(cookieStore) {
+            // 先拷贝再改，避免边遍历边删除
+            cookieStore.toList().forEach { c ->
+                if ((c.name == "JSESSIONID" || c.name == "GS_SESSIONID") && c.matches(jwxt)) {
+                    cookieStore.remove(c)
+                    // OkHttp 4 的 Cookie 没有 newBuilder()，只能照字段重建一个
+                    val brokenCookie = Cookie.Builder()
+                        .name(c.name)
+                        .value("invalid-${System.currentTimeMillis()}")
+                        .apply {
+                            if (c.hostOnly) hostOnlyDomain(c.domain) else domain(c.domain)
+                        }
+                        .path(c.path)
+                        .expiresAt(c.expiresAt)
+                        .apply { if (c.secure) secure() }
+                        .apply { if (c.httpOnly) httpOnly() }
+                        .build()
+                    cookieStore.add(brokenCookie)
+                    broken++
+                }
+            }
+        }
+        logger("invalidateJwxtSession: 已作废 $broken 个教务会话 Cookie")
+        notifyCookiesChanged()
+        return broken
+    }
+
+    /**
      * 导出当前所有 Cookie 快照（用于落盘）。
      *
      * 加锁：写发生在 OkHttp 的网络线程，读可能来自 UI/WorkManager 线程，

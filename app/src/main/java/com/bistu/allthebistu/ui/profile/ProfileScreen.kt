@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.profile
 
 import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -216,6 +217,27 @@ fun ProfileScreen(
                 title = "诊断日志",
                 trailing = "导出并分享",
                 onClick = { AppLog.share(context) }
+            )
+            Divider()
+            // 复现「放了一会儿就刷不出来」用：
+            // 真正的触发条件是教务会话在服务端闲置超时，要等半小时；
+            // 这里直接把本地那份教务会话作废，效果等价，但不用等。
+            // 点完杀掉 App 再进，就是「磁盘里那份会话已经死了」的现场。
+            ActionRow(
+                title = "诊断：模拟教务会话过期",
+                trailing = "复现用",
+                onClick = {
+                    val n = com.bistu.allthebistu.ui.login.AuthHolder.auth
+                        ?.invalidateJwxtSession() ?: 0
+                    // 立刻落盘，让「磁盘里的会话已死」这个状态固定下来
+                    com.bistu.allthebistu.ui.login.AuthHolder.persist(context)
+                    Toast.makeText(
+                        context,
+                        if (n > 0) "已作废 $n 个教务会话，杀掉 App 再进入即可复现"
+                        else "当前没有教务会话（先登录一次）",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             )
         }
 
