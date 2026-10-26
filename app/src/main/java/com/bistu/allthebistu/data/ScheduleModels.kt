@@ -1,5 +1,6 @@
 package com.bistu.allthebistu.data
 
+import com.bistu.allthebistu.data.log.AppLog
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -198,6 +199,8 @@ data class ScheduleData(
 
 object ScheduleParser {
 
+    private const val TAG = "ScheduleParser"
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -219,6 +222,7 @@ object ScheduleParser {
         val arranged = detail.arrangedList.flatMap { expandCourse(it) }
         val notArranged = detail.notArrangeList.flatMap { expandCourse(it) }
         val practice = detail.practiceList.flatMap { expandCourse(it) }
+        auditParse(detail.arrangedList, arranged)
         val courses = mergeDuplicates(arranged) + mergeDuplicates(notArranged) + mergeDuplicates(practice)
 
         return ScheduleData(
@@ -231,6 +235,41 @@ object ScheduleParser {
             campus = info["校区"] ?: "",
             courses = courses
         )
+    }
+
+    /**
+     * 解析审计：把「原始几条 → 展开几条 → 谁被丢了、为什么」打进日志。
+     *
+     * 起因是有人反馈 App 课表比教务网页少一门课（程序设计基础，3-5 节）。
+     * 静态看代码有四处会让一门课**静默消失**：
+     *   ① week 位图不是预期的 "001111" 格式，[parseWeekBitmap] 解出空集
+     *   ② weeksAndTeachers 里某段周次文本解析不出数字，被 filter 掉
+     *   ③ 星期 / 节次为 0，[Course.isArranged] 判定不过，画不进网格
+     *   ④ 主键碰撞被 REPLACE 覆盖
+     * 光靠读代码判断不了是哪一处，所以让数据自己说话。
+     * 这些日志会跟着「诊断日志」一起导出，不用连电脑。
+     */
+    private fun auditParse(rawList: List<RawCourse>, expanded: List<Course>) {
+        AppLog.d(TAG, "解析审计: 原始 ${rawList.size} 条 → 展开 ${expanded.size} 条")
+        rawList.forEach { raw ->
+            AppLog.d(
+                TAG,
+                "原始课: [${raw.courseName}] 星期=${raw.dayOfWeek} 节=${raw.beginSection}-${raw.endSection} " +
+                        "位图=${raw.week} 教室=${raw.placeName} 周次/教师=${raw.weeksAndTeachers}"
+            )
+        }
+        expanded.filter { it.weeks.isEmpty() }.forEach {
+            AppLog.w(
+                TAG,
+                "周次为空→界面上看不到: [${it.name}] 星期=${it.dayOfWeek} 节=${it.beginSection}-${it.endSection}"
+            )
+        }
+        expanded.filter { !it.isArranged }.forEach {
+            AppLog.w(
+                TAG,
+                "星期/节次缺失→画不进网格: [${it.name}] 星期=${it.dayOfWeek} 节=${it.beginSection}-${it.endSection}"
+            )
+        }
     }
 
     /**
@@ -270,10 +309,19 @@ object ScheduleParser {
 
         // 没有分号：单条记录
         if (weekParts.size <= 1) {
+            val weeks = parseWeekBitmap(raw.week)
+            // 位图有内容却解不出任何周次 → 说明服务端给的不是 "001111..." 这种格式，
+            // 这门课会因为 weeks 为空而在界面上彻底消失（isInWeek 永远 false）
+            if (weeks.isEmpty() && raw.week.isNotBlank()) {
+                AppLog.w(
+                    TAG,
+                    "位图解不出周次（格式和预期不符）: [${raw.courseName}] week=${raw.week}"
+                )
+            }
             return listOf(
                 buildCourse(
                     raw = raw,
-                    weeks = parseWeekBitmap(raw.week),
+                    weeks = weeks,
                     teacher = extractTeacher(raw.weeksAndTeachers),
                     room = raw.placeName ?: ""
                 )
@@ -281,17 +329,30 @@ object ScheduleParser {
         }
 
         // 有分号：逐段展开
-        return weekParts.mapIndexed { index, weekText ->
+        val built = weekParts.mapIndexed { index, weekText ->
             val room = roomParts.getOrElse(index) { roomParts.firstOrNull() ?: "" }
             // 从 "3-5周[讲授]/李老师[主讲]" 这种文本里解析周次
             val weeks = parseWeekText(weekText)
+            if (weeks.isEmpty()) {
+                AppLog.w(
+                    TAG,
+                    "周次文本解析为空，该段被丢弃: [${raw.courseName}] 段=${weekText}"
+                )
+            }
             buildCourse(
                 raw = raw,
                 weeks = weeks,
                 teacher = extractTeacher(weekText),
                 room = room
             )
-        }.filter { it.weeks.isNotEmpty() }
+        }
+        if (built.isNotEmpty() && built.all { it.weeks.isEmpty() }) {
+            AppLog.w(
+                TAG,
+                "整条都被丢弃（所有段的周次都解析失败）: [${raw.courseName}] 原文=${raw.weeksAndTeachers}"
+            )
+        }
+        return built.filter { it.weeks.isNotEmpty() }
     }
 
     private fun buildCourse(
@@ -321,6 +382,21 @@ object ScheduleParser {
     // ───────────────────────────────────────────────────────────
     fun parseWeekBitmap(bitmap: String): Set<Int> {
         if (bitmap.isBlank()) return emptySet()
+
+        // 正常位图只由 0/1 组成。出现别的字符，说明服务端换了表达方式
+        // （实测过 "3-5"、"1,3,5"、"3-16周" 这类文本形式）。
+        // 直接按位图解析的后果很隐蔽：字符串里只要没有 '1' 就得到空集，
+        // 于是这门课 weeks 为空、任何一周都不显示 —— 看起来就是「课表少了一门课」。
+        if (bitmap.any { it != '0' && it != '1' }) {
+            val asText = parseWeekText(bitmap)
+            if (asText.isEmpty()) {
+                AppLog.w(TAG, "week 既不是位图也解析不出周次: \"$bitmap\"")
+            } else {
+                AppLog.w(TAG, "week 是文本格式，已按文本解析: \"$bitmap\" → $asText")
+            }
+            return asText
+        }
+
         val result = mutableSetOf<Int>()
         bitmap.forEachIndexed { index, ch ->
             if (ch == '1') result.add(index + 1)

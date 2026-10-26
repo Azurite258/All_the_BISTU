@@ -427,6 +427,10 @@ class JwxtApi(
             })
         }
 
+        // 落盘原始数据：课表「少一门课」这种事，只有拿到真实 JSON 才能精确复现，
+        // 否则只能靠猜服务端字段格式。点「诊断日志」导出时会一起带走。
+        AppLog.dump("schedule_raw_$actualTermCode", rebuilt.toString(2))
+
         return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
             .copy(termWeeks = getTermWeeks(actualTermCode))
     }

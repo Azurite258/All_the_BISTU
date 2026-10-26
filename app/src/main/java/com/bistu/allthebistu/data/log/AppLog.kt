@@ -72,26 +72,31 @@ object AppLog {
     }
 
     fun d(tag: String, message: String) {
+        if (!installed) return
         Log.d(tag, message)
         enqueue("D", tag, message)
     }
 
     fun i(tag: String, message: String) {
+        if (!installed) return
         Log.i(tag, message)
         enqueue("I", tag, message)
     }
 
     fun w(tag: String, message: String) {
+        if (!installed) return
         Log.w(tag, message)
         enqueue("W", tag, message)
     }
 
     fun e(tag: String, message: String) {
+        if (!installed) return
         Log.e(tag, message)
         enqueue("E", tag, message)
     }
 
     fun e(tag: String, message: String, error: Throwable?) {
+        if (!installed) return
         Log.e(tag, message, error)
         enqueue("E", tag, if (error == null) message else "$message\n${Log.getStackTraceString(error)}")
     }
@@ -103,6 +108,24 @@ object AppLog {
 
     /** 当前日志目录，调试用 */
     fun logDir(): File? = logDir
+
+    /**
+     * 把一段原始文本单独落盘（用于保存接口原始响应）。
+     *
+     * 为什么不直接塞进 app.log：教务的课表响应动辄几十 KB，
+     * 一次就能把 512KB 的滚动日志刷掉，真正的排查线索反而没了。
+     * 独立成文件后，导出诊断日志时会一起带走。
+     */
+    fun dump(name: String, content: String) {
+        val dir = logDir ?: return
+        val file = File(dir, "$name.txt")
+        runCatching {
+            file.writeText(content)
+            d("AppLog", "dump: ${file.name} 已保存 (${content.length} 字符)")
+        }.onFailure {
+            w("AppLog", "dump: ${file.name} 写入失败 ${it.message}")
+        }
+    }
 
     /**
      * 把日志打包成一个 txt 分享出去。
@@ -138,6 +161,17 @@ object AppLog {
                     out.appendLine("──── ${current.name} ────")
                     out.append(current.readText())
                 }
+                // 附加的原始数据（接口响应等）。单独成文件是为了不刷掉滚动日志，
+                // 但排查时必须一起看，比如「某门课从课表里消失」要对着原始 JSON 才能定位
+                dir.listFiles()
+                    ?.filter { it.isFile && it.extension == "txt" && !it.name.startsWith(FILE_NAME) }
+                    ?.sortedBy { it.name }
+                    ?.forEach { extra ->
+                        out.appendLine()
+                        out.appendLine("──── ${extra.name} (${extra.length()} bytes) ────")
+                        out.append(extra.readText())
+                        out.appendLine()
+                    }
             }
             file
         }.getOrNull() ?: return
