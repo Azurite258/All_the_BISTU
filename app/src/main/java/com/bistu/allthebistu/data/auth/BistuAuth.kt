@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.data.auth
 
 import com.bistu.allthebistu.data.log.AppLog
+import com.bistu.allthebistu.data.net.RetryPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -629,25 +630,52 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
      * 校外没连校园网时就是这结果，属正常现象，不该清登录态。
      */
     private suspend fun probeJwxt(): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            redirectClient.newCall(
-                Request.Builder()
-                    .url(JwxtApi.ENTRY_SCHEDULE)
-                    // 必须带 UA：教务前面有 WAF，空 UA 会被直接拦成 403，
-                    // 那就把「校内正常」也误判成「教务连不上」了
-                    .addHeader("User-Agent", JwxtApi.UA)
-                    .get()
-                    .build()
-            ).execute().use { r ->
-                val host = r.request.url.host
-                val body = r.body?.string().orEmpty()
-                val loginPage = body.contains("统一身份认证") || body.contains("CASTGC")
-                host == JWXT_HOST && r.isSuccessful && !loginPage
+        val startAt = System.currentTimeMillis()
+        var attempt = 1
+        var answer = false
+        while (true) {
+            val result = runCatching {
+                redirectClient.newCall(
+                    Request.Builder()
+                        .url(JwxtApi.ENTRY_SCHEDULE)
+                        // 必须带 UA：教务前面有 WAF，空 UA 会被直接拦成 403，
+                        // 那就把「校内正常」也误判成「教务连不上」了
+                        .addHeader("User-Agent", JwxtApi.UA)
+                        .get()
+                        .build()
+                ).execute().use { r ->
+                    val host = r.request.url.host
+                    val body = r.body?.string().orEmpty()
+                    val loginPage = body.contains("统一身份认证") || body.contains("CASTGC")
+                    host == JWXT_HOST && r.isSuccessful && !loginPage
+                }
             }
-        }.getOrElse {
-            logger("casLogin: 探活异常 ${it.message}")
-            false
+
+            val value = result.getOrNull()
+            if (value != null) {
+                answer = value
+                break
+            }
+
+            // 探活失败若是因为网络抖动（含教务只发叶子证书导致的随机握手失败），
+            // 直接判「进不去教务」会让上层显示「校外访问」，把排查带偏。重试几次。
+            val error = result.exceptionOrNull()
+            val elapsed = System.currentTimeMillis() - startAt
+            if (error != null && RetryPolicy.shouldRetry(error, attempt, elapsed)) {
+                val wait = RetryPolicy.delayFor(attempt)
+                logger(
+                    "casLogin: 探活第 $attempt 次异常（${error.javaClass.simpleName}: ${error.message}），" +
+                            "${wait}ms 后重试"
+                )
+                delay(wait)
+                attempt++
+                continue
+            }
+            error?.let { logger("casLogin: 探活异常 ${it.message}") }
+            answer = false
+            break
         }
+        answer
     }
 
     /**

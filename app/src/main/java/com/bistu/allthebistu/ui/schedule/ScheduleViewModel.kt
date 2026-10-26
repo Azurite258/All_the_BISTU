@@ -8,6 +8,7 @@ import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.auth.JwxtApi
+import com.bistu.allthebistu.data.net.RetryPolicy
 import com.bistu.allthebistu.data.privacy.UserDataCleaner
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.AutoLoginResult
@@ -122,7 +123,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                         )
                     }
                     // 已登录 → 跳过缓存读，直接拉最新；失败会自动回退到刚显示的缓存
-                    val loaded = repository.loadSchedule(forceRefresh = true)
+                    val loaded = loadWithRetry(forceRefresh = true)
                     // 这次同步可能刚用 TGC 换过新票（JwxtApi.ensureSession 会静默续期），
                     // 把新 Cookie 落盘，下次冷启动就不用再换一遍
                     if (loaded.source == Source.NETWORK) {
@@ -161,6 +162,33 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     // ───────────────────────────────────────────────────────────
 
     /**
+     * 加载课表，失败时补一次重试。
+     *
+     * 网络层（[JwxtApi]）已经按请求重试过抖动类失败；这一层管的是另一件事：
+     * 「整次加载快速失败」往往是环境刚变化 —— 刚从 4G 切回校园 Wi-Fi、
+     * 刚解锁、上网认证刚跳完。这种失败隔一两秒再来一次通常就好了，
+     * 而直接弹「同步失败」会让用户以为得手动处理。
+     *
+     * 只补「快速失败」：慢失败说明网络真的不通，再等一轮只是把
+     * 转圈时间翻倍（见 [RetryPolicy.shouldRetryUi]）。
+     */
+    private suspend fun loadWithRetry(forceRefresh: Boolean): LoadResult {
+        val startedAt = System.currentTimeMillis()
+        val first = repository.loadSchedule(forceRefresh = forceRefresh)
+        val error = first.error ?: return first
+        val elapsed = System.currentTimeMillis() - startedAt
+        if (!RetryPolicy.shouldRetryUi(error, elapsed)) return first
+
+        AppLog.d(
+            TAG,
+            "加载失败（${error.javaClass.simpleName}: ${error.message}，耗时 ${elapsed}ms），" +
+                    "${UI_RETRY_DELAY_MS}ms 后自动重试一次"
+        )
+        delay(UI_RETRY_DELAY_MS)
+        return repository.loadSchedule(forceRefresh = forceRefresh)
+    }
+
+    /**
      * 重新加载。
      *
      * @param forceRefresh true 时先清缓存再拉，用于「刚登录」「退出登录」这类数据源已变的场景
@@ -175,7 +203,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             // 用户就从「有真实课表」直接掉到「示例数据」，看起来像数据丢了。
             // forceRefresh 的语义是「跳过缓存读」，而不是「删掉缓存」，
             // 拉取成功时 saveSchedule 会整学期覆盖，用不着提前清。
-            val loaded = repository.loadSchedule(forceRefresh = forceRefresh)
+            val loaded = loadWithRetry(forceRefresh = forceRefresh)
             _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
         }
     }
@@ -191,7 +219,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 AuthHolder.auth?.let(repository::setAuth)
                 // 下拉 = 强制从网络拉最新
-                val loaded = repository.loadSchedule(forceRefresh = true)
+                val loaded = loadWithRetry(forceRefresh = true)
                 _uiState.update { it.copy(loadResult = loaded) }
                 refreshStudyReport()
             } finally {
@@ -331,5 +359,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
          * 800ms 是 Material Design 建议的「既能感知到、又不觉得卡」的时长。
          */
         private const val MIN_REFRESH_MS = 800L
+
+        /** 整次加载失败后自动重试前的等待（毫秒） */
+        private const val UI_RETRY_DELAY_MS = 2_000L
     }
 }

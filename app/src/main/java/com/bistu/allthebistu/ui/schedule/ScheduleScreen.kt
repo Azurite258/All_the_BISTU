@@ -93,7 +93,7 @@ fun ScheduleScreen(
             modifier = modifier
         )
 
-        else -> ErrorScreen(result?.error, modifier)
+        else -> ErrorScreen(result?.error, onRefresh, modifier)
     }
 }
 
@@ -390,14 +390,18 @@ private fun ScheduleContent(
             confirmButton = {
                 TextButton(onClick = {
                     errorDetail = null
-                    if (LoadErrorText.needsRelogin(err)) onOpenLogin()
+                    if (LoadErrorText.needsRelogin(err)) onOpenLogin() else onRefresh()
                 }) {
-                    Text(if (LoadErrorText.needsRelogin(err)) "重新登录" else "知道了")
+                    // 只是同步失败时，「重试」比「知道了」有用得多：
+                    // 用户不必知道下拉刷新这个手势也能自己救一次
+                    Text(if (LoadErrorText.needsRelogin(err)) "重新登录" else "重试")
                 }
             },
             dismissButton = if (LoadErrorText.needsRelogin(err)) {
                 { TextButton(onClick = { errorDetail = null }) { Text("稍后") } }
-            } else null
+            } else {
+                { TextButton(onClick = { errorDetail = null }) { Text("关闭") } }
+            }
         )
     }
 
@@ -570,7 +574,11 @@ private fun LoadingScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ErrorScreen(error: Throwable?, modifier: Modifier = Modifier) {
+private fun ErrorScreen(
+    error: Throwable?,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -585,6 +593,10 @@ private fun ErrorScreen(error: Throwable?, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(12.dp))
         Text(text = error?.message ?: "未知错误", fontSize = 14.sp)
+        Spacer(Modifier.height(12.dp))
+        // 以前这里只有错误文本和堆栈，用户没有任何可操作的入口，
+        // 只能猜「下拉刷新」或者干脆重开 App
+        Button(onClick = onRefresh) { Text("重试") }
         if (error != null) {
             Spacer(Modifier.height(12.dp))
             Text(

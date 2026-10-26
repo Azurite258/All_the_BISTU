@@ -6,7 +6,12 @@ import com.bistu.allthebistu.data.ScheduleParser
 import com.bistu.allthebistu.data.StudyReport
 import com.bistu.allthebistu.data.StudyReportParser
 import com.bistu.allthebistu.data.TermWeek
+import com.bistu.allthebistu.data.net.RETRYABLE_HTTP_CODES
+import com.bistu.allthebistu.data.net.RetryPolicy
+import com.bistu.allthebistu.data.net.TransientHttpException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -73,39 +78,72 @@ class JwxtApi(
             .addHeader("X-Requested-With", "XMLHttpRequest")
     }
 
+    /**
+     * 给一次网络调用套上重试。
+     *
+     * 这些接口全是「查询」（GET 或 form 查询），重复执行没有副作用，
+     * 所以可以安全重试。策略见 [RetryPolicy]：只重试抖动类失败，
+     * 401/换票、校外 302、业务 code 非 0 一律原样抛给上层。
+     */
+    private suspend fun <T> withRetry(label: String, block: suspend () -> T): T {
+        val startAt = System.currentTimeMillis()
+        var attempt = 1
+        while (true) {
+            try {
+                return block()
+            } catch (e: Throwable) {
+                // 取消不是失败：界面已经走了，继续重试只会偷偷联网
+                if (e is CancellationException) throw e
+                val elapsed = System.currentTimeMillis() - startAt
+                if (!RetryPolicy.shouldRetry(e, attempt, elapsed)) throw e
+                val wait = RetryPolicy.delayFor(attempt)
+                logger(
+                    "retry: $label 第 $attempt 次失败（${e.javaClass.simpleName}: ${e.message}），" +
+                            "${wait}ms 后重试（已耗时 ${elapsed}ms）"
+                )
+                delay(wait)
+                attempt++
+            }
+        }
+    }
+
     /** GET 请求 */
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        logger("GET $url")
-        logger("Cookie 详情:\n${auth.dumpCookies()}")
-        client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
-            val body = resp.body?.string() ?: ""
-            logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${body.length}")
-            // 先判「是不是被认证拦了」：这种情况可能是 200 + 登录页，
-            // 也可能被转成 302，必须排在 HTTP 状态判断前面
-            offCampusError(resp)?.let { throw it }
-            if (!resp.isSuccessful) throw httpError(resp.code, body)
-            // 这条以前漏了：校外返回的登录页 HTML 会一路走到 JSONObject() 才炸，
-            // 抛的是 JSONException，被当成「普通解析错误」，会话失效反而看不出来
-            validateJsonBody(body, resp.code)
-            body
+        withRetry("GET $url") {
+            logger("GET $url")
+            logger("Cookie 详情:\n${auth.dumpCookies()}")
+            client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
+                val body = resp.body?.string() ?: ""
+                logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${body.length}")
+                // 先判「是不是被认证拦了」：这种情况可能是 200 + 登录页，
+                // 也可能被转成 302，必须排在 HTTP 状态判断前面
+                offCampusError(resp)?.let { throw it }
+                if (!resp.isSuccessful) throw httpError(resp.code, body)
+                // 这条以前漏了：校外返回的登录页 HTML 会一路走到 JSONObject() 才炸，
+                // 抛的是 JSONException，被当成「普通解析错误」，会话失效反而看不出来
+                validateJsonBody(body, resp.code)
+                body
+            }
         }
     }
 
     /** POST 请求（form 格式） */
     private suspend fun post(url: String, params: Map<String, String>): String =
         withContext(Dispatchers.IO) {
-            logger("POST $url params=$params")
-            val body = FormBody.Builder().apply {
-                params.forEach { (k, v) -> add(k, v) }
-            }.build()
+            withRetry("POST $url") {
+                logger("POST $url params=$params")
+                val body = FormBody.Builder().apply {
+                    params.forEach { (k, v) -> add(k, v) }
+                }.build()
 
-            client.newCall(requestBuilder(url).post(body).build()).execute().use { resp ->
-                val text = resp.body?.string() ?: ""
-                logger("POST 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
-                offCampusError(resp)?.let { throw it }
-                if (!resp.isSuccessful) throw httpError(resp.code, text)
-                validateJsonBody(text, resp.code)
-                text
+                client.newCall(requestBuilder(url).post(body).build()).execute().use { resp ->
+                    val text = resp.body?.string() ?: ""
+                    logger("POST 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
+                    offCampusError(resp)?.let { throw it }
+                    if (!resp.isSuccessful) throw httpError(resp.code, text)
+                    validateJsonBody(text, resp.code)
+                    text
+                }
             }
         }
 
@@ -134,12 +172,17 @@ class JwxtApi(
      * 只有 401/403 才代表「会话没了」，必须用 [SessionExpiredException]，
      * 否则上层会把它和「没排课」「接口报错」混为一谈，把用户的登录态清掉。
      */
-    private fun httpError(code: Int, body: String): Exception =
-        if (code == 401 || code == 403) {
+    private fun httpError(code: Int, body: String): Exception = when {
+        // 会话问题：重试只会再 401 一次，交给换票流程处理
+        code == 401 || code == 403 ->
             SessionExpiredException("教务接口返回 $code，登录态已失效")
-        } else {
-            AuthException("HTTP $code: ${body.take(200)}")
-        }
+
+        // 服务端临时故障 / 限流：值得再试一次
+        code in RETRYABLE_HTTP_CODES ->
+            TransientHttpException(code, "教务接口临时不可用（HTTP $code）")
+
+        else -> AuthException("HTTP $code: ${body.take(200)}")
+    }
 
     /**
      * 学业完成情况（要求学分 / 已修 / 已选 / 分类明细）。
@@ -158,14 +201,16 @@ class JwxtApi(
 
     /** 最朴素的 GET，供不带参数的查询接口使用 */
     private suspend fun getRaw(url: String): String = withContext(Dispatchers.IO) {
-        logger("GET $url")
-        client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
-            val text = resp.body?.string() ?: ""
-            logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
-            offCampusError(resp)?.let { throw it }
-            if (!resp.isSuccessful) throw httpError(resp.code, text)
-            validateJsonBody(text, resp.code)
-            text
+        withRetry("GET(raw) $url") {
+            logger("GET $url")
+            client.newCall(requestBuilder(url).get().build()).execute().use { resp ->
+                val text = resp.body?.string() ?: ""
+                logger("GET 响应: HTTP ${resp.code}, 落点=${resp.request.url.host}, 长度 ${text.length}")
+                offCampusError(resp)?.let { throw it }
+                if (!resp.isSuccessful) throw httpError(resp.code, text)
+                validateJsonBody(text, resp.code)
+                text
+            }
         }
     }
 
@@ -216,17 +261,21 @@ class JwxtApi(
     suspend fun ensureSession(): CasResult = withContext(Dispatchers.IO) {
         // ① 先直接探业务入口：会话还在时省掉一次 CAS 往返
         val alive = runCatching {
-            client.newCall(
-                requestBuilder(ENTRY_SCHEDULE).get().build()
-            ).execute().use { r ->
-                val host = r.request.url.host
-                val body = r.body?.string().orEmpty()
-                val verdict = isEntryAlive(r.code, host, body)
-                logger("ensureSession: 入口落点=$host, HTTP ${r.code}, 会话可用=$verdict")
-                if (!verdict) {
-                    logger("ensureSession: 判定依据 — body 前 120 字: ${body.take(120)}")
+            // 探活也要重试：一次 TLS 握手抖动会被判成「进不去教务」，
+            // 上层就显示「校外访问」的提示，而实际上账号会话都是好的
+            withRetry("入口探活") {
+                client.newCall(
+                    requestBuilder(ENTRY_SCHEDULE).get().build()
+                ).execute().use { r ->
+                    val host = r.request.url.host
+                    val body = r.body?.string().orEmpty()
+                    val verdict = isEntryAlive(r.code, host, body)
+                    logger("ensureSession: 入口落点=$host, HTTP ${r.code}, 会话可用=$verdict")
+                    if (!verdict) {
+                        logger("ensureSession: 判定依据 — body 前 120 字: ${body.take(120)}")
+                    }
+                    verdict
                 }
-                verdict
             }
         }.onFailure {
             // 以前这里是静默失败：探活一抛异常就当成「会话没了」，
