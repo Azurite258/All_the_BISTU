@@ -352,6 +352,11 @@ class JwxtApi(
         // ③ 每个校区拉课表，合并原始 JSON
         val mergedCourses = mutableListOf<org.json.JSONObject>()
         var subTitles: org.json.JSONArray? = null
+        // mergeArrangedList = 教务侧的「合并后排课」。本字段在此之前只定义过、从没读过，
+        // 重组 JSON 时还被主动置空。怀疑「同一门课多段安排只显示一段」就丢在这里
+        // （有人反馈某课在教务有两个教室，App 只剩其中一个）。
+        // 先只取证不改行为 —— 不清楚它的语义，贸然并进 arrangedList 可能整片重复。
+        var mergeArrangedSample: org.json.JSONArray? = null
         var okQueries = 0
         var failCode = ""
 
@@ -380,6 +385,9 @@ class JwxtApi(
 
             okQueries++
             if (subTitles == null) subTitles = detail.optJSONArray("subTitles")
+            if (mergeArrangedSample == null) {
+                mergeArrangedSample = detail.optJSONArray("mergeArrangedList")
+            }
 
             val list = detail.optJSONArray("arrangedList") ?: return
             (0 until list.length()).forEach { i ->
@@ -402,6 +410,10 @@ class JwxtApi(
 
         logger("总共拉取 ${mergedCourses.size} 条原始课程")
 
+        // 只记条数，先判断「到底有没有数据」，有再谈怎么用
+        val mergeCount = mergeArrangedSample?.length() ?: 0
+        logger("mergeArrangedList 条数=$mergeCount（当前未参与解析，仅取证）")
+
         // ⑤ 一次都没成功说明是接口/参数问题，不能伪装成「本学期没课」
         if (okQueries == 0) {
             throw AuthException("课表接口返回失败（code=$failCode），请稍后重试")
@@ -421,7 +433,9 @@ class JwxtApi(
                 put("getMyScheduleDetail", org.json.JSONObject().apply {
                     put("subTitles", subTitles ?: org.json.JSONArray())
                     put("arrangedList", org.json.JSONArray(mergedCourses))
-                    put("mergeArrangedList", org.json.JSONArray())
+                    // 原样带出去（以前是空的）：落盘后能直接对比它和 arrangedList
+                    // 差在哪，不用再猜「多段安排被谁吃了」
+                    put("mergeArrangedList", mergeArrangedSample ?: org.json.JSONArray())
                     put("termName", termName)
                 })
             })
@@ -431,8 +445,18 @@ class JwxtApi(
         // 否则只能靠猜服务端字段格式。点「诊断日志」导出时会一起带走。
         AppLog.dump("schedule_raw_$actualTermCode", rebuilt.toString(2))
 
+        val termWeeks = getTermWeeks(actualTermCode)
+        // 周历单独落盘。这门课「只在 9-10 周」和「教务网页今天有课」互相矛盾，
+        // 症结很可能在「今天是第几周」上 —— 这份对应关系是唯一的裁判。
+        if (termWeeks.isNotEmpty()) {
+            AppLog.dump(
+                "term_weeks_$actualTermCode",
+                termWeeks.joinToString("\n") { "第${it.weekNumber}周  ${it.startDate} ~ ${it.endDate}" }
+            )
+        }
+
         return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
-            .copy(termWeeks = getTermWeeks(actualTermCode))
+            .copy(termWeeks = termWeeks)
     }
 }
 
