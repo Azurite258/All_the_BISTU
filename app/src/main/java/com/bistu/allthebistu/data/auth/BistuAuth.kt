@@ -656,13 +656,13 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
      * 必须按域判断：CookieJar 里同时存在 sso / uc / jwxt 三个域的 JSESSIONID，
      * 用 `getCookie("JSESSIONID")` 取第一个，命中的往往是 sso 的。
      */
-    fun hasJwxtSession(): Boolean {
-        val url = JWXT_BASE.toHttpUrlOrNull() ?: return false
+    fun hasJwxtSession(): Boolean = synchronized(cookieStore) {
         // 正方新版（jwapp）用 GS_SESSIONID，老版才是 JSESSIONID。
-        // 只认 JSESSIONID 会一直报 `jwxt会话=false`，日志看着像没登录上，实际是好的
-        return cookieStore.any {
-            (it.name == "JSESSIONID" || it.name == "GS_SESSIONID") && it.matches(url)
-        }
+        // 只认 JSESSIONID 会一直报 `jwxt会话=false`，日志看着像没登录上，实际是好的。
+        //
+        // ⚠️ 这里**不能用** Cookie.matches(url)：它连 path 一起校验，
+        // 而 jwxt 的会话 Cookie 作用域是 path=/jwapp/，拿根路径去 matches 永远 false。
+        cookieStore.any { isSessionCookieName(it.name) && cookieDomainCovers(it.domain, JWXT_HOST) }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -736,12 +736,14 @@ class BistuAuth(private val logger: (String) -> Unit = { AppLog.d(TAG, it) }) {
      * @return 被作废的 Cookie 个数（0 表示当前压根没有教务会话）
      */
     fun invalidateJwxtSession(): Int {
-        val jwxt = JWXT_BASE.toHttpUrlOrNull() ?: return 0
         var broken = 0
         synchronized(cookieStore) {
             // 先拷贝再改，避免边遍历边删除
             cookieStore.toList().forEach { c ->
-                if ((c.name == "JSESSIONID" || c.name == "GS_SESSIONID") && c.matches(jwxt)) {
+                // 旧实现用 c.matches(jwxt)，而 jwxt 会话的 path 是 /jwapp/、
+                // 用于匹配的 URL 是根路径，Cookie.matches 会连 path 一起判 → 永远 false，
+                // 于是这个入口一次都没生效过（点下去只提示「当前没有教务会话」）。
+                if (isSessionCookieName(c.name) && cookieDomainCovers(c.domain, JWXT_HOST)) {
                     cookieStore.remove(c)
                     // OkHttp 4 的 Cookie 没有 newBuilder()，只能照字段重建一个
                     val brokenCookie = Cookie.Builder()
@@ -910,6 +912,36 @@ internal fun resolveCasLanding(finalHost: String, probeOk: Boolean): CasResult =
     finalHost == BistuAuth.JWXT_HOST -> if (probeOk) CasResult.Ok else CasResult.Unreachable
     finalHost.endsWith("sso.bistu.edu.cn") -> CasResult.NoTicket
     else -> CasResult.Unreachable
+}
+
+/**
+ * 这个 Cookie 名是不是「某个系统的会话 ID」。
+ *
+ * 正方新版（jwapp）用 GS_SESSIONID，老版用 JSESSIONID；sso 域也有一个 JSESSIONID，
+ * 所以必须连域名一起判，不能只按名字找。
+ */
+internal fun isSessionCookieName(name: String): Boolean =
+    name == "JSESSIONID" || name == "GS_SESSIONID"
+
+/**
+ * Cookie 的 domain 是否覆盖 [host]。
+ *
+ * ⚠️ 判断「某个 Cookie 属于哪个站」**不要用** `Cookie.matches(url)`：
+ * 它会把 **path** 一起校验，而教务的会话 Cookie 作用域是
+ * `domain=jwxt.bistu.edu.cn, path=/jwapp/`，用 `https://jwxt.bistu.edu.cn/`
+ * （path=/）去 matches 永远返回 false。
+ *
+ * 「诊断：模拟教务会话过期」点了提示「当前没有教务会话」就是这个原因：
+ * 它拿 matches 找 Cookie，一个都没找到。同理 `hasJwxtSession()` 一直报 false，
+ * 排查时看着像没登录上，实际会话是好的。
+ *
+ * 所以这里只比 domain（含 `.bistu.edu.cn` 这种父域写法），不看 path。
+ */
+internal fun cookieDomainCovers(domain: String, host: String): Boolean {
+    val d = domain.removePrefix(".").lowercase()
+    val h = host.lowercase()
+    if (d.isEmpty()) return false
+    return d == h || h.endsWith(".$d")
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -227,14 +227,17 @@ fun ProfileScreen(
                 title = "诊断：模拟教务会话过期",
                 trailing = "复现用",
                 onClick = {
-                    val n = com.bistu.allthebistu.ui.login.AuthHolder.auth
-                        ?.invalidateJwxtSession() ?: 0
+                    val auth = com.bistu.allthebistu.ui.login.AuthHolder.auth
+                    val n = auth?.invalidateJwxtSession() ?: 0
                     // 立刻落盘，让「磁盘里的会话已死」这个状态固定下来
                     com.bistu.allthebistu.ui.login.AuthHolder.persist(context)
                     Toast.makeText(
                         context,
-                        if (n > 0) "已作废 $n 个教务会话，杀掉 App 再进入即可复现"
-                        else "当前没有教务会话（先登录一次）",
+                        when {
+                            n > 0 -> "已作废 $n 个教务会话并写入磁盘，杀掉 App 再进入即可验证自动换票"
+                            auth == null -> "登录实例还没建立，下拉刷新一次再点"
+                            else -> "本地没有教务会话 Cookie，可能是刚登出，重新登录一次再点"
+                        },
                         Toast.LENGTH_LONG
                     ).show()
                 }
