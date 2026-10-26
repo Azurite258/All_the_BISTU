@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -23,7 +24,13 @@ data class AppSettings(
     /** 自建昵称。空字符串 = 没设，账号卡上退回显示「点击设置昵称」 */
     val nickname: String = "",
     /** 底部导航风格：[BottomBarStyle.FLAT] / [BottomBarStyle.GLASS] */
-    val bottomBarStyle: Int = BottomBarStyle.DEFAULT
+    val bottomBarStyle: Int = BottomBarStyle.DEFAULT,
+    /** 课程提醒总开关。关掉后闹钟会被全部撤销，不是「只是不弹」 */
+    val reminderEnabled: Boolean = false,
+    /** 上课前多少分钟提醒。0..240，5 分钟一档，收敛逻辑见 ReminderPlanner.sanitizeAdvance */
+    val reminderAdvanceMinutes: Int = ReminderPlanner.DEFAULT_ADVANCE,
+    /** 是否把整学期课表写进系统日历（由系统负责弹提醒，App 不用活着） */
+    val calendarSyncEnabled: Boolean = false
 ) {
     /** 有没有设过昵称 */
     val hasNickname: Boolean get() = nickname.isNotBlank()
@@ -60,6 +67,15 @@ class SettingsStore(private val context: Context) {
         /** 底部导航风格（扁平 / 光效） */
         val BOTTOM_BAR_STYLE = intPreferencesKey("bottom_bar_style")
 
+        /** 课程提醒开关 */
+        val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
+
+        /** 提前分钟数 */
+        val REMINDER_ADVANCE = intPreferencesKey("reminder_advance_minutes")
+
+        /** 系统日历同步开关 */
+        val CALENDAR_SYNC = booleanPreferencesKey("calendar_sync_enabled")
+
         /** 生活页「电费说明」弹窗是否已经看过（只弹一次） */
         val ELECTRIC_NOTICE_SHOWN = booleanPreferencesKey("electric_notice_shown")
     }
@@ -73,7 +89,12 @@ class SettingsStore(private val context: Context) {
             nickname = prefs[Keys.NICKNAME].orEmpty(),
             bottomBarStyle = BottomBarStyle.sanitize(
                 prefs[Keys.BOTTOM_BAR_STYLE] ?: BottomBarStyle.DEFAULT
-            )
+            ),
+            reminderEnabled = prefs[Keys.REMINDER_ENABLED] ?: false,
+            reminderAdvanceMinutes = ReminderPlanner.sanitizeAdvance(
+                prefs[Keys.REMINDER_ADVANCE] ?: ReminderPlanner.DEFAULT_ADVANCE
+            ),
+            calendarSyncEnabled = prefs[Keys.CALENDAR_SYNC] ?: false
         )
     }
 
@@ -95,6 +116,23 @@ class SettingsStore(private val context: Context) {
     /** 设置底部导航风格 */
     suspend fun setBottomBarStyle(style: Int) {
         context.dataStore.edit { it[Keys.BOTTOM_BAR_STYLE] = BottomBarStyle.sanitize(style) }
+    }
+
+    /** 开关课程提醒 */
+    suspend fun setReminderEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.REMINDER_ENABLED] = enabled }
+    }
+
+    /** 设置提前分钟数（会被收敛到 0..240 / 5 的倍数） */
+    suspend fun setReminderAdvanceMinutes(minutes: Int) {
+        context.dataStore.edit {
+            it[Keys.REMINDER_ADVANCE] = ReminderPlanner.sanitizeAdvance(minutes)
+        }
+    }
+
+    /** 开关系统日历同步 */
+    suspend fun setCalendarSyncEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.CALENDAR_SYNC] = enabled }
     }
 
     /**

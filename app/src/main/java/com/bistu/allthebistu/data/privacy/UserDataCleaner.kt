@@ -6,6 +6,8 @@ import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.auth.SessionStore
 import com.bistu.allthebistu.data.prefs.AvatarStore
 import com.bistu.allthebistu.data.prefs.SettingsStore
+import com.bistu.allthebistu.data.reminder.CourseCalendarSync
+import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
@@ -113,6 +115,17 @@ class UserDataCleaner(private val context: Context) {
         runCatching { SettingsStore(context).clearNickname() }
             .onSuccess { done += "昵称" }
             .onFailure { AppLog.w(TAG, "清除昵称失败: ${it.message}") }
+
+        // ②''' 课程提醒。
+        // 课表本身就是个人数据（什么时候在哪上课 = 行踪），所以退出登录时
+        // 不仅要撤销闹钟，系统日历里那份也要一起清掉，否则日历里还留着
+        // 一份「已退出账号的课表」。开关本身属于设备偏好，保留不动。
+        runCatching {
+            CourseReminderScheduler.cancelAll(context)
+            CourseCalendarSync.clear(context)
+        }
+            .onSuccess { done += "课程提醒" }
+            .onFailure { AppLog.w(TAG, "清除课程提醒失败: ${it.message}") }
 
         // ③ 应用缓存目录：头像、临时图片、网络缓存等
         runCatching { wipeCacheDirs() }

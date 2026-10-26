@@ -2,6 +2,7 @@ package com.bistu.allthebistu
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,12 +32,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.prefs.AppFontScale
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.prefs.ThemeMode
+import com.bistu.allthebistu.data.reminder.CourseCalendarSync
+import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
+import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import com.bistu.allthebistu.ui.LifeScreen
 import com.bistu.allthebistu.ui.profile.ProfileScreen
+import com.bistu.allthebistu.ui.reminder.ReminderSettingsSheet
 import com.bistu.allthebistu.ui.study.StudyScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
@@ -46,6 +52,8 @@ import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.Study1Theme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -121,6 +129,10 @@ private fun AppRoot(
     var currentTab by rememberSaveable { mutableStateOf(MainTab.SCHEDULE) }
     // 顶栏「添加日程」「日程提醒」的提示弹窗（功能尚未实现，先给明确反馈）
     var pendingFeature by remember { mutableStateOf<String?>(null) }
+    // 课程提醒设置弹窗（顶栏和「我的」页两个入口共用同一个）
+    var showReminderSheet by remember { mutableStateOf(false) }
+    // 滑块去抖任务：拖动时每跨一档都会回调，不能每次都写库 + 重排闹钟
+    var advanceJob by remember { mutableStateOf<Job?>(null) }
 
     /** 跳转登录页（登录成功后 AuthHolder 会变，下面的 LaunchedEffect 会自动刷新课表） */
     fun openLogin() {
@@ -131,6 +143,16 @@ private fun AppRoot(
     // AuthHolder.isLoggedIn 是 Compose 状态：从登录页返回后这里能立刻观察到变化
     val authLoggedIn = AuthHolder.isLoggedIn
     LaunchedEffect(authLoggedIn) { viewModel.onAuthChanged(authLoggedIn) }
+
+    // 课表从网络刷新成功 → 把系统日历那份也跟着更新。
+    // 不更新的话，用户改了课、换了教室，日历里还是开学时那份 —— 比不同步更糟。
+    // 只在 NETWORK 来源时触发：缓存命中、示例数据都不算「课表变了」。
+    LaunchedEffect(uiState.loadResult?.timestamp) {
+        val result = uiState.loadResult
+        if (result?.source == Source.NETWORK) {
+            CourseCalendarSync.syncIfEnabled(context)
+        }
+    }
 
     // ── 深色模式 ──
     val systemDark = isSystemInDarkTheme()
@@ -162,7 +184,7 @@ private fun AppRoot(
                 isDark = isDark,
                 onRefresh = viewModel::refresh,
                 onAddEvent = { pendingFeature = "添加日程" },
-                onReminderSettings = { pendingFeature = "日程提醒" },
+                onReminderSettings = { showReminderSheet = true },
                 onOpenLogin = { openLogin() }
             )
 
@@ -184,6 +206,7 @@ private fun AppRoot(
                     scope.launch { settingsStore.setBottomBarStyle(style) }
                 },
                 onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
+                onReminderSettings = { showReminderSheet = true },
                 onLogin = { openLogin() },
                 onLogout = { viewModel.logout() }
             )
@@ -216,6 +239,68 @@ private fun AppRoot(
                 .windowInsetsPadding(WindowInsets.navigationBars)
         )
     }
+
+    // ── 课程提醒设置 ──
+    // 顶栏和「我的」页两个入口共用这一个弹窗，避免两处 UI 各写一遍、
+    // 以后改文案还得改两个地方
+    if (showReminderSheet) {
+        ReminderSettingsSheet(
+            settings = settings,
+            onDismiss = { showReminderSheet = false },
+            onEnabledChange = { enabled ->
+                scope.launch {
+                    settingsStore.setReminderEnabled(enabled)
+                    if (enabled) {
+                        CourseReminderScheduler.rescheduleAsync(context)
+                        toast(context, "已开启，未来一周的课会按设置提前提醒")
+                    } else {
+                        CourseReminderScheduler.cancelAll(context)
+                        toast(context, "已关闭课程提醒")
+                    }
+                }
+            },
+            onAdvanceChange = { minutes ->
+                // 拖滑块时每跨一档都会回调。写 DataStore、撤销+重排闹钟、
+                // 重写整套日历事件都是重活，等手指停下来再做
+                advanceJob?.cancel()
+                advanceJob = scope.launch {
+                    delay(ADVANCE_DEBOUNCE_MS)
+                    settingsStore.setReminderAdvanceMinutes(minutes)
+                    CourseReminderScheduler.rescheduleAsync(context)
+                    // 提前量变了，日历里每条事件的 VALARM 也得跟着改，否则两边说法不一致
+                    if (settings.calendarSyncEnabled) {
+                        CourseCalendarSync.sync(context, ReminderPlanner.sanitizeAdvance(minutes))
+                    }
+                }
+            },
+            onCalendarSyncChange = { enabled ->
+                scope.launch {
+                    settingsStore.setCalendarSyncEnabled(enabled)
+                    if (enabled) {
+                        val result = CourseCalendarSync.sync(context, settings.reminderAdvanceMinutes)
+                        toast(
+                            context,
+                            if (result.ok) {
+                                "已写入系统日历：${result.eventCount} 条课程"
+                            } else {
+                                "同步失败：${result.reason}"
+                            }
+                        )
+                    } else {
+                        val cleared = CourseCalendarSync.clear(context)
+                        toast(context, "已清掉日历里的 $cleared 条课程")
+                    }
+                }
+            }
+        )
+    }
+}
+
+/** 提前量滑块的落盘去抖：拖动过程中不写盘，停手后一次性生效 */
+private const val ADVANCE_DEBOUNCE_MS = 400L
+
+private fun toast(context: android.content.Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 
 /**

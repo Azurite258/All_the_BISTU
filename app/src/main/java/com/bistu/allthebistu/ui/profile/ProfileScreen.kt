@@ -82,6 +82,7 @@ import com.bistu.allthebistu.ui.components.DiscreteSlider
 import com.bistu.allthebistu.ui.components.liquidGlass
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
+import com.bistu.allthebistu.ui.reminder.advanceText
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 
 /**
@@ -105,6 +106,7 @@ fun ProfileScreen(
     onFontLevelChange: (Int) -> Unit,
     onBottomBarStyleChange: (Int) -> Unit,
     onNicknameChange: (String) -> Unit,
+    onReminderSettings: () -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -191,6 +193,23 @@ fun ProfileScreen(
                 current = settings.bottomBarStyle,
                 isDark = isDark,
                 onChange = onBottomBarStyleChange
+            )
+        }
+
+        // ══════ 提醒 ══════
+        SectionLabel("提醒")
+
+        SurfaceCard {
+            ActionRow(
+                title = "课程提醒",
+                trailing = when {
+                    settings.calendarSyncEnabled && settings.reminderEnabled ->
+                        "提前 ${advanceText(settings.reminderAdvanceMinutes)}"
+                    settings.calendarSyncEnabled -> "已同步到日历"
+                    settings.reminderEnabled -> advanceText(settings.reminderAdvanceMinutes)
+                    else -> "已关闭"
+                },
+                onClick = onReminderSettings
             )
         }
 

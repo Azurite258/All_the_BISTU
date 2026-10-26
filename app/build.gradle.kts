@@ -71,6 +71,9 @@ dependencies {
     // 偏好存储
     implementation(libs.androidx.datastore.preferences)
 
+    // 后台定时任务：课程提醒的每日兜底重排
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
     testImplementation(libs.junit)
     // JVM 单元测试需要真实的 org.json 实现（Android SDK 里只有 stub，调用即抛异常）
     testImplementation("org.json:json:20240303")

@@ -6,6 +6,27 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- ══════ 课程提醒 ══════
+      通知：Android 13 起是运行时权限，开启提醒时才申请，不开启不打扰。
+      精确闹钟：课程提醒必须在「上课前 N 分钟」这个点上响，不能靠
+      WorkManager 的 15 分钟窗口抖动（迟到 10 分钟等于没提醒）。
+        - USE_EXACT_ALARM（33+）安装即授予，本 App 用途就是课表/日程提醒，
+          属于系统认定的 calendar 类，不需要用户手动去设置里开；
+        - SCHEDULE_EXACT_ALARM 是为了 31/32 的设备兜底，33+ 上会被前者覆盖。
+      开机广播：闹钟不会跨重启存活，开机后必须重排一次。
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.USE_EXACT_ALARM"
+        tools:ignore="ExactAlarm" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 写系统日历：把整学期课程写成带提醒的日程，由系统自己弹，
+         这样即使 App 被清理掉也能收到提醒。只在用户主动开启同步时申请。 -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
     <!--
       Android 11+ 包可见性：不声明这个，代码里查不到微信装没装，
       weixin:// 的 resolveActivity 也会返回 null。只查微信，不查别的。
@@ -87,6 +108,24 @@
             android:exported="false"
             android:label="Cookie验证"
             android:theme="@style/Theme.Study1" />
+
+        <!-- 课程提醒铃声：AlarmManager 只负责叫醒，发通知和「响完立刻排下一批」在这里 -->
+        <receiver
+            android:name=".data.reminder.ReminderReceiver"
+            android:exported="false" />
+
+        <!-- 开机 / 换时区 / 改时间 / 覆盖安装后重排闹钟。
+             系统闹钟不跨重启存活，不接这个广播 = 重启一次就再也收不到提醒。 -->
+        <receiver
+            android:name=".data.reminder.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

@@ -42,6 +42,8 @@ import kotlin.math.roundToInt
  * @param value 当前挡位索引，0 起
  * @param onValueChange 挡位变化回调（只有真正改变时才回调）
  * @param steps 总挡位数
+ * @param showTicks 是否画刻度点。挡位到几十级时（比如 0-240 分钟）必须关掉，
+ *                  否则 48 个点会连成一条粗线，比不画还难看
  */
 @Composable
 fun DiscreteSlider(
@@ -49,7 +51,8 @@ fun DiscreteSlider(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     steps: Int = 3,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    showTicks: Boolean = true
 ) {
     val lastIndex = (steps - 1).coerceAtLeast(1)
     val safeValue = value.coerceIn(0, lastIndex)
@@ -143,14 +146,16 @@ fun DiscreteSlider(
             )
 
             // 中间刻度点：落在已选区间内的用白色，衬托在蓝色轨道上
-            for (i in 1 until lastIndex) {
-                val tickX = startX + span * (i.toFloat() / lastIndex)
-                drawCircle(
-                    color = if (tickX <= thumbX) Color.White.copy(alpha = 0.9f)
-                    else colors.onSurface.copy(alpha = 0.35f),
-                    radius = tickRadius,
-                    center = Offset(tickX, centerY)
-                )
+            if (showTicks) {
+                for (i in 1 until lastIndex) {
+                    val tickX = startX + span * (i.toFloat() / lastIndex)
+                    drawCircle(
+                        color = if (tickX <= thumbX) Color.White.copy(alpha = 0.9f)
+                        else colors.onSurface.copy(alpha = 0.35f),
+                        radius = tickRadius,
+                        center = Offset(tickX, centerY)
+                    )
+                }
             }
 
             // 按下光晕（M3 的状态层）
