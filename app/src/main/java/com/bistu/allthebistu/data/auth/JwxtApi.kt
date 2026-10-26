@@ -220,8 +220,13 @@ class JwxtApi(
                 requestBuilder(ENTRY_SCHEDULE).get().build()
             ).execute().use { r ->
                 val host = r.request.url.host
-                logger("ensureSession: 入口落点=$host, HTTP ${r.code}")
-                host == BistuAuth.JWXT_HOST
+                val body = r.body?.string().orEmpty()
+                val verdict = isEntryAlive(r.code, host, body)
+                logger("ensureSession: 入口落点=$host, HTTP ${r.code}, 会话可用=$verdict")
+                if (!verdict) {
+                    logger("ensureSession: 判定依据 — body 前 120 字: ${body.take(120)}")
+                }
+                verdict
             }
         }.onFailure {
             // 以前这里是静默失败：探活一抛异常就当成「会话没了」，
@@ -337,6 +342,29 @@ class JwxtApi(
             )
         }
 
+        // 业务请求自己还是可能 401：探活与业务请求之间隔着几次往返，
+        // 服务端的闲置计时完全可能正好在这个缝里到期；并发刷新也会撕掉会话。
+        // 旧代码让这个 401 一路抛到仓储层，仓储层据此把登录态、课表缓存、
+        // 头像全清掉 —— 用户看到的是「用着用着就自己退出登录了」。
+        // 实际上 TGC 还在，换张票就能继续，所以这里换一次票重试一遍。
+        return try {
+            fetchScheduleOnce(termCode)
+        } catch (e: SessionExpiredException) {
+            logger("fetchSchedule: 业务请求被判会话失效（${e.message}），换票后重试一次")
+            when (val r = auth.casLoginDetailed()) {
+                CasResult.Ok -> fetchScheduleOnce(termCode)
+                CasResult.NoTicket ->
+                    throw SessionExpiredException("统一身份认证会话已过期，请重新登录")
+                CasResult.Unreachable -> throw OffCampusException(
+                    "教务系统没接住这次请求（校外访问、上网认证未完成或教务维护）。" +
+                            "校内请下拉重试；校外需先连校园网或学校 VPN。"
+                )
+            }
+        }
+    }
+
+    /** [fetchSchedule] 的单次执行体（会话已确认可用） */
+    private suspend fun fetchScheduleOnce(termCode: String?): ScheduleData {
         // ① 确定学期
         val (actualTermCode, termName) = if (termCode != null) {
             termCode to termCode
@@ -458,6 +486,25 @@ class JwxtApi(
         return ScheduleParser.parse(rebuilt.toString(), actualTermCode)
             .copy(termWeeks = termWeeks)
     }
+}
+
+/**
+ * 教务模块入口（[JwxtApi.ENTRY_SCHEDULE]）这一次请求，能不能证明「会话还活着」。
+ *
+ * 这是「用着用着就自己退出登录」的第一道闸门，判定必须同时满足三条：
+ *  1. HTTP 2xx —— 会话没了时正方回的是 **401**，而 401 的落点 host
+ *     仍然是 `jwxt.bistu.edu.cn`。旧代码只看 host，于是把 401 当成
+ *     「会话可用」，接着业务接口再 401 一次，一路抛成「登录态已失效」，
+ *     把用户踢下线并清掉课表缓存（真机日志 2026-10-26 11:12、13:36 两次都是这样）。
+ *  2. 落点仍是 jwxt 域 —— 说明没有被认证系统重定向走。
+ *  3. 响应体不是登录页 —— 校外/会话失效时教务可能回 200 + CAS 登录页。
+ */
+internal fun isEntryAlive(code: Int, landingHost: String, body: String): Boolean {
+    if (landingHost != BistuAuth.JWXT_HOST) return false
+    if (code !in 200..299) return false
+    // 入口本身就是一张 HTML 单页应用，所以**不能**拿「是不是 HTML」判登录页，
+    // 只认统一身份认证自己的标记（与 BistuAuth.probeJwxt 保持一致）。
+    return !body.contains("统一身份认证") && !body.contains("CASTGC")
 }
 
 /**
