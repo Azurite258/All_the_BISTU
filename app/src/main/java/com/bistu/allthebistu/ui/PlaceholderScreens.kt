@@ -273,17 +273,6 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.error
                 )
             }
-
-            if (overview != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    TextButton(onClick = { showRaw = true }) {
-                        Text("查看原始数据", fontSize = 11.sp)
-                    }
-                }
-            }
         }
 
         // ── 图书馆座位（接口公开，未登录也显示）──
@@ -291,6 +280,18 @@ fun LifeScreen(modifier: Modifier = Modifier) {
 
         // ── 空教室（教务系统反查，要登录）──
         EmptyRoomCard()
+
+        // ── 查看原始数据：固定在整页最底部，不插在卡片中间 ──
+        if (overview != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TextButton(onClick = { showRaw = true }) {
+                    Text("查看原始数据", fontSize = 12.sp)
+                }
+            }
+        }
 
         Spacer(Modifier.height(100.dp))
     }

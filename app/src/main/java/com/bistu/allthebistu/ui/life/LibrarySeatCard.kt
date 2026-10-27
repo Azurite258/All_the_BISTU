@@ -75,9 +75,11 @@ fun LibrarySeatCard(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) { if (snapshot == null) load() }
 
     val snap = snapshot
-    val occupiedFraction by animateFloatAsState(
-        targetValue = snap?.occupancy ?: 0f,
-        label = "seatOccupancy"
+    // 条形填充 = **空座**占比（彩色 = 还有位置）。
+    // 之前反着做（彩色 = 已占用），同一根条上一眼看上去像「满格有座」，容易读反。
+    val availableFraction by animateFloatAsState(
+        targetValue = snap?.let { (1f - it.occupancy).coerceIn(0f, 1f) } ?: 0f,
+        label = "seatAvailable"
     )
 
     Card(
@@ -145,9 +147,10 @@ fun LibrarySeatCard(modifier: Modifier = Modifier) {
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = "空座",
-                    fontSize = 12.sp,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
+                    modifier = Modifier.padding(bottom = 5.dp)
                 )
                 Spacer(Modifier.weight(1f))
                 if (snap != null && snap.error == null) {
@@ -162,18 +165,18 @@ fun LibrarySeatCard(modifier: Modifier = Modifier) {
 
             Spacer(Modifier.height(8.dp))
 
-            // ── 占用率条：填充部分 = 已被占用的比例 ──
+            // ── 占用率条：填充部分 = 空座（彩色 = 还有位置），灰底 = 已占用 ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.20f))
             ) {
-                if (!occupiedFraction.isNaN() && occupiedFraction > 0f) {
+                if (!availableFraction.isNaN() && availableFraction > 0f) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(occupiedFraction.coerceIn(0f, 1f))
+                            .fillMaxWidth(availableFraction)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(3.dp))
                             .background(MaterialTheme.colorScheme.primary)
@@ -191,7 +194,8 @@ fun LibrarySeatCard(modifier: Modifier = Modifier) {
                         snap != null -> "共 ${snap.total} 个座位 · ${clock(snap.atMillis)} 更新"
                         else -> "正在查座位余量…"
                     },
-                    fontSize = 10.5.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     color = if (snap?.error != null) {
                         MaterialTheme.colorScheme.error
                     } else {
