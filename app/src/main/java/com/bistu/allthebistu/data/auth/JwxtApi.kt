@@ -1,5 +1,6 @@
 package com.bistu.allthebistu.data.auth
 
+import com.bistu.allthebistu.data.classroom.RoomScheduleParser
 import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.ScheduleParser
@@ -52,6 +53,20 @@ class JwxtApi(
 
         /** 考试安排 */
         const val API_EXAM = "$BASE/jwapp/sys/wdkwapp/api/wdks/queryMyExamArrangeMent.do"
+
+        /**
+         * 全校课表模块（`kbapp` 的 `qxkbcx` 子模块）。
+         *
+         * 没有「给我空教室」这种接口，能拿到的是**课程时间地点表**：
+         * 一行 = 一个教学班在某个教室、星期几、第几节、哪几周上课。
+         * 把它按「教室 × 时段」求差集才是空教室，见
+         * [com.bistu.allthebistu.data.classroom.EmptyRoomFinder]。
+         *
+         * 参数用 URL 里的 `action` 区分（这套系统一个 `.do` 按 action 分发）：
+         * - `rwsjdd` 课程时间地点表 ← 空教室用的就是它
+         */
+        const val API_ROOM_SCHEDULE = "$BASE/jwapp/sys/kbapp/modules/qxkbcx.do"
+
 
         /** 课表模块入口（建立 session 用） */
         const val ENTRY_SCHEDULE =
@@ -198,6 +213,31 @@ class JwxtApi(
             }
         return StudyReportParser.parse(raw)
     }
+
+    /**
+     * 全校课程时间地点表（空教室的原料）。
+     *
+     * 一次拉整个学期的排课记录，交给
+     * [com.bistu.allthebistu.data.classroom.RoomScheduleParser] 转成
+     * 「教室 × 周 × 星期 × 节次」的占用记录，再求差集得空教室。
+     *
+     * 为什么一次拉全学期：这套表格接口按页取（`page`/`rows`），
+     * 一学期通常一两千行，一次 2000 条足够；分页拉反而慢且容易半路失败。
+     * 真有超过 2000 行的学期，[RoomScheduleParser.Payload.total] 会大于行数，
+     * 上层可以据此提示「只拿到前 2000 条」而不是悄悄少算。
+     */
+    suspend fun fetchRoomSchedule(termCode: String): RoomScheduleParser.Payload {
+        val params = mapOf(
+            "action" to "rwsjdd",
+            "XNXQDM" to termCode,
+            "page" to "1",
+            "rows" to "2000",
+        )
+        val text = post(API_ROOM_SCHEDULE, params)
+        logger("时间地点表: ${text.length} 字符")
+        return RoomScheduleParser.parse(text)
+    }
+
 
     /** 最朴素的 GET，供不带参数的查询接口使用 */
     private suspend fun getRaw(url: String): String = withContext(Dispatchers.IO) {

@@ -47,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import com.bistu.allthebistu.R
 import com.bistu.allthebistu.data.card.PortalCardApi
 import com.bistu.allthebistu.data.prefs.SettingsStore
+import com.bistu.allthebistu.ui.life.EmptyRoomCard
 import com.bistu.allthebistu.ui.life.LibrarySeatCard
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
@@ -287,6 +288,9 @@ fun LifeScreen(modifier: Modifier = Modifier) {
 
         // ── 图书馆座位（接口公开，未登录也显示）──
         LibrarySeatCard()
+
+        // ── 空教室（教务系统反查，要登录）──
+        EmptyRoomCard()
 
         Spacer(Modifier.height(100.dp))
     }
