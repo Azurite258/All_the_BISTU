@@ -177,7 +177,6 @@ fun ProfileScreen(
         SurfaceCard {
             ActionRow(
                 title = "外观",
-                trailing = appearanceSummary(settings),
                 onClick = { showAppearance = true }
             )
         }
@@ -801,21 +800,6 @@ private fun AppearanceScreen(
     }
 }
 
-/** 一级列表上那一行摘要：深色 · 莫兰迪 · 中 · 扁平 */
-private fun appearanceSummary(settings: AppSettings): String {
-    val theme = when (settings.themeMode) {
-        ThemeMode.LIGHT -> "浅色"
-        ThemeMode.DARK -> "深色"
-        else -> "跟随系统"
-    }
-    val scheme = when (settings.colorScheme) {
-        CourseColorScheme.MORANDI -> "莫兰迪"
-        CourseColorScheme.DOPAMINE -> "多巴胺"
-        else -> "学校"
-    }
-    val bar = if (settings.bottomBarStyle == BottomBarStyle.GLASS) "光效" else "扁平"
-    return "$theme · $scheme · ${FontLevel.label(settings.fontLevel)} · $bar"
-}
 
 /** 主题三段选择。比三个 RadioButton 占的纵向空间少一半 */
 @Composable
@@ -1239,7 +1223,7 @@ private fun Divider() {
 @Composable
 private fun ActionRow(
     title: String,
-    trailing: String,
+    trailing: String? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
@@ -1258,13 +1242,15 @@ private fun ActionRow(
             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
             modifier = Modifier.weight(1f)
         )
-        Text(
-            text = trailing,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                alpha = if (enabled) 1f else 0.55f
+        trailing?.let {
+            Text(
+                text = it,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                    alpha = if (enabled) 1f else 0.55f
+                )
             )
-        )
+        }
         if (enabled) {
             Text(
                 text = " ›",
