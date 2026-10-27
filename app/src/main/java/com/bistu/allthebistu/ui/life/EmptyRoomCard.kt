@@ -70,7 +70,7 @@ import java.util.Locale
 /**
  * 生活页的「空教室」入口卡片。
  *
- * 点开是 [EmptyRoomSheet]：选教学楼 + 今天/明天 + 节次段，列出这个时段空着的教室。
+ * 点开是 [EmptyRoomSheet]：选教学楼 + 节次段，列出**今天**这个时段空着的教室。
  *
  * ## 数据怎么来的
  * 教务没有「给我空教室」的接口，也没有一次能拿全校课表的接口（模型注册表里没有），
@@ -170,7 +170,6 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
     var progress by remember { mutableStateOf(0 to 0) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    var dayOffset by remember { mutableStateOf(0) }    // 0=今天 1=明天
     var sectionIndex by remember { mutableStateOf(1) } // 默认 3-4 节
 
     // ① 教室清单 + 学期/教学周
@@ -258,7 +257,7 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
         }
     }
 
-    val target = remember(dayOffset) { dateOf(dayOffset) }
+    val target = remember { Date() }
     val weekOfTarget = remember(termWeeks, target) {
         DateUtils.currentWeekOfTermWeeks(termWeeks, isoTarget(target))
     }
@@ -318,21 +317,17 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(14.dp))
 
-            // ── 今天 / 明天 ──
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceChip("今天", dayOffset == 0) { dayOffset = 0 }
-                ChoiceChip("明天", dayOffset == 1) { dayOffset = 1 }
-            }
-
-            // ── 教学楼（教室清单里的真实楼栋）──
+            // ── 教学楼（教室清单里的真实楼栋，信息楼 A→D 在最前）──
             val buildings = remember(rooms) {
                 RoomDirectoryApi.groupByBuilding(rooms).keys.toList()
             }
             if (buildings.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // 用 FlowRow 而不是横向滚动：信息楼拆成 A-D 后一共八九个按钮，
+                // 横着滚的话「工学」那几栋藏在屏幕外，等于没有
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     buildings.forEach { b ->
                         ChoiceChip(b, building == b) { building = b }
@@ -499,14 +494,13 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun cacheKey(termCode: String, roomCode: String) = "$termCode|$roomCode"
 
 /**
- * 默认选中哪栋楼：优先文理楼A座（主教学楼，课最多），否则取分组里的第一栋。
+ * 默认选中哪栋楼：就取排序后的第一栋（信息楼A座）。
+ *
+ * 楼栋顺序由 [RoomDirectoryApi.groupByBuilding] 定好了，这里不再自己挑，
+ * 免得「第一个按钮亮着、实际选的是别的楼」。
  */
-private fun defaultBuilding(rooms: List<RoomDirectoryApi.Room>): String {
-    val keys = RoomDirectoryApi.groupByBuilding(rooms).keys
-    return keys.firstOrNull { it.startsWith("文理楼A") }
-        ?: keys.firstOrNull { it.startsWith("文理楼") }
-        ?: keys.firstOrNull().orEmpty()
-}
+private fun defaultBuilding(rooms: List<RoomDirectoryApi.Room>): String =
+    RoomDirectoryApi.groupByBuilding(rooms).keys.firstOrNull().orEmpty()
 
 /** 网络/会话失败翻译成人话 */
 private fun describe(e: Exception): String = when (e) {
@@ -515,12 +509,6 @@ private fun describe(e: Exception): String = when (e) {
     is java.net.UnknownHostException -> "网络没通（DNS 解析失败）。"
     is java.net.SocketTimeoutException -> "连接教务超时，稍后再试。"
     else -> "${e.javaClass.simpleName}: ${e.message}"
-}
-
-private fun dateOf(offsetDays: Int): Date {
-    val cal = Calendar.getInstance()
-    cal.add(Calendar.DAY_OF_YEAR, offsetDays)
-    return cal.time
 }
 
 private fun isoTarget(date: Date): String =

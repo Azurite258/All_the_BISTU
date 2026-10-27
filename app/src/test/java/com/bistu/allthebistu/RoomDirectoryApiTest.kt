@@ -37,6 +37,10 @@ class RoomDirectoryApiTest {
       {"JASMC":"XXD-205","JXLDM_DISPLAY":"信息楼 沙河校区","SFPK":"1","XXXQDM":"10",
        "XXXQDM_DISPLAY":"沙河校区","SKZWS":120.0,"NAME":"XXD-205[050330]","SFPK_DISPLAY":"是",
        "CODE":"050330","WID":"f0aa51eb","LC":2.0,"JXLDM":"05","JASLXDM":"02","DWDM":"17",
+       "JASLXDM_DISPLAY":"多媒体","DWDM_DISPLAY":"教务处"},
+      {"JASMC":"XXA-306","JXLDM_DISPLAY":"信息楼 沙河校区","SFPK":"1","XXXQDM":"10",
+       "XXXQDM_DISPLAY":"沙河校区","SKZWS":40.0,"NAME":"XXA-306[050303]","SFPK_DISPLAY":"是",
+       "CODE":"050303","WID":"f4830d2d","LC":3.0,"JXLDM":"05","JASLXDM":"02","DWDM":"17",
        "JASLXDM_DISPLAY":"多媒体","DWDM_DISPLAY":"教务处"}
     ]}}}
     """.trimIndent()
@@ -44,7 +48,7 @@ class RoomDirectoryApiTest {
     @Test
     fun `能解析出全部字段`() {
         val page = RoomDirectoryApi.parse(sample)
-        assertEquals(5, page.rooms.size)
+        assertEquals(6, page.rooms.size)
         assertEquals(686, page.total)
 
         val wla = page.rooms.first { it.name == "WLA-506" }
@@ -84,8 +88,58 @@ class RoomDirectoryApiTest {
         val grouped = RoomDirectoryApi.groupByBuilding(RoomDirectoryApi.parse(sample).rooms)
         assertTrue(grouped.containsKey("文理楼A座"))
         assertTrue(grouped.containsKey("工程训练中心"))
-        // 信息楼只有一间，楼层 2
-        assertEquals(listOf("XXD-205"), grouped.getValue("信息楼").map { it.name })
+        // 文理楼 A 座只有一间（样本里裁过），楼内排序规则由 compareRooms 保证
+        assertEquals(listOf("WLA-506"), grouped.getValue("文理楼A座").map { it.name })
+    }
+
+    /**
+     * 信息楼在教务里只有「信息楼」一个楼名，但实际分 A/B/C/D 四块。
+     * 不拆开的话一个按钮里塞几百间教室，查一次要等很久。
+     */
+    @Test
+    fun `信息楼按楼块拆开并排在最前`() {
+        val grouped = RoomDirectoryApi.groupByBuilding(RoomDirectoryApi.parse(sample).rooms)
+
+        // 前四位就是信息楼 A → D（样本里只有 A 和 D）
+        assertEquals(
+            listOf("信息楼A座", "信息楼D座", "文理楼A座", "文理楼C座"),
+            grouped.keys.take(4).toList()
+        )
+        assertEquals(listOf("XXA-306"), grouped.getValue("信息楼A座").map { it.name })
+        assertEquals(
+            listOf("XXD-205"),
+            grouped.getValue("信息楼D座").map { it.name }
+        )
+
+        // 工学类场地（工程训练中心/信控中心）排在文理楼之后
+        val keys = grouped.keys.toList()
+        assertTrue(keys.indexOf("工程训练中心") > keys.indexOf("文理楼C座"))
+        assertTrue(keys.indexOf("信控中心") > keys.indexOf("文理楼C座"))
+    }
+
+    @Test
+    fun `楼名拆分只在信息楼生效`() {
+        // 信息楼教室号自带楼块
+        assertEquals("信息楼A座", RoomDirectoryApi.refineBuilding("信息楼", "XXA-306"))
+        assertEquals("信息楼D座", RoomDirectoryApi.refineBuilding("信息楼", "XXD-207(智)"))
+        // 认不出楼块就保留原楼名，不瞎猜
+        assertEquals("信息楼", RoomDirectoryApi.refineBuilding("信息楼", "会议室"))
+        // 别的楼栋原样保留（文理楼 A/B/C 本来就是分开的三个楼名）
+        assertEquals(
+            "文理楼A座",
+            RoomDirectoryApi.refineBuilding("文理楼A座", "WLA-506")
+        )
+    }
+
+    @Test
+    fun `楼栋排序权重`() {
+        assertEquals(0, RoomDirectoryApi.buildingRank("信息楼A座"))
+        assertEquals(3, RoomDirectoryApi.buildingRank("信息楼D座"))
+        assertEquals(10, RoomDirectoryApi.buildingRank("文理楼A座"))
+        assertEquals(11, RoomDirectoryApi.buildingRank("文理楼B座"))
+        assertEquals(12, RoomDirectoryApi.buildingRank("文理楼C座"))
+        assertEquals(20, RoomDirectoryApi.buildingRank("工程训练中心"))
+        assertEquals(30, RoomDirectoryApi.buildingRank("学生发展中心"))
     }
 
     @Test

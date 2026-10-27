@@ -102,13 +102,48 @@ object RoomDirectoryApi {
         return Room(
             code = code,
             name = name,
-            building = stripCampus(row.optString("JXLDM_DISPLAY")),
+            building = refineBuilding(stripCampus(row.optString("JXLDM_DISPLAY")), name),
             campus = row.optString("XXXQDM_DISPLAY").trim(),
             floor = row.optDouble("LC", Double.NaN).takeIf { !it.isNaN() }?.toInt(),
             type = row.optString("JASLXDM_DISPLAY").trim(),
             seats = row.optDouble("SKZWS", 0.0).toInt(),
             hasSchedule = row.optString("SFPK").trim() == "1",
         )
+    }
+
+    /** 信息楼教室号的楼块前缀：`XXA-306` / `XXD-207(智)` → A / D */
+    private val INFO_BLOCK = Regex("^XX([A-D])(?![A-Za-z])")
+
+    /**
+     * 信息楼在教务里是**一整栋**（`JXLDM_DISPLAY` 都写「信息楼 沙河校区」），
+     * 但实际分 A/B/C/D 四个区，楼块就藏在教室号开头（`XXA-306`、`XXD-207`）。
+     *
+     * 不拆开的话「信息楼」一个按钮里塞几百间教室，点一下要拉很久，
+     * 而且查「D 座有没有空教室」得连着别的座一起等。
+     */
+    internal fun refineBuilding(building: String, roomName: String): String {
+        if (!building.startsWith("信息楼")) return building
+        val block = INFO_BLOCK.find(roomName)?.groupValues?.get(1) ?: return building
+        return "信息楼${block}座"
+    }
+
+    /** 信息楼四块固定排最前，按 A→D；其余楼栋走 [buildingRank] */
+    private val INFO_ORDER = listOf("信息楼A座", "信息楼B座", "信息楼C座", "信息楼D座")
+
+    /**
+     * 教学楼在筛选条里的排序权重（小的在前）：
+     * 信息楼 A→D → 文理楼 A→C → 工学类场地（工程训练中心/信控中心）→ 其他按名字。
+     */
+    internal fun buildingRank(name: String): Int {
+        INFO_ORDER.indexOf(name).let { if (it >= 0) return it }
+        if (name.startsWith("信息楼")) return INFO_ORDER.size
+        if (name.startsWith("文理楼")) {
+            val letter = name.getOrNull(3)
+            val offset = if (letter == null) 0 else (letter - 'A').coerceIn(0, 5)
+            return 10 + offset
+        }
+        if (name.startsWith("工学") || name.contains("工程训练") || name.contains("信控")) return 20
+        return 30
     }
 
     /**
@@ -126,13 +161,15 @@ object RoomDirectoryApi {
     /**
      * 按楼分组，楼内按「楼层 → 教室名数值序」排。
      *
-     * 界面上的教学楼筛选和空教室分组都按这个顺序，保证同样的数据每次排出来一样。
+     * 楼栋顺序不按字典序（中文按拼音排会乱），走 [buildingRank]：
+     * 信息楼 A→D 最前，其次文理楼，再工学类场地。
      */
     fun groupByBuilding(rooms: List<Room>): Map<String, List<Room>> =
         rooms.groupBy { it.building }
-            .toSortedMap()
-            .mapValues { (_, list) ->
-                list.sortedWith(
+            .entries
+            .sortedWith(compareBy({ buildingRank(it.key) }, { it.key }))
+            .associate { (building, list) ->
+                building to list.sortedWith(
                     compareBy<Room> { it.floor ?: Int.MAX_VALUE }
                         .thenComparator { a, b -> EmptyRoomFinder.compareRooms(a.name, b.name) }
                 )
