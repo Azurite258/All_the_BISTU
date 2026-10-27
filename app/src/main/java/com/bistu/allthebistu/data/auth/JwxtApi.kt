@@ -222,37 +222,87 @@ class JwxtApi(
     }
 
     /**
-     * 教室清单（686 间，含教学楼/楼层/座位数/教室类型）。
+     * 教室清单（实测 686 间，含教学楼/楼层/座位数/教室类型）。
      *
-     * 分页参数**没有文档**：前端是表格组件自己拼的，我无法从静态代码确认它叫
-     * `pageNumber/pageSize` 还是 `page/rows`。所以这里按可能性依次试，
-     * 哪种能拿回数据就用哪种，并把结论打进日志（只多花一两次请求，不影响体验）。
-     * 拿到稳定答案后可以把这个探测收紧。
+     * ## 必须带 `XNXQDM`
+     * 模型注册表里 `jslb` 声明了必需参数 `XNXQDM`（学年学期）。**少了它服务端不报错，
+     * 直接返回 `datas:{}` 空表**，解析出来就是 0 间——这正是 0.16 首版报
+     * 「拿到 0 间」的原因。
+     *
+     * ## 分页参数名靠试探
+     * 前端是表格组件自己拼的，从静态代码看不出叫 `pageNumber/pageSize` 还是
+     * `page/rows`，所以按可能性依次试（多花一两次请求）。响应里会回显
+     * `pageNumber/pageSize`，说明前者是主流写法，放第一位。
+     *
+     * @param termCode 学年学期，形如 `2026-2027-1`
      */
-    suspend fun fetchRoomDirectory(): RoomDirectoryApi.Page {
+    suspend fun fetchRoomDirectory(termCode: String): RoomDirectoryApi.Page {
         val attempts = listOf(
-            mapOf("pageNumber" to "1", "pageSize" to "1000"),
-            mapOf("page" to "1", "rows" to "1000"),
-            emptyMap(),
+            // 主流写法：强智表格组件把 pageNumber/pageSize 回显在响应里
+            mapOf("XNXQDM" to termCode, "pageNumber" to "1", "pageSize" to "2000"),
+            mapOf("XNXQDM" to termCode, "page" to "1", "rows" to "2000"),
+            // 兜底：某些版本把模型参数塞进 querySetting 而不是平铺表单
+            mapOf(
+                "querySetting" to
+                    """[{"name":"XNXQDM","builder":"m_value_equal","linkOpt":"AND","value":"$termCode"}]""",
+                "pageNumber" to "1",
+                "pageSize" to "2000",
+            ),
         )
 
-        var lastError: String? = null
+        var lastError = "全部请求失败"
         for (params in attempts) {
             val text = runCatching { post(API_ROOM_DIRECTORY, params) }
-                .onFailure { logger("教室清单: 参数 ${params.keys} 请求失败 ${it.message}") }
+                .onFailure { logger("教室清单: ${params.keys} 请求失败 ${it.message}") }
                 .getOrNull() ?: continue
 
             val page = runCatching { RoomDirectoryApi.parse(text) }
-                .onFailure { logger("教室清单: 参数 ${params.keys} 解析失败 ${it.message}") }
+                .onFailure { logger("教室清单: ${params.keys} 解析失败 ${it.message}") }
                 .getOrNull()
 
             if (page != null && page.rooms.isNotEmpty()) {
-                logger("教室清单: 参数 ${params.keys} 可用，拿到 ${page.rooms.size}/${page.total} 间")
-                return page
+                val rooms = fetchRemainingPages(params, page)
+                logger("教室清单: ${params.keys} 可用，拿到 ${rooms.size}/${page.total} 间")
+                return page.copy(rooms = rooms)
             }
-            lastError = "参数 ${params.keys} 拿到 0 间"
+
+            // 空表就把响应开头带上，装机后截图即可定位，不用再去翻日志
+            val snippet = text.replace(Regex("\\s+"), " ").take(180)
+            logger("教室清单: ${params.keys} 拿到 0 间，响应=$snippet")
+            lastError = "${params.keys} 拿到 0 间｜响应 $snippet"
         }
-        throw IllegalStateException("教室清单拿不到数据（${lastError ?: "全部请求失败"}）")
+        throw IllegalStateException(
+            "教室清单拿不到数据（学期 $termCode，$lastError）"
+        )
+    }
+
+    /**
+     * 服务端可能把 `pageSize` 压到自己的上限（表格组件默认 10/页），
+     * 这时只拿到第一页。按 `totalSize` 补齐剩下的页，最多 10 页（2000 条封顶足够）。
+     */
+    private suspend fun fetchRemainingPages(
+        base: Map<String, String>,
+        first: RoomDirectoryApi.Page,
+    ): List<RoomDirectoryApi.Room> {
+        val out = first.rooms.toMutableList()
+        if (first.total <= out.size) return out
+
+        val pageKey = when {
+            "pageNumber" in base -> "pageNumber"
+            "page" in base -> "page"
+            else -> return out
+        }
+
+        var n = 2
+        while (out.size < first.total && n <= 10) {
+            val text = runCatching { post(API_ROOM_DIRECTORY, base + (pageKey to "$n")) }
+                .getOrNull() ?: break
+            val page = runCatching { RoomDirectoryApi.parse(text) }.getOrNull() ?: break
+            if (page.rooms.isEmpty()) break
+            out += page.rooms
+            n++
+        }
+        return out.distinctBy { it.code }
     }
 
     /**

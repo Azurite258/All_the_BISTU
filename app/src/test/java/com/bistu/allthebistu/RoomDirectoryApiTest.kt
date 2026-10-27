@@ -4,6 +4,7 @@ import com.bistu.allthebistu.data.classroom.RoomDirectoryApi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -110,5 +111,21 @@ class RoomDirectoryApiTest {
             {"CODE":"1","JASMC":"A-101","SKZWS":40}
         ]}}}"""
         assertEquals(1, RoomDirectoryApi.parse(json).rooms.size)
+    }
+
+    /**
+     * 0.16 装机后报「教室清单拿不到数据」的真实形态：
+     * 少了必需参数 XNXQDM 时，服务端 **不报错**，只回 `datas:{}` + searchMeta。
+     *
+     * 这种响应必须抛出来，绝不能悄悄当成「0 间教室」——那样界面会显示
+     * 「这个时段教室都排满了」，把接口问题伪装成正常结果。
+     */
+    @Test
+    fun `缺少参数导致的空 datas 要抛异常而不是当成 0 间`() {
+        val json = """{"code":"0","datas":{},"searchMeta":{"name":"jslb"}}"""
+        val e = assertThrows(IllegalStateException::class.java) {
+            RoomDirectoryApi.parse(json)
+        }
+        assertTrue(e.message?.contains("rows") == true)
     }
 }

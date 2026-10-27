@@ -187,7 +187,7 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
             termCode = meta?.termCode ?: ScheduleRepository.DEFAULT_TERM
             termWeeks = dao.getTermWeeks(termCode).map { it.toTermWeek() }
 
-            val page = JwxtApi(auth).fetchRoomDirectory()
+            val page = JwxtApi(auth).fetchRoomDirectory(termCode)
             rooms = page.rooms
             building = defaultBuilding(page.rooms)
             AppLog.d("EmptyRoom", "教室清单: ${page.rooms.size}/${page.total} 间")
@@ -371,6 +371,17 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+
+                // 教室清单都没拿到就别往下算了：显示「共 0 间空着」会让人以为
+                // 真的排满了，其实是接口没返回数据（两种情况的处理方式完全不同）
+                rooms.isEmpty() -> {
+                    Text(
+                        text = "教室清单没取到，所以算不出空教室。原因见下方。",
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 busy -> {
