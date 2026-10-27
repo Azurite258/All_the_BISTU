@@ -174,6 +174,49 @@ class RoomScheduleParserTest {
         assertNull(RoomScheduleParser.parseSections(row))
     }
 
+    // ── 楼栋反推 ─────────────────────────────────────────
+
+    @Test
+    fun `文理楼教室号能反推出楼栋`() {
+        assertEquals("文理楼A", RoomScheduleParser.buildingOf("WLA-605"))
+        assertEquals("文理楼C", RoomScheduleParser.buildingOf("WLC-305(语)"))
+    }
+
+    @Test
+    fun `信息楼教室号能反推出楼栋`() {
+        assertEquals("信息楼D", RoomScheduleParser.buildingOf("XXD-202(智)"))
+    }
+
+    @Test
+    fun `工学楼和工程训练中心`() {
+        assertEquals("工学楼A", RoomScheduleParser.buildingOf("GXA-301(智)"))
+        assertEquals("工程训练中心", RoomScheduleParser.buildingOf("SJA-201"))
+    }
+
+    @Test
+    fun `认不出的教室号返回空串而不是瞎猜`() {
+        assertEquals("", RoomScheduleParser.buildingOf("学生发展中心光影剧场"))
+        assertEquals("", RoomScheduleParser.buildingOf(""))
+    }
+
+    @Test
+    fun `课表里有楼栋字段时优先用字段而不是反推`() {
+        val json = """{"code":"0","datas":{"rwsjdd":{"rows":[
+            {"JASMC":"WLA-101","JXLMC":"文理楼A座","XQ":"3","KSDJ":"1","JSDJ":"2","SKZC":"1-16"}
+        ]}}}"""
+        val parsed = RoomScheduleParser.toLessons(RoomScheduleParser.parse(json))
+        assertEquals("文理楼A座", parsed.lessons[0].building)
+    }
+
+    @Test
+    fun `没有楼栋字段时用教室号反推`() {
+        val json = """{"code":"0","datas":{"rwsjdd":{"rows":[
+            {"JASMC":"WLA-101","XQ":"3","KSDJ":"1","JSDJ":"2","SKZC":"1-16"}
+        ]}}}"""
+        val parsed = RoomScheduleParser.toLessons(RoomScheduleParser.parse(json))
+        assertEquals("文理楼A", parsed.lessons[0].building)
+    }
+
     // ── 端到端：解析完直接能查空教室 ──────────────────────
 
     @Test

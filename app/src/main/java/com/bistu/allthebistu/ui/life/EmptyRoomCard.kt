@@ -130,8 +130,15 @@ private data class RoomQueryState(
     val error: String? = null,
 )
 
-/** 选中的节次段（小节编号） */
-private val SECTION_RANGES = listOf(1 to 2, 3 to 4, 5 to 6, 7 to 8, 9 to 10, 11 to 12)
+/**
+ * 选中的节次段（小节编号）。
+ *
+ * 到 16 节：实测课表里出现过 11-14 节（晚上 18:31-21:45），
+ * 只做到 12 节会把晚上的课漏在筛选范围外。
+ */
+private val SECTION_RANGES = listOf(
+    1 to 2, 3 to 4, 5 to 6, 7 to 8, 9 to 10, 11 to 12, 13 to 14, 15 to 16,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

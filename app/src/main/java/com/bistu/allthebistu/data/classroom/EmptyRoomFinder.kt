@@ -128,6 +128,11 @@ object EmptyRoomFinder {
      * 把教务的周次字符串展开成周次集合。
      *
      * 支持实测见过的几种写法：
+     *
+     * **位图**（这套系统最常用，来自 `getMyScheduleDetail` 的 `week` 字段）：
+     * `"001111111111"` → 第 3..12 周，下标即周次、`1` 表示当周有课
+     *
+     * **区间文本**：
      * - `1-16`            → 1..16
      * - `1-8,10-16`       → 跳过 9
      * - `1-16周`           → 去掉单位
@@ -137,9 +142,21 @@ object EmptyRoomFinder {
      *
      * 解析不出来就返回**空集合**（当作「这学期不上」而不是「每周都上」）：
      * 宁可少算一间空教室，也不要把有课的教室说成空的。
+     *
+     * ⚠️ 位图和「单个周次」会撞车（`"1"` 到底是第 1 周还是「只有第 1 周有课」？
+     * 答案一样，所以不冲突）。判定门槛放在长度 ≥ 7：一个学期的周次数不可能少到 7 位以下
+     * 还能被误读成周号，而 7 位以上的纯 01 串只可能是位图。
      */
     fun parseWeeks(raw: String): Set<Int> {
         if (raw.isBlank()) return emptySet()
+
+        // ① 位图：`001111111111`
+        val trimmed = raw.trim()
+        if (trimmed.length >= 7 && trimmed.all { it == '0' || it == '1' }) {
+            val set = LinkedHashSet<Int>()
+            trimmed.forEachIndexed { i, c -> if (c == '1') set += i + 1 }
+            return set
+        }
 
         val odd = raw.contains("单")
         val even = raw.contains("双")

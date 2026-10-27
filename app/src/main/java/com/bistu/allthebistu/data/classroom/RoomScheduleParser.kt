@@ -112,7 +112,9 @@ object RoomScheduleParser {
         if (room.isEmpty()) return null
 
         val building = pick(row, "JXLMC", "JXLDM", "JXDDMC", "XXXQMC", "JXDD")
-            ?.trim().orEmpty()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: buildingOf(room)
 
         val day = parseDay(pick(row, "XQ", "XQMC", "XQJ", "XINGQI", "WEEKDAY")) ?: return null
         val (begin, end) = parseSections(row) ?: return null
@@ -140,6 +142,28 @@ object RoomScheduleParser {
             if (v.isNotEmpty() && v != "null") return v
         }
         return null
+    }
+
+    /**
+     * 从教室号反推楼栋（课表里没有楼栋字段时的兜底）。
+     *
+     * 学校教室号是「楼栋缩写-房间号」；对应关系从教务处「教室课表」页面的真实数据确认过：
+     * `WLA-313` → 文理楼A座，`WLB-602` → 文理楼B座，`XXC-309` → 信息楼C座，
+     * `SJA-201` → 工程训练中心。
+     *
+     * 认不出来就返回空串（界面按「未分楼」处理），不硬编。
+     */
+    internal fun buildingOf(room: String): String {
+        val code = room.substringBefore('-').trim().uppercase()
+        if (code.length < 2) return ""
+        val letter = code.getOrNull(2)
+        return when (code.take(2)) {
+            "WL" -> letter?.let { "文理楼$it" } ?: ""
+            "XX" -> letter?.let { "信息楼$it" } ?: ""
+            "GX" -> letter?.let { "工学楼$it" } ?: ""
+            "SJ" -> "工程训练中心"
+            else -> ""
+        }
     }
 
     /**

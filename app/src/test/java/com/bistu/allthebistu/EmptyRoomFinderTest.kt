@@ -211,4 +211,44 @@ class EmptyRoomFinderTest {
     fun `乱码解析成空集合而不是崩`() {
         assertTrue(EmptyRoomFinder.parseWeeks("第几周来着").isEmpty())
     }
+
+    // ── 位图周次（这套系统的真实格式）─────────────────────
+    //
+    // 实测 `getMyScheduleDetail` 的 week 字段是 "001111111111" 这种位图：
+    // 下标 = 周次，1 = 当周有课。以前只认 "1-16周" 文本，
+    // 会把位图读成「第 1111111111 周」，于是所有教室都被判成空的。
+
+    @Test
+    fun `位图周次`() {
+        assertEquals((3..12).toSet(), EmptyRoomFinder.parseWeeks("001111111111"))
+    }
+
+    @Test
+    fun `长位图`() {
+        assertEquals(setOf(1, 2), EmptyRoomFinder.parseWeeks("1100000000000000000"))
+    }
+
+    @Test
+    fun `七位位图`() {
+        assertEquals((1..7).toSet(), EmptyRoomFinder.parseWeeks("1111111"))
+    }
+
+    @Test
+    fun `单个数字不会被误判成位图`() {
+        assertEquals(setOf(1), EmptyRoomFinder.parseWeeks("1"))
+    }
+
+    @Test
+    fun `全零位图表示这学期不上`() {
+        assertTrue(EmptyRoomFinder.parseWeeks("000000000000").isEmpty())
+    }
+
+    @Test
+    fun `位图周次按周命中`() {
+        val l = lesson("A101", begin = 3, end = 4, weeks = EmptyRoomFinder.parseWeeks("001111111111"))
+        assertFalse(l.occupies(week = 2, day = 3, from = 3, to = 4))
+        assertTrue(l.occupies(week = 3, day = 3, from = 3, to = 4))
+        assertTrue(l.occupies(week = 12, day = 3, from = 3, to = 4))
+        assertFalse(l.occupies(week = 13, day = 3, from = 3, to = 4))
+    }
 }
