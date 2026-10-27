@@ -132,18 +132,20 @@ object RoomDirectoryApi {
 
     /**
      * 教学楼在筛选条里的排序权重（小的在前）：
-     * 信息楼 A→D → 文理楼 A→C → 工学类场地（工程训练中心/信控中心）→ 其他按名字。
+     * 信息楼 A→D → 文理楼 A→C → 工学楼 A→C → 其他（工程训练中心、信控中心…）按名字。
      */
     internal fun buildingRank(name: String): Int {
         INFO_ORDER.indexOf(name).let { if (it >= 0) return it }
         if (name.startsWith("信息楼")) return INFO_ORDER.size
-        if (name.startsWith("文理楼")) {
-            val letter = name.getOrNull(3)
-            val offset = if (letter == null) 0 else (letter - 'A').coerceIn(0, 5)
-            return 10 + offset
-        }
-        if (name.startsWith("工学") || name.contains("工程训练") || name.contains("信控")) return 20
+        if (name.startsWith("文理楼")) return 10 + blockOffset(name)
+        if (name.startsWith("工学楼")) return 20 + blockOffset(name)
         return 30
+    }
+
+    /** `文理楼B座` → 1、`工学楼C座` → 2；楼名后面不是字母就当 0 */
+    private fun blockOffset(name: String): Int {
+        val letter = name.getOrNull(3) ?: return 0
+        return (letter - 'A').coerceIn(0, 5)
     }
 
     /**
@@ -162,7 +164,7 @@ object RoomDirectoryApi {
      * 按楼分组，楼内按「楼层 → 教室名数值序」排。
      *
      * 楼栋顺序不按字典序（中文按拼音排会乱），走 [buildingRank]：
-     * 信息楼 A→D 最前，其次文理楼，再工学类场地。
+     * 信息楼 A→D 最前，其次文理楼 A→C，再工学楼 A→C。
      */
     fun groupByBuilding(rooms: List<Room>): Map<String, List<Room>> =
         rooms.groupBy { it.building }

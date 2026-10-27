@@ -138,8 +138,24 @@ class RoomDirectoryApiTest {
         assertEquals(10, RoomDirectoryApi.buildingRank("文理楼A座"))
         assertEquals(11, RoomDirectoryApi.buildingRank("文理楼B座"))
         assertEquals(12, RoomDirectoryApi.buildingRank("文理楼C座"))
-        assertEquals(20, RoomDirectoryApi.buildingRank("工程训练中心"))
+        assertEquals(20, RoomDirectoryApi.buildingRank("工学楼A座"))
+        assertEquals(22, RoomDirectoryApi.buildingRank("工学楼C座"))
+        // 工程训练中心 / 信控中心 这类场地排最后，组内按名字
+        assertEquals(30, RoomDirectoryApi.buildingRank("工程训练中心"))
         assertEquals(30, RoomDirectoryApi.buildingRank("学生发展中心"))
+    }
+
+    /** 工学楼要整组排在文理楼之后（用户要的顺序：信息 → 文理 → 工学） */
+    @Test
+    fun `工学楼排在文理楼之后`() {
+        assertTrue(
+            RoomDirectoryApi.buildingRank("工学楼A座") >
+                RoomDirectoryApi.buildingRank("文理楼C座")
+        )
+        assertTrue(
+            RoomDirectoryApi.buildingRank("工学楼C座") <
+                RoomDirectoryApi.buildingRank("工程训练中心")
+        )
     }
 
     @Test
