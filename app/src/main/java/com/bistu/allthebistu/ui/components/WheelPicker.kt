@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -136,6 +138,11 @@ fun WheelPicker(
         userScrollEnabled = enabled,
         modifier = modifier
             .height(itemHeight * visibleItems)
+            // DstIn 必须画在独立离屏图层里。
+            // 少了这一句，混合会作用到下面已经绘制的内容上——
+            // 弹窗自己的背景被渐变擦成透明，底下的课表直接透上来，
+            // 看起来就像弹窗是半透明的。
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
                 // 上下两行用 DstIn 擦掉透明度：保留本来的底色，
