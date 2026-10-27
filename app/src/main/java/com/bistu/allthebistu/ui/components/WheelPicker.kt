@@ -1,15 +1,13 @@
 package com.bistu.allthebistu.ui.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,11 +25,13 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -41,16 +41,24 @@ import kotlinx.coroutines.launch
  * 重排闹钟，手指一快就跟不上，表现出来就是「拖不动 + 卡」。
  * 滚轮靠惯性和吸附自己滑，**只在停下时回调一次**，中间过程一个回调都不发。
  *
- * 几个必须注意的实现细节：
- *  - 上下各留 `half * itemHeight` 的 contentPadding，让**首尾项也能停在正中**；
- *    没有这个 padding，0 和最大值永远滚不到中间那一行，用户根本选不到
- *  - 判断「哪一项在中间」用的是 `layoutInfo` 里各可见项占的区间去夹视口中点，
- *    而不是 `firstVisibleItemIndex + offset / itemHeight`：后者在有 contentPadding 时
- *    语义会跑偏（首项已经贴顶、padding 还没滚完的那一段算不清楚），
- *    典型症状就是「滚到头两项，选中的却永远是 0」
- *  - 外部值变化（比如「4 小时」把分钟轮锁成 0）时反向同步位置：
- *    先滚到大致位置，再按实际布局量把目标项挪到正中，不依赖上面的公式
- *  - 只在用户手停下时报值；同步滚动期间不报，避免回环
+ * ## 居中的实现（这里踩过坑，写清楚免得以后改回去）
+ *
+ * 一开始用 `contentPadding` 上下各留 `half * itemHeight` 让首尾项能停在正中，
+ * 再用 `firstVisibleItemIndex + round(offset / itemHeight)` 算中间项，**这是错的**：
+ * 带 padding 时，列表在起点（padding 还没滚完）和滚过 padding 之后，
+ * 这两个值的语义不一样。实测日志：
+ *
+ *     起点（选中第 0 项）：first=0 off=0，中间项其实就是 0
+ *     选中第 3 项：first=1 off=0，中间项却是 3
+ *
+ * 同一个 `first=1/off=0` 对应不同结果，无论怎么调公式都救不回来。
+ * 表现出来就是「打开时显示 15 分钟，重开一次变回 5 分钟」——
+ * 轮子把用户存的设置改掉了。
+ *
+ * 现在改成在列表**前后各插入 `half` 个等高空白项**，不用 padding。
+ * 这样任何时刻都有 `S = first * H + offset`，
+ * 中间项（内容下标）= `first + round(offset / H) - half`，
+ * 且 `scrollToItem(k, 0)` 恰好就是「让第 k 项居中」，不用补差。
  *
  * @param index 当前选中的项下标
  * @param count 总项数，至少 1
@@ -73,9 +81,15 @@ fun WheelPicker(
     val safeIndex = index.coerceIn(0, lastIndex)
     val half = (visibleItems / 2).coerceAtLeast(0)
     val colors = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val itemHeightPx = with(density) { itemHeight.toPx() }
+
+    // 前后各 half 个空白项，用来替代 contentPadding（原因见类注释）
+    val leading = half
+    val totalItems = count + half * 2
 
     val state = rememberLazyListState(
-        initialFirstVisibleItemIndex = (safeIndex - half).coerceAtLeast(0),
+        initialFirstVisibleItemIndex = safeIndex.coerceIn(0, (totalItems - 1).coerceAtLeast(0)),
         initialFirstVisibleItemScrollOffset = 0
     )
     val fling = rememberSnapFlingBehavior(lazyListState = state)
@@ -86,18 +100,15 @@ fun WheelPicker(
     val currentOnChange by rememberUpdatedState(onIndexChange)
     val currentSafe by rememberUpdatedState(safeIndex)
 
-    // 哪一项正压在视口中间：看哪一项的区间包含中点，比任何偏移量推导都可靠
+    // 中间项的内容下标。
+    // 注意**不要再减 leading**：滚动量 S = k * H 时第 k 项正好居中，
+    // 而前导空白项让 first == k 在这个位置成立，所以 first + round(off/H) 就是答案。
+    // 减掉 leading 会让「打开时 15 分钟被读成 5 分钟」。
     val centered by remember {
         derivedStateOf {
-            val info = state.layoutInfo
-            if (info.visibleItemsInfo.isEmpty()) {
-                currentSafe
-            } else {
-                val mid = (info.viewportStartOffset + info.viewportEndOffset) / 2
-                info.visibleItemsInfo
-                    .firstOrNull { mid >= it.offset && mid < it.offset + it.size }
-                    ?.index ?: currentSafe
-            }
+            val first = state.firstVisibleItemIndex
+            val offset = state.firstVisibleItemScrollOffset
+            (first + (offset / itemHeightPx).roundToInt()).coerceIn(0, lastIndex)
         }
     }
 
@@ -114,14 +125,15 @@ fun WheelPicker(
     // 外部值变了（联动、脏数据被清洗）→ 把轮子滚过去
     LaunchedEffect(safeIndex, lastIndex) {
         if (state.isScrollInProgress) return@LaunchedEffect
-        if (centered != safeIndex) state.centerOn(safeIndex, half)
+        if (centered != safeIndex) {
+            state.scrollToItem(safeIndex.coerceIn(0, totalItems - 1), 0)
+        }
     }
 
     LazyColumn(
         state = state,
         flingBehavior = fling,
         userScrollEnabled = enabled,
-        contentPadding = PaddingValues(vertical = itemHeight * half),
         modifier = modifier
             .height(itemHeight * visibleItems)
             .drawWithContent {
@@ -139,21 +151,27 @@ fun WheelPicker(
                 )
             }
     ) {
-        items(count) { i ->
-            val selected = i == centered
-            val distance = abs(i - centered)
+        items(totalItems) { i ->
+            val value = i - leading
+            if (value < 0 || value >= count) {
+                // 占位项：让首尾的值也能滚到中间，视觉上是一片空白
+                Spacer(Modifier.fillMaxWidth().height(itemHeight))
+                return@items
+            }
+            val selected = value == centered
+            val distance = abs(value - centered)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(itemHeight)
                     .clickable(enabled = enabled) {
                         // 点哪一行就滚到哪一行，省得非要在小小一行字上精确拖
-                        scope.launch { state.centerOn(i, half) }
+                        scope.launch { state.animateScrollToItem(i, 0) }
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = formatter(i),
+                    text = formatter(value),
                     fontSize = if (selected) 24.sp else 18.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = colors.onSurface.copy(
@@ -168,23 +186,6 @@ fun WheelPicker(
             }
         }
     }
-}
-
-/**
- * 把第 [target] 项挪到视口正中。
- *
- * 分两步：先滚到「目标项以上 half 项」的位置（到边界会被夹住），
- * 再用 `scrollBy` 按**实测布局**补掉剩下的差值。
- * 之所以不一步到位：目标项在头两项或末两项时，单靠 `scrollToItem` 的
- * offset 参数表达不出来（会要求负数偏移），实测补差才是稳的。
- */
-private suspend fun LazyListState.centerOn(target: Int, half: Int) {
-    scrollToItem((target - half).coerceAtLeast(0), 0)
-    val info = layoutInfo
-    val item = info.visibleItemsInfo.firstOrNull { it.index == target } ?: return
-    val mid = (info.viewportStartOffset + info.viewportEndOffset) / 2
-    val delta = item.offset + item.size / 2 - mid
-    if (delta != 0) scrollBy(delta.toFloat())
 }
 
 /**
