@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
@@ -311,30 +310,6 @@ private fun SemesterOverviewCard(
             )
         }
 
-        // 分类学分：通识 / 专业 / 拓展，各占一份要求
-        if (report != null && report.categories.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                report.categories.forEach { c ->
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "${formatCredit(c.earned)}/${formatCredit(c.required)}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = c.name,
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
         // 有些课没有排上课时间（线上课/安全教育），它们不在课表里但学分要算
         if (unarrangedCount > 0) {
             Spacer(Modifier.height(10.dp))
@@ -415,22 +390,16 @@ private fun TodaySummary(courses: List<Course>, nowMinutes: Int) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = if (courses.isEmpty()) "0" else courses.size.toString(),
-                fontSize = 28.sp,
+                fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = " 节课",
-                fontSize = 13.sp,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "${courses.map { it.name }.distinct().size} 门课",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = 5.dp)
             )
         }
 
