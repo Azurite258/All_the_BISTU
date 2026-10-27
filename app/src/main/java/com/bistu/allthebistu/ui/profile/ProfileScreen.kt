@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.profile
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,10 +30,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -112,6 +115,8 @@ fun ProfileScreen(
     var showAccountSheet by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    /** 外观成了二级页：一层列表里铺四组设置太挤，点进去单独改 */
+    var showAppearance by remember { mutableStateOf(false) }
 
     // 换完头像文件已变，靠这个版本号把「重新解码」这件事推给重组
     var avatarVersion by remember { mutableIntStateOf(0) }
@@ -122,6 +127,21 @@ fun ProfileScreen(
     }
 
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    // 外观二级页：整页覆盖，返回回到这里
+    if (showAppearance) {
+        AppearanceScreen(
+            settings = settings,
+            isDark = isDark,
+            onThemeModeChange = onThemeModeChange,
+            onColorSchemeChange = onColorSchemeChange,
+            onFontLevelChange = onFontLevelChange,
+            onBottomBarStyleChange = onBottomBarStyleChange,
+            onBack = { showAppearance = false },
+            modifier = modifier
+        )
+        return
+    }
 
     Column(
         modifier = modifier
@@ -153,42 +173,12 @@ fun ProfileScreen(
             }
         )
 
-        // ══════ 外观 ══════
-        SectionLabel("外观")
-
+        // ══════ 外观（二级页）：一行入口，不再是摊开的四组控件 ══════
         SurfaceCard {
-            SettingRowTitle("主题模式")
-            Spacer(Modifier.height(8.dp))
-            ThemeSegmented(
-                current = settings.themeMode,
-                onChange = onThemeModeChange
-            )
-
-            Divider()
-
-            SettingRowTitle("课程配色")
-            Spacer(Modifier.height(8.dp))
-            ColorSchemeRow(
-                current = settings.colorScheme,
-                isDark = isDark,
-                onChange = onColorSchemeChange
-            )
-
-            Divider()
-
-            FontLevelBlock(
-                level = settings.fontLevel,
-                onChange = onFontLevelChange
-            )
-
-            Divider()
-
-            SettingRowTitle("底栏风格")
-            Spacer(Modifier.height(8.dp))
-            BottomBarStyleRow(
-                current = settings.bottomBarStyle,
-                isDark = isDark,
-                onChange = onBottomBarStyleChange
+            ActionRow(
+                title = "外观",
+                trailing = appearanceSummary(settings),
+                onClick = { showAppearance = true }
             )
         }
 
@@ -703,6 +693,129 @@ private fun RadioDot(selected: Boolean) {
 // ══════════════════════════════════════════════════════════════
 // 外观设置
 // ══════════════════════════════════════════════════════════════
+
+/**
+ * 外观二级页。
+ *
+ * 四组设置（主题 / 配色 / 字体 / 底栏）原来平铺在「我的」里，一屏被它们占掉大半，
+ * 而且每改一项都要在长列表里找位置。收进二级页后一级列表只剩一行摘要。
+ *
+ * 改动**即时生效**（回调直接写 SettingsStore），所以没有「保存」按钮，
+ * 看完返回即可；顶栏返回和系统返回键都走 [onBack]。
+ */
+@Composable
+private fun AppearanceScreen(
+    settings: AppSettings,
+    isDark: Boolean,
+    onThemeModeChange: (Int) -> Unit,
+    onColorSchemeChange: (Int) -> Unit,
+    onFontLevelChange: (Int) -> Unit,
+    onBottomBarStyleChange: (Int) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // 顶栏
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Text(
+                text = "外观",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = HyperSpacing.pageHorizontal,
+                    end = HyperSpacing.pageHorizontal,
+                    top = 6.dp,
+                    bottom = 24.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SurfaceCard {
+                SettingRowTitle("主题模式")
+                Spacer(Modifier.height(8.dp))
+                ThemeSegmented(
+                    current = settings.themeMode,
+                    onChange = onThemeModeChange
+                )
+
+                Divider()
+
+                SettingRowTitle("课程配色")
+                Spacer(Modifier.height(8.dp))
+                ColorSchemeRow(
+                    current = settings.colorScheme,
+                    isDark = isDark,
+                    onChange = onColorSchemeChange
+                )
+
+                Divider()
+
+                FontLevelBlock(
+                    level = settings.fontLevel,
+                    onChange = onFontLevelChange
+                )
+
+                Divider()
+
+                SettingRowTitle("底栏风格")
+                Spacer(Modifier.height(8.dp))
+                BottomBarStyleRow(
+                    current = settings.bottomBarStyle,
+                    isDark = isDark,
+                    onChange = onBottomBarStyleChange
+                )
+            }
+
+            Text(
+                text = "改动立刻生效，不用保存，直接返回就行。",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** 一级列表上那一行摘要：深色 · 莫兰迪 · 中 · 扁平 */
+private fun appearanceSummary(settings: AppSettings): String {
+    val theme = when (settings.themeMode) {
+        ThemeMode.LIGHT -> "浅色"
+        ThemeMode.DARK -> "深色"
+        else -> "跟随系统"
+    }
+    val scheme = when (settings.colorScheme) {
+        CourseColorScheme.MORANDI -> "莫兰迪"
+        CourseColorScheme.DOPAMINE -> "多巴胺"
+        else -> "学校"
+    }
+    val bar = if (settings.bottomBarStyle == BottomBarStyle.GLASS) "光效" else "扁平"
+    return "$theme · $scheme · ${FontLevel.label(settings.fontLevel)} · $bar"
+}
 
 /** 主题三段选择。比三个 RadioButton 占的纵向空间少一半 */
 @Composable
