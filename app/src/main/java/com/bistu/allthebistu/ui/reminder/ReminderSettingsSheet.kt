@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -31,9 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -41,7 +45,7 @@ import androidx.core.content.ContextCompat
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.reminder.CourseCalendarSync
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
-import com.bistu.allthebistu.ui.components.DiscreteSlider
+import com.bistu.allthebistu.ui.components.WheelColumn
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 
 /**
@@ -63,16 +67,38 @@ fun ReminderSettingsSheet(
     onCalendarSyncChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
+    // skipPartiallyExpanded：点开就是全展开，不用再上拉一次；
+    // 返回键也因此直接关闭弹窗，而不是先缩回半高
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val advance = ReminderPlanner.sanitizeAdvance(settings.reminderAdvanceMinutes)
 
-    // 滑块自己维护一个本地值。
-    // 不能让滑块直接读 settings：拖动的每一档都要写一次 DataStore，
-    // 而 DataStore 是异步的，读回滞后会让滑块「拖不动 / 往回弹」。
+    // 滚轮自己维护一个本地值。
+    // 不能让滚轮直接读 settings：每次停下都要写一次 DataStore，
+    // 而 DataStore 是异步的，读回滞后会让轮子「滚不动 / 往回弹」。
     // 本地值实时跟手，写盘和重排交给上层去抖。
     var localAdvance by remember(settings.reminderAdvanceMinutes) {
         mutableIntStateOf(advance)
     }
+
+    val (hour, minute) = ReminderPlanner.splitAdvance(localAdvance)
+
+    fun pickAdvance(totalMinutes: Int) {
+        val next = ReminderPlanner.sanitizeAdvance(totalMinutes)
+        if (next != localAdvance) {
+            localAdvance = next
+            onAdvanceChange(next)
+        }
+    }
+
+    // 关闭态的圆点默认是 onSurfaceVariant 的灰，压在浅灰轨道上几乎糊成一团。
+    // 这里固定成纯白（深色主题下也是白点，对比反而更强），
+    // 同时把轨道压深一档，保证两种主题下都能一眼看出「关着」。
+    val switchColors = SwitchDefaults.colors(
+        uncheckedThumbColor = Color.White,
+        uncheckedTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+        uncheckedBorderColor = Color.Transparent,
+        uncheckedIconColor = Color.Transparent
+    )
 
     // 每次打开弹窗重算一次权限状态：用户可能刚在系统设置里改过
     val notificationAllowed = remember(settings.reminderEnabled) {
@@ -150,6 +176,11 @@ fun ReminderSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 全展开后内容可能仍高于可用高度（小屏 / 放大字体），
+                // 让它自己可滚，别把最底下的开关挤没了。
+                // 滚轮本身是固定高度的 LazyColumn，手势会优先被它吃掉，
+                // 只有手指落在滚轮外面时才滚整个弹窗。
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = HyperSpacing.pageHorizontal)
                 .padding(bottom = 28.dp)
         ) {
@@ -177,7 +208,11 @@ fun ReminderSettingsSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = settings.reminderEnabled, onCheckedChange = ::toggleReminder)
+                Switch(
+                    checked = settings.reminderEnabled,
+                    onCheckedChange = ::toggleReminder,
+                    colors = switchColors
+                )
             }
 
             // 权限被系统关掉时，开关亮着却不响，必须明说
@@ -209,7 +244,8 @@ fun ReminderSettingsSheet(
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = advanceText(localAdvance),
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
                     color = if (settings.reminderEnabled) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -218,36 +254,44 @@ fun ReminderSettingsSheet(
                 )
             }
 
-            DiscreteSlider(
-                value = localAdvance / ReminderPlanner.ADVANCE_STEP,
-                onValueChange = { index ->
-                    val next = index * ReminderPlanner.ADVANCE_STEP
-                    if (next != localAdvance) {
-                        localAdvance = next
-                        onAdvanceChange(next)
-                    }
-                },
-                steps = ReminderPlanner.MAX_ADVANCE / ReminderPlanner.ADVANCE_STEP + 1,
-                enabled = settings.reminderEnabled,
-                // 49 档，画刻度会连成一条线
-                showTicks = false,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            Spacer(Modifier.height(2.dp))
 
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                listOf("准时", "1 小时", "2 小时", "4 小时").forEachIndexed { index, label ->
-                    Text(
-                        text = label,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = when (index) {
-                            0 -> TextAlign.Start
-                            3 -> TextAlign.End
-                            else -> TextAlign.Center
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            // 两列滚轮：「小时」0–4 +「分钟」0–55（5 分钟一档）。
+            // 顶到 4 小时（240 分钟，上限）时分钟轮只剩 0 一项，
+            // 免得用户滚出一堆会被静默夹回去的无效值
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                WheelColumn(
+                    label = "小时",
+                    index = hour,
+                    count = ReminderPlanner.MAX_ADVANCE / 60 + 1,
+                    formatter = { it.toString() },
+                    enabled = settings.reminderEnabled,
+                    onIndexChange = { h -> pickAdvance(ReminderPlanner.joinAdvance(h, minute)) },
+                    modifier = Modifier.width(88.dp)
+                )
+                Spacer(Modifier.width(28.dp))
+                WheelColumn(
+                    label = "分钟",
+                    index = minute / ReminderPlanner.ADVANCE_STEP,
+                    count = if (hour * 60 >= ReminderPlanner.MAX_ADVANCE) {
+                        1
+                    } else {
+                        60 / ReminderPlanner.ADVANCE_STEP
+                    },
+                    formatter = { i ->
+                        (i * ReminderPlanner.ADVANCE_STEP).toString().padStart(2, '0')
+                    },
+                    enabled = settings.reminderEnabled,
+                    onIndexChange = { m ->
+                        pickAdvance(
+                            ReminderPlanner.joinAdvance(hour, m * ReminderPlanner.ADVANCE_STEP)
+                        )
+                    },
+                    modifier = Modifier.width(88.dp)
+                )
             }
 
             Spacer(Modifier.height(6.dp))
@@ -280,7 +324,8 @@ fun ReminderSettingsSheet(
                 }
                 Switch(
                     checked = settings.calendarSyncEnabled,
-                    onCheckedChange = ::toggleCalendar
+                    onCheckedChange = ::toggleCalendar,
+                    colors = switchColors
                 )
             }
 

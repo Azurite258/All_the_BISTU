@@ -61,7 +61,7 @@ object ReminderPlanner {
     const val MIN_ADVANCE = 0
     const val MAX_ADVANCE = 240
 
-    /** 滑杆步长。5 分钟一档：再细没有意义，又不是秒表 */
+    /** 档位步长。5 分钟一档：再细没有意义，又不是秒表 */
     const val ADVANCE_STEP = 5
 
     /** 默认提前 15 分钟 —— 从宿舍走到教学楼差不多就是这个时间 */
@@ -80,6 +80,28 @@ object ReminderPlanner {
         val stepped = (minutes / ADVANCE_STEP) * ADVANCE_STEP
         return stepped.coerceIn(MIN_ADVANCE, MAX_ADVANCE)
     }
+
+    /**
+     * 提前量拆成「小时、分钟」，给两个滚轮定位用。
+     *
+     * 先清洗再拆，所以传进来的脏数据（负数、不整档、超上限）
+     * 都会得到和界面上显示一致的结果 —— 不这么做就会出现
+     * 「轮子停在 4 小时，实际存的是 250 分钟」这种对不上的状态。
+     */
+    fun splitAdvance(minutes: Int): Pair<Int, Int> {
+        val safe = sanitizeAdvance(minutes)
+        return safe / 60 to safe % 60
+    }
+
+    /**
+     * 两个滚轮的选择拼回提前量（分钟）。
+     *
+     * 顶到上限时多余的分钟会被夹掉：4 小时 30 分 → 240 分钟 → 分钟轮重新显示 00。
+     * 界面上「4 小时」时分钟轮只剩 0 一项，所以正常操作走不到这条路径，
+     * 这里是防脏数据和联动时序的兜底。
+     */
+    fun joinAdvance(hours: Int, minutes: Int): Int =
+        sanitizeAdvance(hours.coerceAtLeast(0) * 60 + minutes.coerceAtLeast(0))
 
     /**
      * 计算 [fromMs, fromMs + windowDays 天) 这个窗口里需要触发的提醒。

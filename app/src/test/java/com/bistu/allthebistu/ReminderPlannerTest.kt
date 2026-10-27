@@ -346,4 +346,54 @@ class ReminderPlannerTest {
         )
         assertTrue(plans.isEmpty())
     }
+
+    // ── 双滚轮（时 / 分）的换算 ──
+    // 两个轮子各自独立滚动，拼回分钟时很容易在「4 小时 30 分」这类越界组合上出错，
+    // 一旦错了用户会觉得「轮子转了但没生效」
+
+    @Test
+    fun `提前量拆成时和分`() {
+        assertEquals(0 to 0, ReminderPlanner.splitAdvance(0))
+        assertEquals(0 to 5, ReminderPlanner.splitAdvance(5))
+        assertEquals(2 to 30, ReminderPlanner.splitAdvance(150))
+        assertEquals(4 to 0, ReminderPlanner.splitAdvance(240))
+    }
+
+    @Test
+    fun `拆分前先清洗脏数据`() {
+        // 负数
+        assertEquals(0 to 0, ReminderPlanner.splitAdvance(-30))
+        // 不整档：152 → 150，不能让轮子停在「2 小时 32 分」但实际存 150
+        assertEquals(2 to 30, ReminderPlanner.splitAdvance(152))
+        // 超上限：247 → 245 → 夹到 240
+        assertEquals(4 to 0, ReminderPlanner.splitAdvance(247))
+    }
+
+    @Test
+    fun `时和分拼回分钟`() {
+        assertEquals(5, ReminderPlanner.joinAdvance(0, 5))
+        assertEquals(150, ReminderPlanner.joinAdvance(2, 30))
+        assertEquals(240, ReminderPlanner.joinAdvance(4, 0))
+    }
+
+    @Test
+    fun `超过上限的组合被夹成四小时`() {
+        assertEquals(240, ReminderPlanner.joinAdvance(4, 30))
+        assertEquals(240, ReminderPlanner.joinAdvance(9, 55))
+        // 夹完之后分钟轮要回到 00，否则界面会显示「4 小时 30 分」但存的是 240
+        assertEquals(4 to 0, ReminderPlanner.splitAdvance(ReminderPlanner.joinAdvance(4, 30)))
+    }
+
+    @Test
+    fun `小时和分钟都为负时归零`() {
+        assertEquals(0, ReminderPlanner.joinAdvance(-1, -5))
+    }
+
+    @Test
+    fun `拆合是互逆的`() {
+        listOf(0, 5, 15, 30, 60, 95, 150, 235, 240).forEach { minutes ->
+            val (h, m) = ReminderPlanner.splitAdvance(minutes)
+            assertEquals(minutes, ReminderPlanner.joinAdvance(h, m))
+        }
+    }
 }
