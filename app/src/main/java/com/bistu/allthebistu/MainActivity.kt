@@ -206,7 +206,6 @@ private fun AppRoot(
                     scope.launch { settingsStore.setBottomBarStyle(style) }
                 },
                 onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
-                onReminderSettings = { showReminderSheet = true },
                 onLogin = { openLogin() },
                 onLogout = { viewModel.logout() }
             )

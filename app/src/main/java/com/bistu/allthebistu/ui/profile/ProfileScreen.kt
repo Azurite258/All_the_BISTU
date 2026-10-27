@@ -1,7 +1,6 @@
 package com.bistu.allthebistu.ui.profile
 
 import android.content.Context
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -82,7 +80,6 @@ import com.bistu.allthebistu.ui.components.DiscreteSlider
 import com.bistu.allthebistu.ui.components.liquidGlass
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
-import com.bistu.allthebistu.ui.reminder.advanceText
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 
 /**
@@ -106,7 +103,6 @@ fun ProfileScreen(
     onFontLevelChange: (Int) -> Unit,
     onBottomBarStyleChange: (Int) -> Unit,
     onNicknameChange: (String) -> Unit,
-    onReminderSettings: () -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -196,23 +192,6 @@ fun ProfileScreen(
             )
         }
 
-        // ══════ 提醒 ══════
-        SectionLabel("提醒")
-
-        SurfaceCard {
-            ActionRow(
-                title = "课程提醒",
-                trailing = when {
-                    settings.calendarSyncEnabled && settings.reminderEnabled ->
-                        "提前 ${advanceText(settings.reminderAdvanceMinutes)}"
-                    settings.calendarSyncEnabled -> "已同步到日历"
-                    settings.reminderEnabled -> advanceText(settings.reminderAdvanceMinutes)
-                    else -> "已关闭"
-                },
-                onClick = onReminderSettings
-            )
-        }
-
         // ══════ 其他 ══════
         SectionLabel("其他")
 
@@ -236,30 +215,6 @@ fun ProfileScreen(
                 title = "诊断日志",
                 trailing = "导出并分享",
                 onClick = { AppLog.share(context) }
-            )
-            Divider()
-            // 复现「放了一会儿就刷不出来」用：
-            // 真正的触发条件是教务会话在服务端闲置超时，要等半小时；
-            // 这里直接把本地那份教务会话作废，效果等价，但不用等。
-            // 点完杀掉 App 再进，就是「磁盘里那份会话已经死了」的现场。
-            ActionRow(
-                title = "诊断：模拟教务会话过期",
-                trailing = "复现用",
-                onClick = {
-                    val auth = com.bistu.allthebistu.ui.login.AuthHolder.auth
-                    val n = auth?.invalidateJwxtSession() ?: 0
-                    // 立刻落盘，让「磁盘里的会话已死」这个状态固定下来
-                    com.bistu.allthebistu.ui.login.AuthHolder.persist(context)
-                    Toast.makeText(
-                        context,
-                        when {
-                            n > 0 -> "已作废 $n 个教务会话并写入磁盘，杀掉 App 再进入即可验证自动换票"
-                            auth == null -> "登录实例还没建立，下拉刷新一次再点"
-                            else -> "本地没有教务会话 Cookie，可能是刚登出，重新登录一次再点"
-                        },
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
             )
         }
 

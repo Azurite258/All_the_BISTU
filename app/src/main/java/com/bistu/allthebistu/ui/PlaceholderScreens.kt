@@ -3,7 +3,6 @@ package com.bistu.allthebistu.ui
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -31,16 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -66,8 +60,10 @@ private val CardBadgeRed = Color(0xFF8E1B1B)
  *
  * 卡面样式对齐学校「信息科大 E 卡通」：
  *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 余额 + 本月消费 + 网费充值
- *  - 卡片下方是「扫一扫」「校园码」两个入口（都跳微信）
  *  - 流水不在本页展示，**点击卡片进入明细页** [CardDetailScreen]
+ *
+ * 「扫一扫」「校园码」两个入口已删（2026-10-27）：都只能把微信拉起来，
+ * 跳不到具体功能，留着是块死按钮。
  *
  * 刻意**不展示**姓名、学号、学院、班级、照片。
  *
@@ -88,10 +84,6 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(false) }
     var showRaw by remember { mutableStateOf(false) }
     var showDetail by remember { mutableStateOf(false) }
-    /** 微信相关提示（没装微信 / 调不起来） */
-    var wxTip by remember { mutableStateOf<String?>(null) }
-    /** 校园码指引弹层 */
-    var showWxGuide by remember { mutableStateOf(false) }
     /** 电费说明弹窗：第一次进生活页弹一次 */
     var showElectricNotice by remember { mutableStateOf(false) }
 
@@ -214,58 +206,6 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 }
             )
 
-            // ── 扫一扫 / 校园码（压矮版）──
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    QuickAction(
-                        label = "扫一扫",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            when {
-                                !WeChatEntry.isInstalled(context) &&
-                                    !WeChatEntry.isWeComInstalled(context) ->
-                                    wxTip = "没检测到微信。扫一扫要用微信的，装好后再点。"
-
-                                WeChatEntry.openScanner(context) -> Unit
-
-                                else -> wxTip =
-                                    "微信没能直接打开扫一扫。手动进：微信 → 右上角 + → 扫一扫。"
-                            }
-                        }
-                    ) { tint -> ScanGlyph(tint = tint, size = 24.dp) }
-
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(26.dp)
-                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
-                    )
-
-                    QuickAction(
-                        label = "校园码",
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            if (WeChatEntry.isInstalled(context) ||
-                                WeChatEntry.isWeComInstalled(context)
-                            ) {
-                                showWxGuide = true
-                            } else {
-                                wxTip = "没检测到微信。校园码在微信企业号「信息科大E卡通」里。"
-                            }
-                        }
-                    ) { tint -> BarcodeGlyph(tint = tint, size = 24.dp) }
-                }
-            }
-
             overview?.error?.let { err ->
                 Text(
                     text = err,
@@ -294,29 +234,6 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         }
 
         Spacer(Modifier.height(100.dp))
-    }
-
-    // ── 校园码指引（E 卡通在微信企业号里，外部只能送到微信门口）──
-    if (showWxGuide) {
-        CampusCodeSheet(onDismiss = { showWxGuide = false })
-    }
-
-    // ── 微信相关的失败提示 ──
-    wxTip?.let { msg ->
-        AlertDialog(
-            onDismissRequest = { wxTip = null },
-            confirmButton = {
-                TextButton(onClick = { wxTip = null }) { Text("知道了") }
-            },
-            title = { Text("跳不到微信", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
-            text = {
-                Text(
-                    text = msg,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        )
     }
 
     // ── 电费说明：第一次进生活页弹一次，讲清楚为什么这里没有电费 ──
@@ -406,130 +323,6 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-// ══════════════════════════════════════════════════════════════
-// 校园码指引
-// ══════════════════════════════════════════════════════════════
-
-/**
- * 「校园码」为什么只能跳到微信门口。
- *
- * E 卡通是学校**企业号**里的一个应用，校园码只是其中一项；码由它的服务端按时间段
- * 实时下发，外部 App 既拿不到会话也算不出来。微信的 URL Scheme 只开放到「扫一扫」
- * 这一级，没有「打开某个企业号某个应用某个页面」的入口（那要 appid + path，得对方给）。
- * 所以做指引：把微信拉起来 + 三步路径 + 一键复制名称。
- *
- * 企业微信只做**兜底**：没装微信时才引导去企业微信工作台。
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CampusCodeSheet(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    var copied by remember { mutableStateOf(false) }
-
-    val hasWeChat = remember { WeChatEntry.isInstalled(context) }
-    val hasWeCom = remember { WeChatEntry.isWeComInstalled(context) }
-    // 只有没微信的时候才切到企业微信路径
-    val onlyWeCom = !hasWeChat && hasWeCom
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = HyperSpacing.pageHorizontal)
-                .padding(bottom = 32.dp)
-        ) {
-            Text(
-                text = if (onlyWeCom) "校园码在企业微信里" else "校园码在微信企业号里",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "E 卡通是学校企业号里的一个应用，校园码只是其中一项——码由它的服务器" +
-                    "实时下发，App 拿不到也生成不了，只能带你过去。",
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(Modifier.height(18.dp))
-
-            if (onlyWeCom) {
-                WxStep("1", "企业微信 → 工作台 → 信息科大E卡通")
-            } else {
-                WxStep("1", "微信 → 通讯录 → 我的企业 → 信息科大E卡通（找不到就在微信里直接搜）")
-            }
-            WxStep("2", "进应用后点「校园码」，把码出示给扫码机")
-            WxStep("3", "充值、购电、网费也都在同一个应用里")
-
-            Spacer(Modifier.height(20.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        if (onlyWeCom) {
-                            WeChatEntry.openWeCom(context)
-                        } else {
-                            WeChatEntry.openWeChat(context)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (onlyWeCom) "打开企业微信" else "打开微信", fontSize = 14.sp)
-                }
-                OutlinedButton(
-                    onClick = {
-                        copyToClipboard(context, "信息科大E卡通")
-                        copied = true
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (copied) "已复制" else "复制名称", fontSize = 14.sp)
-                }
-            }
-        }
-    }
-}
-
-/** 指引里的一步：序号圆点 + 说明 */
-@Composable
-private fun WxStep(index: String, text: String) {
-    Row(
-        modifier = Modifier.padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                    CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = index,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = text,
-            fontSize = 13.sp,
-            lineHeight = 19.sp,
-            color = MaterialTheme.colorScheme.onSurface
-        )
     }
 }
 
@@ -837,75 +630,6 @@ private fun CardDetailScreen(
                 }
             }
         }
-    }
-}
-
-// ══════════════════════════════════════════════════════════════
-// 快捷入口
-// ══════════════════════════════════════════════════════════════
-
-@Composable
-private fun QuickAction(
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    glyph: @Composable (Color) -> Unit,
-) {
-    val tint = MaterialTheme.colorScheme.primary
-    Column(
-        modifier = modifier
-            .clickable { onClick() }
-            .padding(vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        glyph(tint)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-/** 扫码框：四角 + 中间扫描线 */
-@Composable
-private fun ScanGlyph(tint: Color, size: Dp = 24.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val s = this.size.minDimension
-        val sw = s * 0.085f
-        val c = s * 0.30f
-        val o = sw / 2f
-        fun ln(x1: Float, y1: Float, x2: Float, y2: Float) =
-            drawLine(tint, Offset(x1, y1), Offset(x2, y2), sw, StrokeCap.Round)
-
-        ln(o, c, o, o); ln(o, o, c, o)
-        ln(s - c, o, s - o, o); ln(s - o, o, s - o, c)
-        ln(o, s - c, o, s - o); ln(o, s - o, c, s - o)
-        ln(s - c, s - o, s - o, s - o); ln(s - o, s - o, s - o, s - c)
-        ln(s * 0.27f, s * 0.5f, s * 0.73f, s * 0.5f)
-    }
-}
-
-/** 条形码 */
-@Composable
-private fun BarcodeGlyph(tint: Color, size: Dp = 24.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val s = this.size.minDimension
-        val widths = listOf(0.05f, 0.09f, 0.04f, 0.11f, 0.04f, 0.08f, 0.05f)
-        val gap = s * 0.045f
-        var x = s * 0.10f
-        widths.forEach { w ->
-            val bw = s * w
-            drawRect(tint, Offset(x, s * 0.14f), Size(bw, s * 0.58f))
-            x += bw + gap
-        }
-        drawRect(
-            tint.copy(alpha = 0.55f),
-            Offset(s * 0.10f, s * 0.82f),
-            Size(s * 0.80f, s * 0.05f)
-        )
     }
 }
 
