@@ -198,13 +198,6 @@ fun StudyScreen(
 
         Spacer(Modifier.height(HyperSpacing.cardGap))
 
-        HintCard(
-            title = "接下来会做什么",
-            body = "课时统计、课程笔记、学习计划还在排队，先把今天的时间线用起来"
-        )
-
-        Spacer(Modifier.height(HyperSpacing.cardGap))
-
         // 二课积分：数据在微信公众号里，App 拿不到会话，这里只做入口和规则说明
         ErkeCard(onClick = { showErkeSheet = true })
 
