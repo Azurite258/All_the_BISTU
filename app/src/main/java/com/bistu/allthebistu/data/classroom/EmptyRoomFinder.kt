@@ -171,7 +171,8 @@ object EmptyRoomFinder {
 
         val result = LinkedHashSet<Int>()
         for (part in cleaned.split(",")) {
-            val p = part.trim()
+            // 「3-12[讲授]/某某[主讲]」这种带尾巴的文本：只留数字、短横线、波浪线
+            val p = part.trim().replace(Regex("[^0-9\\-~]"), "")
             if (p.isEmpty()) continue
             if (p.contains("-") || p.contains("~")) {
                 val bounds = p.split("-", "~")

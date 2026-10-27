@@ -1,6 +1,8 @@
 package com.bistu.allthebistu.data.auth
 
-import com.bistu.allthebistu.data.classroom.RoomScheduleParser
+import com.bistu.allthebistu.data.classroom.EmptyRoomFinder
+import com.bistu.allthebistu.data.classroom.RoomDirectoryApi
+import com.bistu.allthebistu.data.classroom.RoomTimetableParser
 import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.ScheduleParser
@@ -57,15 +59,20 @@ class JwxtApi(
         /**
          * 全校课表模块（`kbapp` 的 `qxkbcx` 子模块）。
          *
-         * 没有「给我空教室」这种接口，能拿到的是**课程时间地点表**：
-         * 一行 = 一个教学班在某个教室、星期几、第几节、哪几周上课。
-         * 把它按「教室 × 时段」求差集才是空教室，见
-         * [com.bistu.allthebistu.data.classroom.EmptyRoomFinder]。
-         *
-         * 参数用 URL 里的 `action` 区分（这套系统一个 `.do` 按 action 分发）：
-         * - `rwsjdd` 课程时间地点表 ← 空教室用的就是它
+         * ⚠️ 注意：这个模块的接口**不是** `qxkbcx.do?action=xxx` 那种分发式，
+         * 模型注册表（`GET /jxapp/sys/kbapp/modules/qxkbcx.do` 返回的 `models`）里
+         * 根本没有 `rwsjdd` 之类的动作；真正的地址是 `qxkbcx/<模型名>.do`。
+         * 早期按前端页面推测出来的 action 是错的，已废弃。
          */
-        const val API_ROOM_SCHEDULE = "$BASE/jwapp/sys/kbapp/modules/qxkbcx.do"
+        const val API_ROOM_DIRECTORY = "$BASE/jwapp/sys/kbapp/modules/qxkbcx/jslb.do"
+
+        /**
+         * 按教室查课表：`CODE` = 教室代码，`KBLX` = 01（按教室）。
+         * 参数来自 `kbbpapp/public/components/kbxs/kbxs.js`：
+         * `data: $.extend({CODE: code, KBLX: kblx}, params)`。
+         */
+        const val API_ROOM_TIMETABLE = "$BASE/jwapp/sys/kbapp/api/qxkbcx/getScheduleDetail.do"
+
 
 
         /** 课表模块入口（建立 session 用） */
@@ -215,27 +222,60 @@ class JwxtApi(
     }
 
     /**
-     * 全校课程时间地点表（空教室的原料）。
+     * 教室清单（686 间，含教学楼/楼层/座位数/教室类型）。
      *
-     * 一次拉整个学期的排课记录，交给
-     * [com.bistu.allthebistu.data.classroom.RoomScheduleParser] 转成
-     * 「教室 × 周 × 星期 × 节次」的占用记录，再求差集得空教室。
-     *
-     * 为什么一次拉全学期：这套表格接口按页取（`page`/`rows`），
-     * 一学期通常一两千行，一次 2000 条足够；分页拉反而慢且容易半路失败。
-     * 真有超过 2000 行的学期，[RoomScheduleParser.Payload.total] 会大于行数，
-     * 上层可以据此提示「只拿到前 2000 条」而不是悄悄少算。
+     * 分页参数**没有文档**：前端是表格组件自己拼的，我无法从静态代码确认它叫
+     * `pageNumber/pageSize` 还是 `page/rows`。所以这里按可能性依次试，
+     * 哪种能拿回数据就用哪种，并把结论打进日志（只多花一两次请求，不影响体验）。
+     * 拿到稳定答案后可以把这个探测收紧。
      */
-    suspend fun fetchRoomSchedule(termCode: String): RoomScheduleParser.Payload {
-        val params = mapOf(
-            "action" to "rwsjdd",
-            "XNXQDM" to termCode,
-            "page" to "1",
-            "rows" to "2000",
+    suspend fun fetchRoomDirectory(): RoomDirectoryApi.Page {
+        val attempts = listOf(
+            mapOf("pageNumber" to "1", "pageSize" to "1000"),
+            mapOf("page" to "1", "rows" to "1000"),
+            emptyMap(),
         )
-        val text = post(API_ROOM_SCHEDULE, params)
-        logger("时间地点表: ${text.length} 字符")
-        return RoomScheduleParser.parse(text)
+
+        var lastError: String? = null
+        for (params in attempts) {
+            val text = runCatching { post(API_ROOM_DIRECTORY, params) }
+                .onFailure { logger("教室清单: 参数 ${params.keys} 请求失败 ${it.message}") }
+                .getOrNull() ?: continue
+
+            val page = runCatching { RoomDirectoryApi.parse(text) }
+                .onFailure { logger("教室清单: 参数 ${params.keys} 解析失败 ${it.message}") }
+                .getOrNull()
+
+            if (page != null && page.rooms.isNotEmpty()) {
+                logger("教室清单: 参数 ${params.keys} 可用，拿到 ${page.rooms.size}/${page.total} 间")
+                return page
+            }
+            lastError = "参数 ${params.keys} 拿到 0 间"
+        }
+        throw IllegalStateException("教室清单拿不到数据（${lastError ?: "全部请求失败"}）")
+    }
+
+    /**
+     * 一间教室的整学期课表 → 占用记录。
+     *
+     * 逐间查是这套系统唯一给出「结构化时间」的方式：表格接口 `jslb` 的行里
+     * 只有教室属性，没有周次/星期/节次；`YPSJDD` 那种拼好的文本又得自己解析。
+     * 这个接口是点「课表」按钮时前端调的，返回结构和课表组件一致。
+     *
+     * 调用方负责并发控制与缓存（见 `ui/life/EmptyRoomCard.kt`）。
+     */
+    suspend fun fetchRoomTimetable(
+        termCode: String,
+        roomCode: String,
+        roomName: String,
+    ): List<EmptyRoomFinder.RoomLesson> {
+        val params = mapOf(
+            "XNXQDM" to termCode,
+            "CODE" to roomCode,
+            "KBLX" to "01",
+        )
+        val text = post(API_ROOM_TIMETABLE, params)
+        return RoomTimetableParser.parse(text, roomName)
     }
 
 

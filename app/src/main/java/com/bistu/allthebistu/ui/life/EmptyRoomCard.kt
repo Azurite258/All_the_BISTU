@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,10 +25,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,14 +50,18 @@ import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.auth.OffCampusException
 import com.bistu.allthebistu.data.auth.SessionExpiredException
 import com.bistu.allthebistu.data.classroom.EmptyRoomFinder
-import com.bistu.allthebistu.data.classroom.RoomScheduleParser
+import com.bistu.allthebistu.data.classroom.RoomDirectoryApi
 import com.bistu.allthebistu.data.db.AppDatabase
 import com.bistu.allthebistu.data.db.toTermWeek
 import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.theme.HyperSpacing
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -68,9 +72,15 @@ import java.util.Locale
  *
  * 点开是 [EmptyRoomSheet]：选教学楼 + 今天/明天 + 节次段，列出这个时段空着的教室。
  *
- * 数据是「课程时间地点表」反查出来的（教务没有直接的「空教室」接口），
- * 见 [EmptyRoomFinder]。反查规则、边界、周次解析都在那个文件里，
- * 这里只负责把选择条件传进去、把结果摆出来。
+ * ## 数据怎么来的
+ * 教务没有「给我空教室」的接口，也没有一次能拿全校课表的接口（模型注册表里没有），
+ * 所以按教室逐个查：
+ *  1. `jslb.do` 拿全部教室（686 间，含教学楼/楼层/座位数）
+ *  2. `getScheduleDetail.do?CODE=<教室代码>&KBLX=01` 逐间拿课表
+ *  3. 本地求差集（[EmptyRoomFinder]）
+ *
+ * 686 间逐间查太慢，所以**按教学楼分批**：选了哪栋楼才查哪栋（一栋 40-80 间），
+ * 6 路并发，查过的进内存缓存，同一次运行里切回来不再请求。
  */
 @Composable
 fun EmptyRoomCard(modifier: Modifier = Modifier) {
@@ -97,7 +107,7 @@ fun EmptyRoomCard(modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(3.dp))
                 Text(
                     text = if (AuthHolder.isLoggedIn) {
-                        "按教学楼、节次查这个时段哪些教室空着"
+                        "按教学楼查这个时段哪些教室空着"
                     } else {
                         "登录后可用（要问教务系统）"
                     },
@@ -121,103 +131,148 @@ fun EmptyRoomCard(modifier: Modifier = Modifier) {
     }
 }
 
-/** 一次查询需要的上下文：学期、教学周、当前选中的日期/节次 */
-private data class RoomQueryState(
-    val termCode: String = "",
-    val termWeeks: List<TermWeek> = emptyList(),
-    val parsed: RoomScheduleParser.Parsed? = null,
-    val loading: Boolean = false,
-    val error: String? = null,
-)
-
 /**
- * 选中的节次段（小节编号）。
+ * 节次段（小节编号）。
  *
  * 到 16 节：实测课表里出现过 11-14 节（晚上 18:31-21:45），
- * 只做到 12 节会把晚上的课漏在筛选范围外。
+ * 只做到 12 节会把晚课漏在筛选范围外。
  */
 private val SECTION_RANGES = listOf(
     1 to 2, 3 to 4, 5 to 6, 7 to 8, 9 to 10, 11 to 12, 13 to 14, 15 to 16,
 )
 
+/** 同一次运行内缓存「教室 → 整学期占用」，切楼回来不用重查 */
+private object RoomLessonCache {
+    private val map = HashMap<String, List<EmptyRoomFinder.RoomLesson>>()
+
+    fun get(key: String): List<EmptyRoomFinder.RoomLesson>? = synchronized(map) { map[key] }
+
+    fun put(key: String, value: List<EmptyRoomFinder.RoomLesson>) {
+        synchronized(map) { map[key] = value }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun EmptyRoomSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
-    var state by remember { mutableStateOf(RoomQueryState()) }
-    var dayOffset by remember { mutableStateOf(0) }          // 0=今天 1=明天
-    var building by remember { mutableStateOf("") }           // ""=全部
-    var sectionIndex by remember { mutableStateOf(1) }        // 默认 3-4 节
+    var termCode by remember { mutableStateOf("") }
+    var termWeeks by remember { mutableStateOf<List<TermWeek>>(emptyList()) }
+    var rooms by remember { mutableStateOf<List<RoomDirectoryApi.Room>>(emptyList()) }
+    var building by remember { mutableStateOf("") }
+    var lessons by remember {
+        mutableStateOf<Map<String, List<EmptyRoomFinder.RoomLesson>>>(emptyMap())
+    }
 
-    fun load() {
-        if (state.loading) return
+    var loadingDirectory by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0 to 0) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    var dayOffset by remember { mutableStateOf(0) }    // 0=今天 1=明天
+    var sectionIndex by remember { mutableStateOf(1) } // 默认 3-4 节
+
+    // ① 教室清单 + 学期/教学周
+    LaunchedEffect(Unit) {
         val auth = AuthHolder.auth
         if (auth == null) {
-            state = state.copy(error = "还没登录，先登录再去查")
-            return
+            error = "还没登录，先去「我的」登录一次"
+            return@LaunchedEffect
         }
-        state = state.copy(loading = true, error = null)
-        scope.launch {
-            try {
-                val dao = AppDatabase.get(context).scheduleDao()
-                val meta = dao.getLatestMeta()
-                val termCode = meta?.termCode ?: ScheduleRepository.DEFAULT_TERM
-                val weeks = dao.getTermWeeks(termCode).map { it.toTermWeek() }
+        loadingDirectory = true
+        try {
+            val dao = AppDatabase.get(context).scheduleDao()
+            val meta = dao.getLatestMeta()
+            termCode = meta?.termCode ?: ScheduleRepository.DEFAULT_TERM
+            termWeeks = dao.getTermWeeks(termCode).map { it.toTermWeek() }
 
-                val payload = JwxtApi(auth).fetchRoomSchedule(termCode)
-                val parsed = RoomScheduleParser.toLessons(payload)
-                AppLog.d(
-                    "EmptyRoom",
-                    "时间地点表: 行=${payload.rows.size} 解析=${parsed.lessons.size} " +
-                        "丢弃=${parsed.unmapped} 字段=[${parsed.sampleKeys}]"
-                )
-                if (parsed.lessons.isEmpty()) {
-                    state = state.copy(
-                        loading = false,
-                        termCode = termCode,
-                        termWeeks = weeks,
-                        error = "一条排课都没解析出来（字段对不上，字段名=${parsed.sampleKeys.ifBlank { "空" }}）",
-                    )
-                } else {
-                    state = RoomQueryState(
-                        termCode = termCode,
-                        termWeeks = weeks,
-                        parsed = parsed,
-                        loading = false,
-                        error = null,
-                    )
-                }
-            } catch (e: Exception) {
-                AppLog.e("EmptyRoom", "拉时间地点表失败", e)
-                state = state.copy(loading = false, error = describe(e))
-            }
+            val page = JwxtApi(auth).fetchRoomDirectory()
+            rooms = page.rooms
+            building = defaultBuilding(page.rooms)
+            AppLog.d("EmptyRoom", "教室清单: ${page.rooms.size}/${page.total} 间")
+        } catch (e: Exception) {
+            AppLog.e("EmptyRoom", "拉教室清单失败", e)
+            error = describe(e)
+        } finally {
+            loadingDirectory = false
         }
     }
 
-    LaunchedEffect(Unit) { load() }
+    // ② 选中教学楼后补齐这一栋的课表（已缓存的不再请求）
+    LaunchedEffect(building, termCode) {
+        val auth = AuthHolder.auth ?: return@LaunchedEffect
+        if (building.isBlank() || termCode.isBlank()) return@LaunchedEffect
+
+        val targets = rooms.filter { it.building == building }
+        if (targets.isEmpty()) return@LaunchedEffect
+
+        val missing = targets.filter { RoomLessonCache.get(cacheKey(termCode, it.code)) == null }
+        if (missing.isEmpty()) {
+            lessons = collectLessons(termCode, targets)
+            return@LaunchedEffect
+        }
+
+        busy = true
+        error = null
+        progress = 0 to missing.size
+
+        val api = JwxtApi(auth)
+        val sem = Semaphore(6)
+        var done = 0
+        val failed = java.util.Collections.synchronizedList(ArrayList<String>())
+
+        try {
+            coroutineScope {
+                missing.map { room ->
+                    async {
+                        sem.withPermit {
+                            val key = cacheKey(termCode, room.code)
+                            runCatching {
+                                api.fetchRoomTimetable(termCode, room.code, room.name)
+                            }.onSuccess {
+                                RoomLessonCache.put(key, it)
+                            }.onFailure {
+                                AppLog.w("EmptyRoom", "教室 ${room.name} 课表失败: ${it.message}")
+                                failed += room.name
+                                // 失败也写空缓存，避免切楼回来又重试一遍把界面卡住
+                                RoomLessonCache.put(key, emptyList())
+                            }
+                            done++
+                            progress = done to missing.size
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            lessons = collectLessons(termCode, targets)
+            if (failed.isNotEmpty()) {
+                error = "有 ${failed.size} 间教室没查到（${failed.take(3).joinToString("、")}…），" +
+                    "结果可能偏多，仅供参考"
+            }
+        } catch (e: Exception) {
+            AppLog.e("EmptyRoom", "拉教室课表失败", e)
+            error = describe(e)
+        } finally {
+            busy = false
+        }
+    }
 
     val target = remember(dayOffset) { dateOf(dayOffset) }
-    val weekOfTarget = remember(state.termWeeks, target) {
-        // DateUtils 的 isoFormat 是私有的，这里自己格式化一份
-        DateUtils.currentWeekOfTermWeeks(state.termWeeks, isoTarget(target))
+    val weekOfTarget = remember(termWeeks, target) {
+        DateUtils.currentWeekOfTermWeeks(termWeeks, isoTarget(target))
     }
     val dayOfWeek = remember(target) { dayOfWeekOf(target) }
 
-    val emptyRooms = remember(state.parsed, weekOfTarget, dayOfWeek, building, sectionIndex) {
-        val p = state.parsed
+    val emptyRooms = remember(lessons, weekOfTarget, dayOfWeek, building, sectionIndex) {
         val week = weekOfTarget
-        if (p == null || week == null) emptyList() else {
+        if (week == null || building.isBlank()) {
+            emptyList()
+        } else {
             val range = SECTION_RANGES[sectionIndex.coerceIn(SECTION_RANGES.indices)]
             EmptyRoomFinder.findEmpty(
-                lessons = p.lessons,
-                // 只按教学楼过滤时，也只能用「这学期排过课」的教室（见 Parsed.rooms 的注释）
-                allRooms = if (building.isBlank()) {
-                    p.rooms
-                } else {
-                    p.lessons.filter { it.building == building }.map { it.room }.distinct()
-                },
+                lessons = lessons.values.flatten(),
+                allRooms = lessons.keys.toList(),
                 week = week,
                 dayOfWeek = dayOfWeek,
                 fromSection = range.first,
@@ -230,7 +285,6 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        // 一次点开直接到最大；返回键一次关闭，不再要两下
         sheetState = sheetState,
     ) {
         Column(
@@ -241,6 +295,7 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                 .padding(bottom = 20.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // ── 标题 ──
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "空教室",
@@ -251,7 +306,7 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = buildString {
-                        if (weekOfTarget != null) append("第 ${weekOfTarget} 周 · ")
+                        if (weekOfTarget != null) append("第 $weekOfTarget 周 · ")
                         append(weekdayName(dayOfWeek))
                         append(" · ")
                         append(SimpleDateFormat("M月d日", Locale.CHINA).format(target))
@@ -259,24 +314,6 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.weight(1f))
-                if (state.loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 1.5.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Text(
-                        text = "刷新",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { load() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
             }
 
             Spacer(Modifier.height(14.dp))
@@ -287,15 +324,16 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                 ChoiceChip("明天", dayOffset == 1) { dayOffset = 1 }
             }
 
-            // ── 教学楼 ──
-            val buildings = state.parsed?.buildings.orEmpty()
+            // ── 教学楼（教室清单里的真实楼栋）──
+            val buildings = remember(rooms) {
+                RoomDirectoryApi.groupByBuilding(rooms).keys.toList()
+            }
             if (buildings.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ChoiceChip("全部", building.isBlank()) { building = "" }
                     buildings.forEach { b ->
                         ChoiceChip(b, building == b) { building = b }
                     }
@@ -309,44 +347,49 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SECTION_RANGES.forEachIndexed { i, range ->
-                    ChoiceChip(
-                        "${range.first}-${range.second} 节",
-                        sectionIndex == i,
-                    ) { sectionIndex = i }
+                    ChoiceChip("${range.first}-${range.second} 节", sectionIndex == i) {
+                        sectionIndex = i
+                    }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
+            // ── 结果区 ──
             when {
-                state.error != null -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
-                            .padding(14.dp)
-                    ) {
-                        Text(
-                            text = state.error!!,
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp,
-                            color = MaterialTheme.colorScheme.error
+                loadingDirectory -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    }
-                }
-
-                state.loading && state.parsed == null -> {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                        Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "正在拉全学期排课表…",
+                            text = "正在取教室清单…",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+
+                busy -> {
+                    Text(
+                        text = "正在查课表 ${progress.first}/${progress.second} 间…",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = {
+                            if (progress.second <= 0) 0f
+                            else progress.first.toFloat() / progress.second
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                    )
                 }
 
                 weekOfTarget == null -> {
@@ -359,14 +402,15 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
 
                 else -> {
                     Text(
-                        text = "共 ${emptyRooms.size} 间空着",
+                        text = "共 ${emptyRooms.size} 间空着" +
+                            if (building.isNotBlank()) "（$building · ${lessons.size} 间已查）" else "",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(10.dp))
                     if (emptyRooms.isEmpty()) {
                         Text(
-                            text = "这个时段所有教室都有课。换个节次或教学楼试试。",
+                            text = "这个时段这栋楼的教室都排满了。换个节次或教学楼试试。",
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -380,7 +424,9 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                                        )
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
                                     Text(
@@ -392,19 +438,37 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
                                 }
                             }
                         }
-                        Spacer(Modifier.height(14.dp))
-                        Text(
-                            text = "只含这学期排过课的教室；整学期没排课的教室不在这张表里。",
-                            fontSize = 10.sp,
-                            lineHeight = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                        )
                     }
+                }
+            }
+
+            error?.let { msg ->
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = msg,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
     }
 }
+
+/** 把这一栋的教室按「教室名 → 占用记录」组装起来（缓存里都该有了） */
+private fun collectLessons(
+    termCode: String,
+    targets: List<RoomDirectoryApi.Room>,
+): Map<String, List<EmptyRoomFinder.RoomLesson>> =
+    targets.associate { it.name to (RoomLessonCache.get(cacheKey(termCode, it.code)) ?: emptyList()) }
 
 @Composable
 private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
@@ -419,6 +483,18 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
         ),
         border = null,
     )
+}
+
+private fun cacheKey(termCode: String, roomCode: String) = "$termCode|$roomCode"
+
+/**
+ * 默认选中哪栋楼：优先文理楼A座（主教学楼，课最多），否则取分组里的第一栋。
+ */
+private fun defaultBuilding(rooms: List<RoomDirectoryApi.Room>): String {
+    val keys = RoomDirectoryApi.groupByBuilding(rooms).keys
+    return keys.firstOrNull { it.startsWith("文理楼A") }
+        ?: keys.firstOrNull { it.startsWith("文理楼") }
+        ?: keys.firstOrNull().orEmpty()
 }
 
 /** 网络/会话失败翻译成人话 */

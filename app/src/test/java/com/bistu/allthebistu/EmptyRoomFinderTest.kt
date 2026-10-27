@@ -212,6 +212,12 @@ class EmptyRoomFinderTest {
         assertTrue(EmptyRoomFinder.parseWeeks("第几周来着").isEmpty())
     }
 
+    @Test
+    fun `带讲授后缀的周次文本也能认`() {
+        // 真实数据："3-12周[讲授]/某某[主讲]"
+        assertEquals((3..12).toSet(), EmptyRoomFinder.parseWeeks("3-12周[讲授]/某某[主讲]"))
+    }
+
     // ── 位图周次（这套系统的真实格式）─────────────────────
     //
     // 实测 `getMyScheduleDetail` 的 week 字段是 "001111111111" 这种位图：
