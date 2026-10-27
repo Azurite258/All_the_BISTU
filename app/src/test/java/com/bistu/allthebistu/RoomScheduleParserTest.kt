@@ -217,6 +217,20 @@ class RoomScheduleParserTest {
         assertEquals("文理楼A", parsed.lessons[0].building)
     }
 
+    @Test
+    fun `教室课表那种字段名也能认`() {
+        // jslb（教室课表）用的是 SKXQ/SKZC/JC/JASMC 这一套
+        val json = """{"code":"0","datas":{"rows":[
+            {"JASMC":"WLA-101","JXLDM":"文理楼A","SKXQ":"2","JC":"5-6","SKZC":"001111111111","SFPK":"1"}
+        ]}}"""
+        val parsed = RoomScheduleParser.toLessons(RoomScheduleParser.parse(json))
+        assertEquals(1, parsed.lessons.size)
+        val l = parsed.lessons[0]
+        assertEquals(2, l.dayOfWeek)
+        assertEquals(5 to 6, l.beginSection to l.endSection)
+        assertEquals((3..12).toSet(), l.weeks)
+    }
+
     // ── 端到端：解析完直接能查空教室 ──────────────────────
 
     @Test

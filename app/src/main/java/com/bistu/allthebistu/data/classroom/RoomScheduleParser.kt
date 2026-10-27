@@ -116,7 +116,9 @@ object RoomScheduleParser {
             ?.takeIf { it.isNotEmpty() }
             ?: buildingOf(room)
 
-        val day = parseDay(pick(row, "XQ", "XQMC", "XQJ", "XINGQI", "WEEKDAY")) ?: return null
+        // 星期：教务「教室课表」列表里叫 SKXQ（上课星期），课程时间地点表里叫 XQ
+        val day = parseDay(pick(row, "SKXQ", "XQ", "XQMC", "XQJ", "XINGQI", "WEEKDAY"))
+            ?: return null
         val (begin, end) = parseSections(row) ?: return null
 
         val weekText = pick(row, "SKZC", "SKZCMC", "ZC", "ZCMS", "SKZCMS").orEmpty()
