@@ -47,6 +47,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.bistu.allthebistu.ui.theme.cardSurfaceColor
+import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 
 /**
  * 学期第 1 周周一的日期。
@@ -150,7 +151,11 @@ private fun ScheduleContent(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
+        // 必须是 pageBackgroundColor()，不能写死 colorScheme.background。
+        // 这里铺的是**整页底色**，写死不透明的话会把 MainActivity 最底层的
+        // WallpaperBackdrop 整个盖掉 —— 下面课表卡就算设成半透明，
+        // 透出来的也只是这层底色，壁纸在课表页等于不存在。
+        containerColor = pageBackgroundColor(),
         topBar = {
             // HyperOS 风格：不用 TopAppBar，自己画一个。
             // 注意：启用 enableEdgeToEdge 后内容会绘制到状态栏下方，
@@ -299,8 +304,12 @@ private fun ScheduleContent(
                             bottom = HyperSpacing.contentBottom
                         )
                         .clip(RoundedCornerShape(20.dp))
-                        // 有壁纸时透一点出来：这张卡占满整屏，不透的话课表页看不到壁纸
-                        .background(cardSurfaceColor(alpha = 0.72f))
+                        // 有壁纸时透出来：这张卡占满整屏，是课表页唯一挡住壁纸的东西
+                        // （格子 cellBg 在壁纸开启时是透明的，只有课程块本身不透明）。
+                        // 可见度 ≈ (1 - alpha) × (1 - 蒙层)，默认 0.40 / 0.70 → 约 18%。
+                        // 之前写 0.72 只剩 8%，肉眼基本看不出来，这次一起改小。
+                        // 想更明显让用户拖「蒙层」滑块，别改这个常量。
+                        .background(cardSurfaceColor(alpha = 0.40f))
                 ) {
                     if (data.courses.isEmpty()) {
                         // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。
