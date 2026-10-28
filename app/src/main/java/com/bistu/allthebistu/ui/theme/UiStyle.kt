@@ -67,12 +67,30 @@ object UiStyle {
     /**
      * 每种风格配套的课程配色。
      *
-     * 换风格时课块默认跟着换成这一套；用户手动改过就按风格记住，见 SettingsStore。
+     * 现在六套风格都走「跟随风格」——课块颜色由 [courseTone] 的 HSL 参数实时算，
+     * 这是与方向稿一比一复刻的要求（方向稿里课块本来就不是固定色板）。
+     * 用户显式选了学校 / 莫兰迪 / 多巴胺时才不跟随，见 SettingsStore。
      */
-    fun defaultCourseScheme(style: Int): Int = when (style) {
-        HYPEROS, MINIMAL, MATERIAL3, IOS -> CourseColorScheme.MORANDI
-        LINEAR -> CourseColorScheme.DOPAMINE
-        else -> CourseColorScheme.SCHOOL
+    fun defaultCourseScheme(@Suppress("UNUSED_PARAMETER") style: Int): Int =
+        CourseColorScheme.FOLLOW_STYLE
+
+    /**
+     * 课程块的颜色参数，**逐项照抄方向稿 `ui-lab/index.html` 的 `--course-l/s/t`**。
+     *
+     * 背景 = `hsl(h, s, l)`，文字 = `hsl(h, 48%, t)`，描边 = `hsl(h, 40%, t / .13)`。
+     * 色相 h 由课程序号从固定色相池里取，见 CourseColors.COURSE_HUES。
+     *
+     * 注意这里**不区分明暗**：方向稿里每套风格就是一套固定的课块观感，
+     * 跟着 themeMode 变会让「切风格」的辨识度被稀释。原版 / Linear 的 l 本来就很低，
+     * 那正是它们「深色风格」的一部分。
+     */
+    fun courseTone(style: Int): CourseTone = when (style) {
+        HYPEROS -> CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
+        LINEAR -> CourseTone(saturation = 0.36f, lightness = 0.22f, textLightness = 0.84f)
+        MINIMAL -> CourseTone(saturation = 0.52f, lightness = 0.91f, textLightness = 0.30f)
+        MATERIAL3 -> CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
+        IOS -> CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
+        else -> CourseTone(saturation = 0.11f, lightness = 0.34f, textLightness = 0.97f)
     }
 
     /** 课表「今天」那一列的高亮底色 */
@@ -159,6 +177,19 @@ object UiStyle {
         else -> HyperShapes
     }
 }
+
+/**
+ * 课程块的一组 HSL 参数。
+ *
+ * @param saturation 背景饱和度 0..1（方向稿 `--course-s`）
+ * @param lightness  背景明度 0..1（`--course-l`）
+ * @param textLightness 文字明度 0..1（`--course-t`），文字饱和度固定 48%
+ */
+data class CourseTone(
+    val saturation: Float,
+    val lightness: Float,
+    val textLightness: Float
+)
 
 /**
  * 当前界面风格。放在 CompositionLocal 里，是因为课表网格这样的深层组件

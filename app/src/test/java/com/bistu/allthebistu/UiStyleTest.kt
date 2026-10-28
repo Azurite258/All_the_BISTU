@@ -94,19 +94,59 @@ class UiStyleTest {
     }
 
     @Test
-    fun `每套风格都配了课程色板且各不相同`() {
+    fun `课程配色默认跟随界面风格`() {
         UiStyle.all.forEach { style ->
-            val scheme = UiStyle.defaultCourseScheme(style)
-            assertTrue(
-                "${UiStyle.label(style)} 的课程色板值不合法：$scheme",
-                scheme == CourseColorScheme.SCHOOL ||
-                    scheme == CourseColorScheme.MORANDI ||
-                    scheme == CourseColorScheme.DOPAMINE
+            assertEquals(
+                "${UiStyle.label(style)} 应默认跟随风格",
+                CourseColorScheme.FOLLOW_STYLE,
+                UiStyle.defaultCourseScheme(style)
             )
         }
-        // 至少要覆盖三套色板里的两种，否则「换风格课块颜色跟着变」是假的
-        val used = UiStyle.all.map { UiStyle.defaultCourseScheme(it) }.toSet()
-        assertTrue("六套风格指向的课程色板太单一：$used", used.size >= 2)
+    }
+
+    /**
+     * 数值来自方向稿 `ui-lab/index.html` 的 `--course-s / --course-l / --course-t`。
+     * 改这里之前先去改方向稿，否则「一比一复刻」就成了随口说说。
+     */
+    @Test
+    fun `六套风格的课程色参数与方向稿一致`() {
+        val expected = mapOf(
+            UiStyle.HYPEROS to Triple(0.62f, 0.90f, 0.30f),
+            UiStyle.LINEAR to Triple(0.36f, 0.22f, 0.84f),
+            UiStyle.MINIMAL to Triple(0.52f, 0.91f, 0.30f),
+            UiStyle.ORIGINAL to Triple(0.11f, 0.34f, 0.97f),
+            UiStyle.MATERIAL3 to Triple(0.52f, 0.88f, 0.25f),
+            UiStyle.IOS to Triple(0.74f, 0.84f, 0.26f)
+        )
+        assertEquals("方向稿里有六套风格", 6, expected.size)
+        expected.forEach { (style, v) ->
+            val t = UiStyle.courseTone(style)
+            assertEquals("${UiStyle.label(style)} 饱和度", v.first, t.saturation, 0.001f)
+            assertEquals("${UiStyle.label(style)} 明度", v.second, t.lightness, 0.001f)
+            assertEquals("${UiStyle.label(style)} 文字明度", v.third, t.textLightness, 0.001f)
+        }
+        // 六套参数不能重复，否则「换风格课块跟着变」是假的
+        assertEquals(
+            "六套风格的课程色参数有重复",
+            6,
+            UiStyle.all.map { UiStyle.courseTone(it) }.toSet().size
+        )
+    }
+
+    @Test
+    fun `跟随风格时课块文字对比度达标`() {
+        UiStyle.all.forEach { style ->
+            val tone = UiStyle.courseTone(style)
+            // 色相池有 9 个色相，逐个都要过
+            repeat(9) { i ->
+                val bg = CourseColors.styleBackground(i, tone)
+                val (fg, sub) = CourseColors.textPairStyle(i, tone, bg, isDark = false)
+                val c = CourseColors.contrastRatio(fg, bg)
+                assertTrue("${UiStyle.label(style)} 第 $i 色主文字对比度只有 $c", c >= 4.5f)
+                val cs = CourseColors.contrastRatio(sub, bg)
+                assertTrue("${UiStyle.label(style)} 第 $i 色副文字对比度只有 $cs", cs >= 3f)
+            }
+        }
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.bistu.allthebistu.ui.schedule
 
 import androidx.compose.ui.graphics.Color
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
+import com.bistu.allthebistu.ui.theme.CourseTone
+import com.bistu.allthebistu.ui.theme.UiStyle
 import kotlin.math.pow
 
 /**
@@ -17,6 +19,30 @@ import kotlin.math.pow
  * 说明取到的是色块内部而不是渐变边缘。
  */
 object CourseColors {
+
+    /**
+     * 课块色相池，**直接取自方向稿 `ui-lab/index.html` 里用到的 9 个 `--h` 值**。
+     *
+     * 方向稿的课块不是固定色板，而是 `hsl(h, --course-s, --course-l)`：
+     * 同一套色相换不同的 s/l 就是一套新观感，所以六套风格共用这 9 个色相。
+     * 顺序也是方向稿里的出现顺序，别按大小重排——重排会让同一个课程换风格后色相跳变。
+     */
+    private val COURSE_HUES = floatArrayOf(14f, 28f, 160f, 190f, 206f, 238f, 270f, 280f, 346f)
+
+    /** 取第 [index] 门课的色相（循环使用色相池） */
+    fun hueOf(index: Int): Float = COURSE_HUES[((index % COURSE_HUES.size) + COURSE_HUES.size) % COURSE_HUES.size]
+
+    /** 跟随风格时的课块底色：`hsl(h, s, l)` */
+    fun styleBackground(index: Int, tone: CourseTone): Color =
+        Color.hsl(hueOf(index), tone.saturation, tone.lightness)
+
+    /** 跟随风格时的课块主文字：`hsl(h, 48%, t)` */
+    fun styleTextColor(index: Int, tone: CourseTone): Color =
+        Color.hsl(hueOf(index), 0.48f, tone.textLightness)
+
+    /** 跟随风格时的副文字（地点/教师），比主文字再淡一档但保持同色相 */
+    fun styleSubTextColor(index: Int, tone: CourseTone): Color =
+        Color.hsl(hueOf(index), 0.40f, if (tone.textLightness > 0.5f) 0.66f else 0.42f)
 
     // ── 莫兰迪色系 ──
     // 8 个色相 × 2 个明度层 = 16 色。
@@ -92,13 +118,18 @@ object CourseColors {
         courseName: String,
         scheme: Int,
         isDark: Boolean,
-        paletteIndex: Int? = null
+        paletteIndex: Int? = null,
+        style: Int = UiStyle.DEFAULT
     ): Color {
         // 优先用调用方给的顺序索引（课表页会按课程名排好序依次分配，
         // 这样 8 门课一定拿到 8 种颜色）；没有索引时才退回按名字哈希。
         val index = paletteIndex ?: stableIndex(courseName)
 
         return when (scheme) {
+            // 跟随界面风格：按该风格的 HSL 参数实时算，与方向稿一比一
+            CourseColorScheme.FOLLOW_STYLE ->
+                styleBackground(index, UiStyle.courseTone(style))
+
             CourseColorScheme.MORANDI -> {
                 val palette = if (isDark) MORANDI_DARK else MORANDI_LIGHT
                 parse(palette[slotOf(index, palette.size)])
@@ -122,7 +153,16 @@ object CourseColors {
      * 学校配色没有固定色板，用四个真实感的浅色示例；
      * 其余两套直接取各自色板的前 4 个，所见即所得。
      */
-    fun sampleSwatches(scheme: Int, isDark: Boolean, count: Int = 4): List<Color> = when (scheme) {
+    fun sampleSwatches(
+        scheme: Int,
+        isDark: Boolean,
+        count: Int = 4,
+        style: Int = UiStyle.DEFAULT
+    ): List<Color> = when (scheme) {
+        // 跟随风格：色卡直接按当前风格的 HSL 参数算，所见即所得
+        CourseColorScheme.FOLLOW_STYLE ->
+            (0 until count).map { styleBackground(it, UiStyle.courseTone(style)) }
+
         // 色板是「色相 × 明度」交错的，直接取前 N 个会全是同一两个色相，
         // 这里按步长跳着取，预览里能看出这是一套多色相色板
         CourseColorScheme.MORANDI -> spread(if (isDark) MORANDI_DARK else MORANDI_LIGHT, count)
@@ -176,6 +216,53 @@ object CourseColors {
         val contrastWithWhite = 1.05f / (bgL + 0.05f)
         val contrastWithDark = (bgL + 0.05f) / (relativeLuminance(DarkText) + 0.05f)
         return if (contrastWithDark >= contrastWithWhite) DarkText else LightText
+    }
+
+    /**
+     * 课块描边色，照方向稿 `hsl(h, 40%, t / .13)`。
+     *
+     * 两处特例都是方向稿里明确的：
+     *  - Linear 的描边更实（`/ .2`），它整套就是靠细边框分层
+     *  - iOS 的课块是**白边 + 内高光**（`rgba(255,255,255,.55)`），
+     *    这是液态玻璃「有厚度」的线索，换成同色相暗边会立刻变回普通卡片
+     */
+    fun styleBorderColor(index: Int, tone: CourseTone, style: Int): Color = when (style) {
+        UiStyle.IOS -> Color.White.copy(alpha = 0.55f)
+        UiStyle.LINEAR -> Color.hsl(hueOf(index), 0.40f, tone.textLightness).copy(alpha = 0.20f)
+        else -> Color.hsl(hueOf(index), 0.40f, tone.textLightness).copy(alpha = 0.13f)
+    }
+
+    /**
+     * 取一门课在色相池里的序号。
+     *
+     * 课表页会传排好序的 [paletteIndex]，弹窗和预览没有，退回按名字哈希，
+     * 保证「同一门课在课表和详情弹窗里是同一个颜色」。
+     */
+    fun indexOf(courseName: String, paletteIndex: Int? = null): Int =
+        paletteIndex ?: stableIndex(courseName)
+
+    /**
+     * 跟随风格时的文字配色（主文字 + 副文字）。
+     *
+     * 方向稿用 `hsl(h, 48%, t)` 给文字上同色相的暗色，这里照做；
+     * 但某套风格的参数万一算出难读的组合，就用 WCAG 兜一道底：
+     * 低于 4.5:1 退回按亮度挑黑/白的旧逻辑。
+     */
+    fun textPairStyle(
+        index: Int,
+        tone: CourseTone,
+        background: Color,
+        isDark: Boolean
+    ): Pair<Color, Color> {
+        val title = styleTextColor(index, tone)
+        val sub = styleSubTextColor(index, tone)
+        val titleOk = contrastRatio(title, background) >= 4.5f
+        val subOk = contrastRatio(sub, background) >= 3f
+        return when {
+            titleOk && subOk -> title to sub
+            titleOk -> title to subTextColorOf(background, isDark)
+            else -> textColorOf(background, isDark) to subTextColorOf(background, isDark)
+        }
     }
 
     /** 副文字颜色（教室、时间），按同一套判断跟着主文字走 */

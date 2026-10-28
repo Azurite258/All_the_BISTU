@@ -79,6 +79,15 @@ object ThemeMode {
 }
 
 object CourseColorScheme {
+    /**
+     * 跟随界面风格（默认）。
+     *
+     * 每套风格自带一组 HSL 参数（见 [com.bistu.allthebistu.ui.theme.UiStyle.courseTone]），
+     * 课块据此实时计算，换风格课块就整套跟着变 —— 这是与方向稿一比一复刻的要求。
+     * 下面三套是用户显式指定的覆盖值，选了就不再跟随风格。
+     */
+    const val FOLLOW_STYLE = -1
+
     /** 使用教务系统返回的原始颜色 */
     const val SCHOOL = 0
     /** 莫兰迪色系：低饱和灰调 */
@@ -193,7 +202,9 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.courseSchemeFor(style)]?.let { map[style] = it }
         }
         val legacy = prefs[Keys.LEGACY_COLOR_SCHEME]
-        if (legacy != null && !map.containsKey(UiStyle.ORIGINAL)) {
+        // 0 = 学校配色，是 0.16 之前的**默认值**，区分不出「用户选过」还是「从没动过」。
+        // 当成没选过，让老用户升级后也能拿到与方向稿一致的跟随风格配色。
+        if (legacy != null && legacy != CourseColorScheme.SCHOOL && !map.containsKey(UiStyle.ORIGINAL)) {
             map[UiStyle.ORIGINAL] = legacy
         }
         return map

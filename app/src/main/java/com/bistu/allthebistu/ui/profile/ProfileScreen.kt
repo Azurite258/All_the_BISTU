@@ -86,6 +86,7 @@ import com.bistu.allthebistu.ui.schedule.CourseTypography
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
@@ -1066,10 +1067,16 @@ private fun ThemeSegmented(current: Int, onChange: (Int) -> Unit) {
     }
 }
 
-/** 三套配色：每个都是「色卡 + 名字」，选中的加勾 */
+/**
+ * 课程配色：默认「跟随」界面风格，另外三套是显式覆盖。
+ *
+ * 「跟随」放第一位，因为它是默认值，也是与方向稿一比一的那一档。
+ */
 @Composable
 private fun ColorSchemeRow(current: Int, isDark: Boolean, onChange: (Int) -> Unit) {
+    val style = LocalUiStyle.current
     val options = listOf(
+        CourseColorScheme.FOLLOW_STYLE to "跟随",
         CourseColorScheme.SCHOOL to "学校",
         CourseColorScheme.MORANDI to "莫兰迪",
         CourseColorScheme.DOPAMINE to "多巴胺"
@@ -1098,7 +1105,7 @@ private fun ColorSchemeRow(current: Int, isDark: Boolean, onChange: (Int) -> Uni
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    CourseColors.sampleSwatches(scheme, isDark).take(4).forEach { c ->
+                    CourseColors.sampleSwatches(scheme, isDark, style = style).take(4).forEach { c ->
                         Box(
                             modifier = Modifier
                                 .size(9.dp)
@@ -1337,14 +1344,21 @@ private fun FontPreview(level: Int) {
 
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val sample = "现代前沿传感技术"
+    val previewStyle = LocalUiStyle.current
     val bg = CourseColors.backgroundOf(
         originalHex = "#D3EAFD",
         courseName = sample,
-        scheme = CourseColorScheme.SCHOOL,
+        scheme = CourseColorScheme.FOLLOW_STYLE,
+        isDark = isDark,
+        style = previewStyle
+    )
+    // 预览卡要和真实课块长得一样，所以文字也走同一套
+    val (fg, sub) = CourseColors.textPairStyle(
+        index = CourseColors.indexOf(sample),
+        tone = UiStyle.courseTone(previewStyle),
+        background = bg,
         isDark = isDark
     )
-    val fg = CourseColors.textColorOf(bg, isDark)
-    val sub = CourseColors.subTextColorOf(bg, isDark)
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(

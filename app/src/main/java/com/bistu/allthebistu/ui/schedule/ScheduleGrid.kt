@@ -393,20 +393,26 @@ private fun CourseBlock(
     paletteIndex: Int? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val bgColor = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex) {
+    val uiStyleNow = LocalUiStyle.current
+    val courseIndex = CourseColors.indexOf(course.name, paletteIndex)
+    val bgColor = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex, uiStyleNow) {
         CourseColors.backgroundOf(
             originalHex = course.colorHex,
             courseName = course.name,
             scheme = colorScheme,
             isDark = isDark,
-            paletteIndex = paletteIndex
+            paletteIndex = paletteIndex,
+            style = uiStyleNow
         )
     }
-    val titleColor = remember(bgColor, isDark) {
-        CourseColors.textColorOf(bgColor, isDark)
-    }
-    val subColor = remember(bgColor, isDark) {
-        CourseColors.subTextColorOf(bgColor, isDark)
+    // 跟随风格时文字也走同色相的 HSL（方向稿的 hsl(h, 48%, t)），
+    // 其余配色方案继续用按亮度挑黑白的旧逻辑
+    val (titleColor, subColor) = remember(bgColor, isDark, colorScheme, uiStyleNow, courseIndex) {
+        if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
+            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow), bgColor, isDark)
+        } else {
+            CourseColors.textColorOf(bgColor, isDark) to CourseColors.subTextColorOf(bgColor, isDark)
+        }
     }
 
     val x = dayColumnWidth * (course.dayOfWeek - 1)
@@ -418,13 +424,27 @@ private fun CourseBlock(
     val showRoom = sections >= 2 && course.room.isNotBlank()
     val showTime = sections >= 2
 
+    val blockShape = RoundedCornerShape(LocalUiMetrics.current.courseRadius)
+    // 方向稿里每个课块都有一圈 1px 描边（iOS 是白边），少了它课块会显得「贴在纸上」
+    val blockBorder = remember(colorScheme, uiStyleNow, courseIndex) {
+        if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
+            CourseColors.styleBorderColor(courseIndex, UiStyle.courseTone(uiStyleNow), uiStyleNow)
+        } else {
+            Color.Transparent
+        }
+    }
+
     Box(
         modifier = Modifier
             .offset(x = x, y = y)
             .size(width = dayColumnWidth, height = blockHeight)
             .padding(1.5.dp)
-            .clip(RoundedCornerShape(LocalUiMetrics.current.courseRadius))
+            .clip(blockShape)
             .background(bgColor)
+            .then(
+                if (blockBorder != Color.Transparent) Modifier.border(1.dp, blockBorder, blockShape)
+                else Modifier
+            )
             // clickable 放在 clip 之后，水波纹才会被圆角裁掉
             .then(
                 if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier

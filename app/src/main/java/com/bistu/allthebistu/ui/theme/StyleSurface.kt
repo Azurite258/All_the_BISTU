@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 fun Modifier.styleCard(
     shape: Shape = RoundedCornerShape(LocalUiMetrics.current.cardRadius),
     color: Color = defaultCardColor(),
-    borderColor: Color = MaterialTheme.colorScheme.outline,
+    borderColor: Color = defaultCardBorderColor(),
 ): Modifier {
     val m = LocalUiMetrics.current
     return this
@@ -57,6 +57,20 @@ fun Modifier.styleCard(
         .background(color)
         .then(if (m.useBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
 }
+
+/**
+ * 卡片默认描边色。
+ *
+ * 液态玻璃的边必须是**近白**（方向稿 `rgba(255,255,255,.66)`）：玻璃的边缘高光
+ * 来自折射，用灰色 outline 画出来就成了普通描边，一眼看出「不是玻璃」。
+ */
+@Composable
+private fun defaultCardBorderColor(): Color =
+    if (LocalUiMetrics.current.glowBackdrop) {
+        Color.White.copy(alpha = 0.72f)
+    } else {
+        MaterialTheme.colorScheme.outline
+    }
 
 /**
  * 卡片默认底色。

@@ -27,6 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
+import com.bistu.allthebistu.data.prefs.CourseColorScheme
+import com.bistu.allthebistu.ui.theme.LocalUiStyle
+import com.bistu.allthebistu.ui.theme.UiStyle
 
 private val DayNames = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
@@ -51,16 +54,25 @@ fun CourseDetailSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // 沿用课表里的同一套配色，点开弹窗时颜色和课块对得上
-    val accent = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex) {
+    val uiStyleNow = LocalUiStyle.current
+    val courseIndex = CourseColors.indexOf(course.name, paletteIndex)
+    val accent = remember(course.colorHex, course.name, colorScheme, isDark, paletteIndex, uiStyleNow) {
         CourseColors.backgroundOf(
             originalHex = course.colorHex,
             courseName = course.name,
             scheme = colorScheme,
             isDark = isDark,
-            paletteIndex = paletteIndex
+            paletteIndex = paletteIndex,
+            style = uiStyleNow
         )
     }
-    val onAccent = remember(accent, isDark) { CourseColors.textColorOf(accent, isDark) }
+    val onAccent = remember(accent, isDark, colorScheme, uiStyleNow, courseIndex) {
+        if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
+            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow), accent, isDark).first
+        } else {
+            CourseColors.textColorOf(accent, isDark)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

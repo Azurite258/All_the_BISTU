@@ -461,11 +461,19 @@ private fun HyperIconButton(
     contentDescription: String,
     onClick: () -> Unit
 ) {
+    val m = LocalUiMetrics.current
+    // iOS 液态玻璃的顶栏按钮是半透明圆钮 + 白边（方向稿 .icon-btn），
+    // 其余风格仍是实心圆底
+    val bg = if (m.glowBackdrop) Color.White.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(bg)
+            .then(
+                if (m.glowBackdrop) Modifier.border(1.dp, Color.White.copy(alpha = 0.75f), CircleShape)
+                else Modifier
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
