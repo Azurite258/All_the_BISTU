@@ -41,6 +41,12 @@ data class UiMetrics(
     /** 卡片靠阴影分层（原版 / HyperOS）还是靠边框（其余四套） */
     val useShadow: Boolean,
     val useBorder: Boolean,
+    /** 卡片阴影高度。0 = 不用阴影。浮在浅色底上时 10dp 的默认阴影几乎看不见，所以要显式给大一点 */
+    val cardElevation: Dp = 0.dp,
+    /** 底栏是否液态玻璃材质。原版 / HyperOS / iOS 是玻璃，其余三套是不透明实心 */
+    val dockGlass: Boolean = false,
+    /** 页面背景是否需要铺一层彩色光晕（只有 iOS 液态玻璃需要——没有彩色底，玻璃透出来就是白的） */
+    val glowBackdrop: Boolean = false,
 ) {
     /**
      * 内容区底部要给底栏让出的空间。
@@ -75,7 +81,9 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         dockHeight = 68.dp,
         dockMargin = 12.dp,
         useShadow = true,
-        useBorder = false
+        useBorder = false,
+        cardElevation = 18.dp,
+        dockGlass = true
     )
 
     UiStyle.LINEAR -> UiMetrics(
@@ -137,9 +145,11 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         rowHeight = 44.dp,
         dockRadius = 32.dp,
         dockHeight = 64.dp,
-        dockMargin = 14.dp,
+        dockMargin = 16.dp,
         useShadow = false,
-        useBorder = true
+        useBorder = true,
+        dockGlass = true,
+        glowBackdrop = true
     )
 
     else -> UiMetrics(
@@ -154,7 +164,9 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         dockRadius = 33.dp,
         dockHeight = 66.dp,
         dockMargin = 12.dp,
-        useShadow = false,
-        useBorder = false
+        useShadow = true,
+        useBorder = false,
+        cardElevation = 10.dp,
+        dockGlass = true
     )
 }

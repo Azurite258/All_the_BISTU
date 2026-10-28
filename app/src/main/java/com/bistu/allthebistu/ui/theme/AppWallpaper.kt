@@ -69,12 +69,20 @@ object AppWallpaper {
 /**
  * 页面根背景色。
  *
- * 没壁纸时就是主题背景色；有壁纸时透明，让下层的壁纸露出来。
+ * - 没壁纸、也没光晕背景时就是主题背景色；
+ * - 设了壁纸时透明，让下层的壁纸露出来；
+ * - iOS 液态玻璃这种有彩色光晕的风格也返回透明，否则页面会把 [StyleGlow] 整层盖死，
+ *   玻璃就没东西可以透了 —— 这正是「看着像普通浅色主题」的原因。
+ *
  * **只该用在页面根布局上**，卡片请继续用 `colorScheme.surface`（否则文字会糊在图上）。
  */
 @Composable
 fun pageBackgroundColor(): Color =
-    if (AppWallpaper.enabled) Color.Transparent else MaterialTheme.colorScheme.background
+    if (AppWallpaper.enabled || LocalUiMetrics.current.glowBackdrop) {
+        Color.Transparent
+    } else {
+        MaterialTheme.colorScheme.background
+    }
 
 /**
  * 壁纸图层：图片铺满 + 一层主题色蒙层。

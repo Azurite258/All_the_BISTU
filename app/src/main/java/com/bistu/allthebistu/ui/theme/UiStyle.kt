@@ -70,8 +70,8 @@ object UiStyle {
      * 换风格时课块默认跟着换成这一套；用户手动改过就按风格记住，见 SettingsStore。
      */
     fun defaultCourseScheme(style: Int): Int = when (style) {
-        HYPEROS, MINIMAL, MATERIAL3 -> CourseColorScheme.MORANDI
-        LINEAR, IOS -> CourseColorScheme.DOPAMINE
+        HYPEROS, MINIMAL, MATERIAL3, IOS -> CourseColorScheme.MORANDI
+        LINEAR -> CourseColorScheme.DOPAMINE
         else -> CourseColorScheme.SCHOOL
     }
 

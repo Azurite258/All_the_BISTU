@@ -86,6 +86,7 @@ import com.bistu.allthebistu.ui.schedule.CourseTypography
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
@@ -1423,15 +1424,10 @@ private const val SCRIM_STEP = 10
 @Composable
 private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
     val m = LocalUiMetrics.current
-    val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(m.cardRadius)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (m.useShadow) Modifier.shadow(10.dp, shape) else Modifier)
-            .clip(shape)
-            .background(cs.surface)
-            .then(if (m.useBorder) Modifier.border(1.dp, cs.outline, shape) else Modifier)
+            .styleCard()
             .padding(horizontal = m.cardPadding, vertical = m.cardPadding - 2.dp),
         content = content
     )

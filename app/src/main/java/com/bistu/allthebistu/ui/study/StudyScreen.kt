@@ -30,6 +30,7 @@ import com.bistu.allthebistu.ui.schedule.ScheduleUiState
 import com.bistu.allthebistu.ui.schedule.TERM_START_DATE as TERM_START_OF_TERM
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import java.util.Calendar
 
@@ -217,8 +218,7 @@ private fun SemesterOverviewCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
-            .background(MaterialTheme.colorScheme.surface)
+            .styleCard()
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -367,8 +367,7 @@ private fun TodaySummary(courses: List<Course>, nowMinutes: Int) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
-            .background(MaterialTheme.colorScheme.surface)
+            .styleCard()
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -562,8 +561,7 @@ private fun HintCard(title: String, body: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
-            .background(MaterialTheme.colorScheme.surface)
+            .styleCard()
             .padding(16.dp)
     ) {
         Text(

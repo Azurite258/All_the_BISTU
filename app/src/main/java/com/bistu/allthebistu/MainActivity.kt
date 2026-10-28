@@ -55,6 +55,7 @@ import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.Study1Theme
+import com.bistu.allthebistu.ui.theme.StyleGlow
 import com.bistu.allthebistu.ui.theme.WallpaperBackdrop
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -117,6 +118,9 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             WallpaperBackdrop(scrim = settings.wallpaperScrim)
+                            // 没设壁纸时，让风格自己的背景层（iOS 的彩色光晕）铺上来。
+                            // 壁纸优先：用户既然选了图，就不该再叠一层色晕改它的颜色。
+                            if (!AppWallpaper.enabled) StyleGlow()
                             AppRoot(
                                 viewModel = scheduleViewModel,
                                 settings = settings,

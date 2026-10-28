@@ -47,6 +47,7 @@ import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import com.bistu.allthebistu.ui.wechat.WeChatEntry
 import kotlinx.coroutines.launch
@@ -530,8 +531,7 @@ private fun CardDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = LocalUiMetrics.current.pagePadding)
-                .clip(RoundedCornerShape(LocalUiMetrics.current.innerRadius))
-                .background(MaterialTheme.colorScheme.surface)
+                .styleCard(shape = RoundedCornerShape(LocalUiMetrics.current.innerRadius))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

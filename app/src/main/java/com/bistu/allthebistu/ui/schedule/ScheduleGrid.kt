@@ -162,7 +162,13 @@ private fun ScheduleGridBody(
     val todayTextColor = UiStyle.todayText(uiStyle, isDark)
     // 有壁纸时格子透明，让下面那层半透明卡片把壁纸透上来；
     // 无壁纸时仍是实色 surface，和以前完全一致。
-    val cellBg = if (AppWallpaper.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
+    // 格子不铺底色才能透出下层的壁纸 / iOS 光晕；铺了实色的话，
+    // 上面那张半透明卡片就白透了 —— 看着还是实心白板。
+    val cellBg = if (AppWallpaper.enabled || LocalUiMetrics.current.glowBackdrop) {
+        Color.Transparent
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
 
     // 未排课的课程（只有学分、没有节次）不能画进网格，否则会跑到画布外面
     val coursesInWeek = data.courses.filter { it.isInWeek(weekNumber) && it.isArranged }

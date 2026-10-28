@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.schedule
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,6 +44,7 @@ import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.TermWeek
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -294,23 +296,43 @@ private fun ScheduleContent(
                     if (target != pagerState.currentPage) pagerState.animateScrollToPage(target)
                 }
 
+                val metrics = LocalUiMetrics.current
+                val cardShape = RoundedCornerShape(metrics.cardRadius)
+                // 这张卡占满整屏，是课表页唯一挡住壁纸 / 光晕的东西，所以底色分三种：
+                //  - 有壁纸：透一点让照片露出来（可见度 ≈ (1-0.40) × (1-蒙层)，默认约 18%）
+                //  - iOS 液态玻璃：透一点让彩色光晕透上来，卡片才有玻璃感
+                //  - 其余：实色
+                val cardColor = when {
+                    AppWallpaper.enabled -> cardSurfaceColor(alpha = 0.40f)
+                    metrics.glowBackdrop -> MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
+                    else -> cardSurfaceColor()
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
-                            start = LocalUiMetrics.current.pagePadding,
-                            end = LocalUiMetrics.current.pagePadding,
+                            start = metrics.pagePadding,
+                            end = metrics.pagePadding,
                             // 底部留出悬浮导航栏的空间（胶囊高度 + 上下边距）
                             // 与登录引导条共用同一个常量，保证两者底边对齐
-                            bottom = LocalUiMetrics.current.contentBottom
+                            bottom = metrics.contentBottom
                         )
-                        .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
+                        .clip(cardShape)
                         // 有壁纸时透出来：这张卡占满整屏，是课表页唯一挡住壁纸的东西
                         // （格子 cellBg 在壁纸开启时是透明的，只有课程块本身不透明）。
                         // 可见度 ≈ (1 - alpha) × (1 - 蒙层)，默认 0.40 / 0.70 → 约 18%。
                         // 之前写 0.72 只剩 8%，肉眼基本看不出来，这次一起改小。
                         // 想更明显让用户拖「蒙层」滑块，别改这个常量。
-                        .background(cardSurfaceColor(alpha = 0.40f))
+                        .background(cardColor)
+                        // 靠边框分层的风格（Linear / 极简 / M3 / iOS）在这里也要有边，
+                        // 否则整屏一张白卡浮在背景上，边界完全消失
+                        .then(
+                            if (metrics.useBorder) {
+                                Modifier.border(1.dp, MaterialTheme.colorScheme.outline, cardShape)
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     if (data.courses.isEmpty()) {
                         // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。

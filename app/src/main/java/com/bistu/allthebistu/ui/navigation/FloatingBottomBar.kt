@@ -103,7 +103,12 @@ fun FloatingBottomBar(
     // 深色下药丸要更亮一点才看得出来，浅色下则要淡，否则像块灰砖
     val isDarkSurface = surfaceColor.luminance() < 0.5f
 
-    val isGlass = style == BottomBarStyle.GLASS
+    val metrics = LocalUiMetrics.current
+
+    // 材质由**界面风格**决定（原版 / HyperOS / iOS 是玻璃，其余三套实心），
+    // 「外观 → 底栏风格」里的光效开关作为额外覆盖：风格要求玻璃、或用户自己选了光效，都走玻璃。
+    // 唯一做不到的是「在玻璃风格上强制扁平」——那等于把 iOS 的液态玻璃拆掉，不再是这套风格。
+    val isGlass = metrics.dockGlass || style == BottomBarStyle.GLASS
     val hairline = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
     // 扁平模式的选中块。比最初那版（浅色 0.12 / 深色 0.22）深一档——
     // 底栏本身是纯白，选中块太淡等于没选
@@ -133,7 +138,6 @@ fun FloatingBottomBar(
 
     // 底栏的高度/圆角/外边距都跟界面风格走：
     // 原版/HyperOS/M3/iOS 是胶囊，Linear 只有 12dp（方正），极简 14dp。
-    val metrics = LocalUiMetrics.current
     val barHeight = metrics.dockHeight
     val barShape = RoundedCornerShape(metrics.dockRadius)
     val innerPadding = 5.dp
@@ -159,12 +163,22 @@ fun FloatingBottomBar(
                         .liquidGlass(
                             shape = barShape,
                             isDark = isDarkSurface,
-                            // 浅色体色比 LiquidGlass 的默认值再深一档（#E6EBF3 → #DDE4EF）：
-                            // 默认值算出来约 #E9ECF2，和纯白卡片只差 6 个色阶，
-                            // 用户反馈「对比度不够」，所以这里显式压深。
-                            // 深色模式没动——它本来就靠「比黑底亮」来分离，加深反而消失。
-                            bodyColor = if (isDarkSurface) null else Color(0xFFDDE4EF),
-                            bodyAlpha = if (isDarkSurface) 0.78f else 0.80f
+                            // 浅色体色的取法分两种：
+                            //  - iOS 液态玻璃：方向稿里是 rgba(255,255,255,.55)，要更白更透，
+                            //    靠底下的彩色光晕撑出质感，压深反而变灰板。
+                            //  - 原版 / HyperOS：没有光晕可透，得比默认值再深一档（#E6EBF3 → #DDE4EF），
+                            //    否则和纯白卡片只差 6 个色阶，用户会反馈「对比度不够」。
+                            // 深色模式都传 null——它靠「比黑底亮」分离，加深就消失了。
+                            bodyColor = when {
+                                isDarkSurface -> null
+                                metrics.glowBackdrop -> Color.White
+                                else -> Color(0xFFDDE4EF)
+                            },
+                            bodyAlpha = when {
+                                isDarkSurface -> 0.78f
+                                metrics.glowBackdrop -> 0.62f
+                                else -> 0.80f
+                            }
                         )
                 } else {
                     // 扁平：不透明实心胶囊 + 发丝描边。就是液态玻璃之前的做法
