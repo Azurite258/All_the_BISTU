@@ -5,6 +5,7 @@ import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.auth.SessionStore
 import com.bistu.allthebistu.data.prefs.AvatarStore
+import com.bistu.allthebistu.data.prefs.WallpaperStore
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.reminder.CourseCalendarSync
 import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
@@ -111,6 +112,12 @@ class UserDataCleaner(private val context: Context) {
         runCatching { AvatarStore.clear(context) }
             .onSuccess { done += "头像" }
             .onFailure { AppLog.w(TAG, "清除头像失败: ${it.message}") }
+
+        // 壁纸：图上可能就是本人照片，或宿舍/工位这种能定位到人的画面，
+        // 跟头像一样当个人信息清掉；主题/字体/底栏这些纯偏好不动。
+        runCatching { WallpaperStore.clear(context) }
+            .onSuccess { done += "壁纸" }
+            .onFailure { AppLog.w(TAG, "清除壁纸失败: ${it.message}") }
 
         runCatching { SettingsStore(context).clearNickname() }
             .onSuccess { done += "昵称" }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.bistu.allthebistu.ui.theme.AppWallpaper
 
 /**
  * 课表页的全部状态。
@@ -280,6 +281,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val cleared = UserDataCleaner(getApplication()).wipeAll()
+            // 壁纸文件刚被清掉，同步内存里的那份状态，否则界面还铺着已删的图
+            AppWallpaper.refresh(getApplication())
             AppLog.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
 
             val loaded = repository.loadSchedule()
