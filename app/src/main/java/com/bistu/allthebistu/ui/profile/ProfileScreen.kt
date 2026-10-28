@@ -190,14 +190,14 @@ fun ProfileScreen(
                 trailing = versionName(context),
                 onClick = { showAbout = true }
             )
-            Divider()
+            Divider(tight = true)
             ActionRow(
                 title = "AI 学习助手",
                 trailing = "后续开放",
                 enabled = false,
                 onClick = {}
             )
-            Divider()
+            Divider(tight = true)
             // 登录出问题时不用连电脑：日志一直在 filesDir/logs 里滚，
             // 点这里把最近两份打包分享出去，直接发给我就能定位
             ActionRow(
@@ -215,12 +215,12 @@ fun ProfileScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { showLogoutConfirm = true }
-                        .padding(vertical = 12.dp),
+                        .height(SettingRowHeight),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "退出登录",
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -1187,6 +1187,15 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/**
+ * 列表行统一高度。
+ *
+ * 外观（单行卡）、其他（多行卡）、退出登录（单行卡）三块原来高度各不相同：
+ * 外观 48dp、其他每行 24dp、退出登录 68dp，摞在一起很参差。
+ * 统一成 44dp 后：单行卡都是 12+44+12=68dp，多行卡里每一行也是 44dp。
+ */
+private val SettingRowHeight = 44.dp
+
 @Composable
 private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -1210,11 +1219,11 @@ private fun SettingRowTitle(text: String) {
 }
 
 @Composable
-private fun Divider() {
+private fun Divider(tight: Boolean = false) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp)
+            .padding(vertical = if (tight) 2.dp else 12.dp)
             .height(0.5.dp)
             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
     )
@@ -1232,7 +1241,7 @@ private fun ActionRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 2.dp),
+            .height(SettingRowHeight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
