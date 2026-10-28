@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -50,8 +51,10 @@ import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
 import com.bistu.allthebistu.ui.navigation.MainTab
 import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
+import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.Study1Theme
+import com.bistu.allthebistu.ui.theme.WallpaperBackdrop
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,12 +105,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 CompositionLocalProvider(LocalDensity provides appDensity) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        AppRoot(
-                            viewModel = scheduleViewModel,
-                            settings = settings,
-                            settingsStore = settingsStore
-                        )
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        // 设了壁纸就把底色让出来，交给下面的 WallpaperBackdrop
+                        color = if (AppWallpaper.enabled) Color.Transparent
+                        else MaterialTheme.colorScheme.surface
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            WallpaperBackdrop()
+                            AppRoot(
+                                viewModel = scheduleViewModel,
+                                settings = settings,
+                                settingsStore = settingsStore
+                            )
+                        }
                     }
                 }
             }
@@ -124,6 +135,9 @@ private fun AppRoot(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
+
+    // 壁纸文件在私有目录里，启动时读一次（之后由外观页维护）
+    LaunchedEffect(Unit) { AppWallpaper.refresh(context) }
 
     // ── 纯界面状态：不属于课表数据，留在 Compose 里 ──
     var currentTab by rememberSaveable { mutableStateOf(MainTab.SCHEDULE) }

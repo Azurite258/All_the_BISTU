@@ -83,7 +83,10 @@ import com.bistu.allthebistu.ui.components.DiscreteSlider
 import com.bistu.allthebistu.ui.components.liquidGlass
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
+import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
+import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 
 /**
  * 「我的」页。
@@ -146,7 +149,7 @@ fun ProfileScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(pageBackgroundColor())
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
@@ -718,7 +721,7 @@ private fun AppearanceScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(pageBackgroundColor())
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
         // 顶栏
@@ -755,6 +758,9 @@ private fun AppearanceScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // ── 壁纸：选一张铺在整个 App 底层，各页面背景自动透明 ──
+            WallpaperBlock()
+
             SurfaceCard {
                 SettingRowTitle("主题模式")
                 Spacer(Modifier.height(8.dp))
@@ -1265,6 +1271,105 @@ private fun ActionRow(
                 text = " ›",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 壁纸块：预览 + 选择 / 更换 / 移除。
+ *
+ * 选图走系统相册（PickVisualMedia），选完 [AppWallpaper] 会把图复制到私有目录并 +1 版本，
+ * 底层的 [com.bistu.allthebistu.ui.theme.WallpaperBackdrop] 看到版本变化会自动重解，
+ * 所以这里不需要把 Bitmap 往上层传。
+ */
+@Composable
+private fun WallpaperBlock() {
+    val context = LocalContext.current
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        error = if (AppWallpaper.set(context, uri)) null else "这张图读不出来，换一张试试"
+    }
+
+    val preview = rememberWallpaperPreview()
+
+    SurfaceCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (preview != null) {
+                    Image(
+                        bitmap = preview,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = "无",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "壁纸",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (AppWallpaper.enabled) {
+                        "已开启，所有页面生效"
+                    } else {
+                        "从相册选一张，铺满整个 App"
+                    },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            TextButton(
+                onClick = {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+            ) {
+                Text(if (AppWallpaper.enabled) "更换" else "选择", fontSize = 13.sp)
+            }
+
+            if (AppWallpaper.enabled) {
+                TextButton(onClick = { AppWallpaper.clear(context) }) {
+                    Text(
+                        text = "移除",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        error?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = it,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.error
             )
         }
     }

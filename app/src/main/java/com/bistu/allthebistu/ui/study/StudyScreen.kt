@@ -29,6 +29,7 @@ import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.schedule.ScheduleUiState
 import com.bistu.allthebistu.ui.schedule.TERM_START_DATE as TERM_START_OF_TERM
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import java.util.Calendar
 
 /**
@@ -92,7 +93,7 @@ fun StudyScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(pageBackgroundColor())
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(

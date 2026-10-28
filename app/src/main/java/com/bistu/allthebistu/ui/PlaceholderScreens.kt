@@ -46,6 +46,7 @@ import com.bistu.allthebistu.ui.life.LibrarySeatCard
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import com.bistu.allthebistu.ui.wechat.WeChatEntry
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
@@ -129,7 +130,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(pageBackgroundColor())
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
@@ -498,7 +499,7 @@ private fun CardDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(pageBackgroundColor())
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
         // 顶栏
