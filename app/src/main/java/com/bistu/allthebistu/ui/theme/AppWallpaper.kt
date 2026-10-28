@@ -18,10 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import com.bistu.allthebistu.data.prefs.WallpaperStore
+import com.bistu.allthebistu.data.prefs.WallpaperTone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -84,7 +84,10 @@ fun pageBackgroundColor(): Color =
  * 深色模式蒙得略轻（0.70），浅色模式重一点（0.80），因为浅色下花色更容易把黑字吃掉。
  */
 @Composable
-fun WallpaperBackdrop(modifier: Modifier = Modifier) {
+fun WallpaperBackdrop(
+    modifier: Modifier = Modifier,
+    scrim: Int = WallpaperTone.DEFAULT,
+) {
     if (!AppWallpaper.enabled) return
 
     val context = LocalContext.current
@@ -98,8 +101,9 @@ fun WallpaperBackdrop(modifier: Modifier = Modifier) {
     }
 
     val base = MaterialTheme.colorScheme.background
-    val isDark = base.luminance() < 0.5f
-    val scrimAlpha = if (isDark) 0.70f else 0.80f
+    // 0..100 直接映射成 0..1 的蒙层不透明度。用户调的就是「图能看清多少」，
+    // 拖到 0 时照片完全露出，字能不能看清由用户自己权衡。
+    val scrimAlpha = WallpaperTone.sanitize(scrim) / 100f
 
     Box(modifier = modifier.fillMaxSize().background(base)) {
         bitmap?.let {
@@ -113,6 +117,20 @@ fun WallpaperBackdrop(modifier: Modifier = Modifier) {
         Box(Modifier.fillMaxSize().background(base.copy(alpha = scrimAlpha)))
     }
 }
+
+/**
+ * 卡片底色。
+ *
+ * 默认就是 `surface`（不透明）。**课表那种占满整屏的容器**才需要传 alpha，
+ * 让它透一点壁纸出来；普通卡片保持不透明，长文字压在图上看不清。
+ */
+@Composable
+fun cardSurfaceColor(alpha: Float = 0.82f): Color =
+    if (AppWallpaper.enabled) {
+        MaterialTheme.colorScheme.surface.copy(alpha = alpha)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
 
 /** 壁纸预览缩略图用的解码（界面里 56dp 的小方块，直接给原图即可，Compose 自己会缩） */
 @Composable

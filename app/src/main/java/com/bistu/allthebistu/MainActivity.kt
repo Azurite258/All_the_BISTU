@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
                         else MaterialTheme.colorScheme.surface
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            WallpaperBackdrop()
+                            WallpaperBackdrop(scrim = settings.wallpaperScrim)
                             AppRoot(
                                 viewModel = scheduleViewModel,
                                 settings = settings,
@@ -220,6 +220,9 @@ private fun AppRoot(
                     scope.launch { settingsStore.setBottomBarStyle(style) }
                 },
                 onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
+                onWallpaperScrimChange = { v ->
+                    scope.launch { settingsStore.setWallpaperScrim(v) }
+                },
                 onLogin = { openLogin() },
                 onLogout = { viewModel.logout() }
             )

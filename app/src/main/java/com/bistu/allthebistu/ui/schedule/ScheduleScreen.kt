@@ -46,6 +46,7 @@ import com.bistu.allthebistu.ui.theme.HyperSpacing
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.bistu.allthebistu.ui.theme.cardSurfaceColor
 
 /**
  * 学期第 1 周周一的日期。
@@ -298,7 +299,8 @@ private fun ScheduleContent(
                             bottom = HyperSpacing.contentBottom
                         )
                         .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surface)
+                        // 有壁纸时透一点出来：这张卡占满整屏，不透的话课表页看不到壁纸
+                        .background(cardSurfaceColor(alpha = 0.72f))
                 ) {
                     if (data.courses.isEmpty()) {
                         // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。
@@ -484,7 +486,7 @@ private fun WeekSelector(
                 bottom = HyperSpacing.cardGap
             )
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
+            .background(cardSurfaceColor(alpha = 0.88f))
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

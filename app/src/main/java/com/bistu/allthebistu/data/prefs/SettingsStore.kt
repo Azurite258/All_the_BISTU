@@ -30,10 +30,29 @@ data class AppSettings(
     /** 上课前多少分钟提醒。0..240，5 分钟一档，收敛逻辑见 ReminderPlanner.sanitizeAdvance */
     val reminderAdvanceMinutes: Int = ReminderPlanner.DEFAULT_ADVANCE,
     /** 是否把整学期课表写进系统日历（由系统负责弹提醒，App 不用活着） */
-    val calendarSyncEnabled: Boolean = false
+    val calendarSyncEnabled: Boolean = false,
+    /**
+     * 壁纸蒙层强度 0..100：越大越遮、字越清楚；0 = 完全露出照片。
+     * 只在设了壁纸时有意义，值本身始终保存，换壁纸时不用重设。
+     */
+    val wallpaperScrim: Int = WallpaperTone.DEFAULT
 ) {
     /** 有没有设过昵称 */
     val hasNickname: Boolean get() = nickname.isNotBlank()
+}
+
+/**
+ * 壁纸蒙层的取值规范。
+ *
+ * 为什么叫「蒙层强度」而不是「壁纸不透明度」：真正影响文字可读性的，
+ * 是压在图上那层主题色的浓淡，而不是图本身多透明。调这个数就是调那层。
+ */
+object WallpaperTone {
+    const val DEFAULT = 70
+    const val MIN = 0
+    const val MAX = 100
+
+    fun sanitize(value: Int): Int = value.coerceIn(MIN, MAX)
 }
 
 object ThemeMode {
@@ -78,6 +97,7 @@ class SettingsStore(private val context: Context) {
 
         /** 生活页「电费说明」弹窗是否已经看过（只弹一次） */
         val ELECTRIC_NOTICE_SHOWN = booleanPreferencesKey("electric_notice_shown")
+        val WALLPAPER_SCRIM = intPreferencesKey("wallpaper_scrim")
     }
 
     /** 读取设置流 */
@@ -94,7 +114,10 @@ class SettingsStore(private val context: Context) {
             reminderAdvanceMinutes = ReminderPlanner.sanitizeAdvance(
                 prefs[Keys.REMINDER_ADVANCE] ?: ReminderPlanner.DEFAULT_ADVANCE
             ),
-            calendarSyncEnabled = prefs[Keys.CALENDAR_SYNC] ?: false
+            calendarSyncEnabled = prefs[Keys.CALENDAR_SYNC] ?: false,
+            wallpaperScrim = WallpaperTone.sanitize(
+                prefs[Keys.WALLPAPER_SCRIM] ?: WallpaperTone.DEFAULT
+            )
         )
     }
 
@@ -133,6 +156,11 @@ class SettingsStore(private val context: Context) {
     /** 开关系统日历同步 */
     suspend fun setCalendarSyncEnabled(enabled: Boolean) {
         context.dataStore.edit { it[Keys.CALENDAR_SYNC] = enabled }
+    }
+
+    /** 设置壁纸蒙层强度（会被收敛到 0..100） */
+    suspend fun setWallpaperScrim(value: Int) {
+        context.dataStore.edit { it[Keys.WALLPAPER_SCRIM] = WallpaperTone.sanitize(value) }
     }
 
     /**

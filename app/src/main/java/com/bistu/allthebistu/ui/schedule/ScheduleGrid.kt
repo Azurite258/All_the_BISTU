@@ -27,6 +27,7 @@ import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.data.prefs.FontLevel
+import com.bistu.allthebistu.ui.theme.AppWallpaper
 
 // ── 尺寸常量（HyperOS 风格：圆角更大、留白更足）──
 private val TimeColumnWidth = 42.dp
@@ -160,7 +161,9 @@ private fun ScheduleGridBody(
     val timeTextColor = if (isDark) DarkTimeText else LightTimeText
     val todayBg = if (isDark) DarkTodayBg else LightTodayBg
     val todayTextColor = if (isDark) DarkTodayText else LightTodayText
-    val cellBg = MaterialTheme.colorScheme.surface
+    // 有壁纸时格子透明，让下面那层半透明卡片把壁纸透上来；
+    // 无壁纸时仍是实色 surface，和以前完全一致。
+    val cellBg = if (AppWallpaper.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
 
     // 未排课的课程（只有学分、没有节次）不能画进网格，否则会跑到画布外面
     val coursesInWeek = data.courses.filter { it.isInWeek(weekNumber) && it.isArranged }

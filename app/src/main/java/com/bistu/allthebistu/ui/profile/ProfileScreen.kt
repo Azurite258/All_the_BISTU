@@ -109,6 +109,7 @@ fun ProfileScreen(
     onFontLevelChange: (Int) -> Unit,
     onBottomBarStyleChange: (Int) -> Unit,
     onNicknameChange: (String) -> Unit,
+    onWallpaperScrimChange: (Int) -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -140,6 +141,7 @@ fun ProfileScreen(
             onColorSchemeChange = onColorSchemeChange,
             onFontLevelChange = onFontLevelChange,
             onBottomBarStyleChange = onBottomBarStyleChange,
+            onWallpaperScrimChange = onWallpaperScrimChange,
             onBack = { showAppearance = false },
             modifier = modifier
         )
@@ -713,6 +715,7 @@ private fun AppearanceScreen(
     onColorSchemeChange: (Int) -> Unit,
     onFontLevelChange: (Int) -> Unit,
     onBottomBarStyleChange: (Int) -> Unit,
+    onWallpaperScrimChange: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -759,7 +762,10 @@ private fun AppearanceScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // ── 壁纸：选一张铺在整个 App 底层，各页面背景自动透明 ──
-            WallpaperBlock()
+            WallpaperBlock(
+                scrim = settings.wallpaperScrim,
+                onScrimChange = onWallpaperScrimChange
+            )
 
             SurfaceCard {
                 SettingRowTitle("主题模式")
@@ -1200,7 +1206,10 @@ private fun SectionLabel(text: String) {
  * 外观 48dp、其他每行 24dp、退出登录 68dp，摞在一起很参差。
  * 统一成 44dp 后：单行卡都是 12+44+12=68dp，多行卡里每一行也是 44dp。
  */
-private val SettingRowHeight = 44.dp
+private val SettingRowHeight = 38.dp
+
+/** 蒙层滑块的步长（百分比）：0/10/…/100 共 11 档，太细反而是折磨 */
+private const val SCRIM_STEP = 10
 
 @Composable
 private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
@@ -1284,9 +1293,11 @@ private fun ActionRow(
  * 所以这里不需要把 Bitmap 往上层传。
  */
 @Composable
-private fun WallpaperBlock() {
+private fun WallpaperBlock(scrim: Int, onScrimChange: (Int) -> Unit) {
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
+    // 滑块用本地状态跟手；值本身仍写回 SettingsStore
+    var localScrim by remember { mutableIntStateOf(scrim) }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -1361,6 +1372,55 @@ private fun WallpaperBlock() {
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+            }
+        }
+
+        // 蒙层强度：拖到「透」照片更明显但字会发灰，拖到「遮」更清楚但图几乎看不见。
+        // 用本地状态跟手，避免读 DataStore 回到界面时把滑块弹回去。
+        if (AppWallpaper.enabled) {
+            Spacer(Modifier.height(6.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "蒙层",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "$localScrim%",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            DiscreteSlider(
+                value = localScrim / SCRIM_STEP,
+                onValueChange = { index ->
+                    val v = (index * SCRIM_STEP).coerceIn(0, 100)
+                    if (v != localScrim) {
+                        localScrim = v
+                        onScrimChange(v)
+                    }
+                },
+                steps = 100 / SCRIM_STEP + 1,
+                showTicks = false,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                Text(
+                    text = "透",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "遮",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
