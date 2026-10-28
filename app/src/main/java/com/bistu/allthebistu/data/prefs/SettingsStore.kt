@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
+import com.bistu.allthebistu.ui.theme.UiStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -17,8 +18,15 @@ import kotlinx.coroutines.flow.map
 data class AppSettings(
     /** 主题模式：0=跟随系统 1=浅色 2=深色 */
     val themeMode: Int = ThemeMode.SYSTEM,
-    /** 课程配色方案：0=学校配色 1=柔和 2=高对比 */
-    val colorScheme: Int = CourseColorScheme.SCHOOL,
+    /** 界面风格，见 [com.bistu.allthebistu.ui.theme.UiStyle] */
+    val uiStyle: Int = UiStyle.DEFAULT,
+    /**
+     * 用户为「某套界面风格」手动选过的课程配色：风格 → 方案。
+     *
+     * 键是风格而不是全局，这样切到别的风格再切回来，
+     * 用户在那套风格下挑的颜色还在，不会被配套默认值盖掉。
+     */
+    val courseSchemeOverrides: Map<Int, Int> = emptyMap(),
     /** 字体挡位：0=小 1=中 2=大。既决定课表一行几个字，也决定全局 fontScale */
     val fontLevel: Int = FontLevel.MEDIUM,
     /** 自建昵称。空字符串 = 没设，账号卡上退回显示「点击设置昵称」 */
@@ -37,6 +45,15 @@ data class AppSettings(
      */
     val wallpaperScrim: Int = WallpaperTone.DEFAULT
 ) {
+    /**
+     * 当前生效的课程配色。
+     *
+     * 优先级：用户为这套风格手动选过的 > 风格配套的默认值。
+     * 换界面风格时课块默认跟着变，但用户改过的选择会按风格记住。
+     */
+    val colorScheme: Int
+        get() = courseSchemeOverrides[uiStyle] ?: UiStyle.defaultCourseScheme(uiStyle)
+
     /** 有没有设过昵称 */
     val hasNickname: Boolean get() = nickname.isNotBlank()
 }
@@ -77,8 +94,26 @@ class SettingsStore(private val context: Context) {
 
     private object Keys {
         val THEME_MODE = intPreferencesKey("theme_mode")
-        val COLOR_SCHEME = intPreferencesKey("color_scheme")
         val FONT_LEVEL = intPreferencesKey("font_level")
+
+        /** 界面风格（六套之一） */
+        val UI_STYLE = intPreferencesKey("ui_style")
+
+        /**
+         * 0.17 之前的全局课程配色键。
+         *
+         * 只读不写，用于把老用户的选择迁移成「原版」风格下的覆盖值；
+         * 不迁移的话，老用户升级后会突然发现课块颜色变了。
+         */
+        val LEGACY_COLOR_SCHEME = intPreferencesKey("color_scheme")
+
+        /**
+         * 某套风格下的课程配色覆盖值。
+         *
+         * 用「一风格一个键」而不是一个全局键：用户给 Linear 挑了高对比、
+         * 给 iOS 挑了柔和，这两件事要能同时记住。
+         */
+        fun courseSchemeFor(style: Int) = intPreferencesKey("course_scheme_style_$style")
 
         /** 自建昵称（只存本机，不跟学校系统同步） */
         val NICKNAME = stringPreferencesKey("nickname")
@@ -104,7 +139,8 @@ class SettingsStore(private val context: Context) {
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             themeMode = prefs[Keys.THEME_MODE] ?: ThemeMode.SYSTEM,
-            colorScheme = prefs[Keys.COLOR_SCHEME] ?: CourseColorScheme.SCHOOL,
+            uiStyle = UiStyle.sanitize(prefs[Keys.UI_STYLE] ?: UiStyle.DEFAULT),
+            courseSchemeOverrides = readCourseOverrides(prefs),
             fontLevel = FontLevel.sanitize(prefs[Keys.FONT_LEVEL] ?: FontLevel.MEDIUM),
             nickname = prefs[Keys.NICKNAME].orEmpty(),
             bottomBarStyle = BottomBarStyle.sanitize(
@@ -126,9 +162,41 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[Keys.THEME_MODE] = mode }
     }
 
-    /** 设置配色方案 */
+    /**
+     * 换界面风格。
+     *
+     * 只写风格本身，**不动课程配色**：读取时 [AppSettings.colorScheme]
+     * 会按「用户为这套风格选过的 > 这套风格的配套默认」回退。
+     * 所以换风格时课块会自动变成配套色，而用户改过的选择按风格留着。
+     */
+    suspend fun setUiStyle(style: Int) {
+        context.dataStore.edit { it[Keys.UI_STYLE] = UiStyle.sanitize(style) }
+    }
+
+    /**
+     * 给「当前这套界面风格」设置课程配色。
+     *
+     * 写的是当前风格的覆盖键，不是全局键——否则用户给 Linear 挑的颜色
+     * 会连原版一起改掉。
+     */
     suspend fun setColorScheme(scheme: Int) {
-        context.dataStore.edit { it[Keys.COLOR_SCHEME] = scheme }
+        context.dataStore.edit { prefs ->
+            val style = UiStyle.sanitize(prefs[Keys.UI_STYLE] ?: UiStyle.DEFAULT)
+            prefs[Keys.courseSchemeFor(style)] = scheme
+        }
+    }
+
+    /** 读出各风格的课程配色覆盖值，顺带把 0.16 的全局键迁成「原版」的选择 */
+    private fun readCourseOverrides(prefs: Preferences): Map<Int, Int> {
+        val map = mutableMapOf<Int, Int>()
+        UiStyle.all.forEach { style ->
+            prefs[Keys.courseSchemeFor(style)]?.let { map[style] = it }
+        }
+        val legacy = prefs[Keys.LEGACY_COLOR_SCHEME]
+        if (legacy != null && !map.containsKey(UiStyle.ORIGINAL)) {
+            map[UiStyle.ORIGINAL] = legacy
+        }
+        return map
     }
 
     /** 设置字体挡位（课表排版 + 全局字体一起变） */

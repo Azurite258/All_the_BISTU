@@ -11,13 +11,13 @@ import androidx.compose.ui.unit.dp
 // ═══════════════════════════════════════════════════════════════
 
 // ── 浅色模式 ──
-val HyperPrimary = Color(0xFF3482FF)          // HyperOS 蓝
+val HyperPrimary = Color(0xFF2A6FE0)          // HyperOS 蓝（压白 4.72:1）
 val HyperPrimaryDark = Color(0xFF2B6DD8)
 val HyperBackground = Color(0xFFF5F5F7)       // 页面底色（浅灰，让白卡片浮起来）
 val HyperSurface = Color(0xFFFFFFFF)          // 卡片底色（纯白）
 val HyperSurfaceVariant = Color(0xFFF0F0F2)   // 次级卡片
 val HyperOnBackground = Color(0xFF000000)     // 主文字（纯黑）
-val HyperOnSurfaceVariant = Color(0xFF8C8C8C) // 次要文字（灰）
+val HyperOnSurfaceVariant = Color(0xFF6F6F6F) // 次要文字（灰，压白 5.02:1）
 val HyperOutline = Color(0xFFE5E5E5)          // 分割线
 
 // ── 深色模式 ──

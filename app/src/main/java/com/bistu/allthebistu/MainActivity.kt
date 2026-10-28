@@ -89,7 +89,10 @@ class MainActivity : ComponentActivity() {
             val settingsStore = remember { SettingsStore(context) }
             val settings by settingsStore.settings.collectAsState(initial = AppSettings())
 
-            Study1Theme(themeMode = settings.themeMode) {
+            Study1Theme(
+                themeMode = settings.themeMode,
+                uiStyle = settings.uiStyle
+            ) {
                 // 全局字体缩放：把「字体档位」翻译成 fontScale 乘到系统的 fontScale 上。
                 // 用 CompositionLocal 而不是逐个改 sp，是因为全项目有几百处 fontSize，
                 // 逐个改既不现实也必然会漏；这样一处覆盖，所有 sp 一起生效。
@@ -213,6 +216,7 @@ private fun AppRoot(
             MainTab.PROFILE -> ProfileScreen(
                 settings = settings,
                 isLoggedIn = uiState.isLoggedIn,
+                onUiStyleChange = { style -> scope.launch { settingsStore.setUiStyle(style) } },
                 onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
                 onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
                 onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },

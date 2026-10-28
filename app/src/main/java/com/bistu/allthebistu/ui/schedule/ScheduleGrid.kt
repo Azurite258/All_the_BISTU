@@ -28,6 +28,8 @@ import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.data.prefs.FontLevel
 import com.bistu.allthebistu.ui.theme.AppWallpaper
+import com.bistu.allthebistu.ui.theme.LocalUiStyle
+import com.bistu.allthebistu.ui.theme.UiStyle
 
 // ── 尺寸常量（HyperOS 风格：圆角更大、留白更足）──
 private val TimeColumnWidth = 42.dp
@@ -71,17 +73,6 @@ private const val ROOM_LINE_HEIGHT_RATIO = 1.25f
 
 /** 网格总宽度：时间列 + 7 天 */
 private val GridTotalWidth = TimeColumnWidth + DayColumnWidth * 7
-
-private val LightBorder = Color(0xFFE5E5E5)
-private val DarkBorder = Color(0xFF333333)
-private val LightHeaderBg = Color(0xFFF7F7F7)
-private val DarkHeaderBg = Color(0xFF232323)
-private val LightTimeText = Color(0xFF999999)
-private val DarkTimeText = Color(0xFF777777)
-private val LightTodayBg = Color(0xFFFFF8E1)
-private val DarkTodayBg = Color(0xFF2A2618)
-private val LightTodayText = Color(0xFFE65100)
-private val DarkTodayText = Color(0xFFFFB74D)
 
 private val DayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
@@ -156,11 +147,17 @@ private fun ScheduleGridBody(
     onCourseClick: ((Course) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val borderColor = if (isDark) DarkBorder else LightBorder
-    val headerBg = if (isDark) DarkHeaderBg else LightHeaderBg
-    val timeTextColor = if (isDark) DarkTimeText else LightTimeText
-    val todayBg = if (isDark) DarkTodayBg else LightTodayBg
-    val todayTextColor = if (isDark) DarkTodayText else LightTodayText
+    // 表格的骨架色跟随界面风格，不再写死灰阶：
+    // 六套风格里极简是纯黑白、M3 是紫色调、iOS 偏冷蓝，写死的灰边在它们下面会很扎眼。
+    val uiStyle = LocalUiStyle.current
+    val borderColor = MaterialTheme.colorScheme.outline
+    val headerBg = MaterialTheme.colorScheme.surfaceVariant
+    val timeTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val periodTextColor = MaterialTheme.colorScheme.onSurface.copy(
+        alpha = if (isDark) 0.78f else 0.62f
+    )
+    val todayBg = UiStyle.todayBg(uiStyle, isDark)
+    val todayTextColor = UiStyle.todayText(uiStyle, isDark)
     // 有壁纸时格子透明，让下面那层半透明卡片把壁纸透上来；
     // 无壁纸时仍是实色 surface，和以前完全一致。
     val cellBg = if (AppWallpaper.enabled) Color.Transparent else MaterialTheme.colorScheme.surface
@@ -280,7 +277,7 @@ private fun ScheduleGridBody(
                                     text = period.toString(),
                                     fontSize = PeriodNumberSize,
                                     fontWeight = FontWeight.Medium,
-                                    color = if (isDark) Color(0xFFCCCCCC) else Color(0xFF666666)
+                                    color = periodTextColor
                                 )
                                 if (pt != null) {
                                     Text(

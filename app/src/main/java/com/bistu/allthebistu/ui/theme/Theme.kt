@@ -3,83 +3,32 @@ package com.bistu.allthebistu.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import com.bistu.allthebistu.data.prefs.ThemeMode
 
 /**
- * HyperOS 风格配色方案。
+ * 应用主题。
  *
- * 设计要点：
- * - 浅色：浅灰底 + 纯白卡片，靠色差区分层次（不用阴影）
- * - 深色：纯黑底 + 深灰卡片（OLED 省电）
- * - 主色：HyperOS 蓝
- */
-private val HyperLightColorScheme = lightColorScheme(
-    primary = HyperPrimary,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE3EFFF),
-    onPrimaryContainer = HyperPrimaryDark,
-
-    secondary = HyperPrimaryDark,
-    onSecondary = Color.White,
-
-    background = HyperBackground,
-    onBackground = HyperOnBackground,
-
-    surface = HyperSurface,
-    onSurface = HyperOnBackground,
-
-    surfaceVariant = HyperSurfaceVariant,
-    onSurfaceVariant = HyperOnSurfaceVariant,
-
-    outline = HyperOutline,
-    outlineVariant = HyperOutline,
-
-    error = HyperRed,
-    onError = Color.White
-)
-
-private val HyperDarkColorScheme = darkColorScheme(
-    primary = HyperPrimaryDarkMode,
-    onPrimary = Color(0xFF00325C),
-    primaryContainer = Color(0xFF1A3A5C),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-
-    secondary = HyperPrimaryDarkMode,
-    onSecondary = Color(0xFF00325C),
-
-    background = HyperBackgroundDark,
-    onBackground = HyperOnBackgroundDark,
-
-    surface = HyperSurfaceDark,
-    onSurface = HyperOnBackgroundDark,
-
-    surfaceVariant = HyperSurfaceVariantDark,
-    onSurfaceVariant = HyperOnSurfaceVariantDark,
-
-    outline = HyperOutlineDark,
-    outlineVariant = HyperOutlineDark,
-
-    error = HyperRed,
-    onError = Color.White
-)
-
-/**
- * 应用主题（HyperOS 风格）。
+ * 两个正交维度：
+ * - [themeMode] 决定明暗（跟随系统 / 浅 / 深）
+ * - [uiStyle] 决定配色、圆角、层次（六套风格，见 [UiStyle]）
+ *
+ * 六套风格共用同一套页面结构，只换令牌——换风格不改布局，
+ * 这样切换时才不会出现某一套独有的错位。
  *
  * @param themeMode 0=跟随系统 1=浅色 2=深色
+ * @param uiStyle 界面风格，见 [UiStyle]；非法值收敛到原版
  * @param useDynamicColor 是否用 Material You 动态取色
- *        （默认关闭，因为动态取色会覆盖 HyperOS 配色，破坏风格统一）
+ *        （默认关闭：动态取色会把风格配色整个盖掉，六套风格就没意义了）
  */
 @Composable
 fun Study1Theme(
     themeMode: Int = ThemeMode.SYSTEM,
+    uiStyle: Int = UiStyle.DEFAULT,
     useDynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -90,20 +39,21 @@ fun Study1Theme(
         else -> systemDark
     }
 
-    val colorScheme = when {
-        useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+    val style = UiStyle.sanitize(uiStyle)
 
-        darkTheme -> HyperDarkColorScheme
-        else -> HyperLightColorScheme
+    val colorScheme = if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val context = LocalContext.current
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        UiStyle.colorScheme(style, darkTheme)
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = HyperShapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalUiStyle provides style) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = UiStyle.shapes(style),
+            content = content
+        )
+    }
 }

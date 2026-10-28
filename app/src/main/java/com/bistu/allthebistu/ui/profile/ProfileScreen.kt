@@ -85,6 +85,7 @@ import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 
@@ -104,6 +105,7 @@ import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 fun ProfileScreen(
     settings: AppSettings,
     isLoggedIn: Boolean,
+    onUiStyleChange: (Int) -> Unit,
     onThemeModeChange: (Int) -> Unit,
     onColorSchemeChange: (Int) -> Unit,
     onFontLevelChange: (Int) -> Unit,
@@ -121,6 +123,8 @@ fun ProfileScreen(
     var showLogoutConfirm by remember { mutableStateOf(false) }
     /** 外观成了二级页：一层列表里铺四组设置太挤，点进去单独改 */
     var showAppearance by remember { mutableStateOf(false) }
+    /** 界面风格和外观是**平级**的两个入口，不是外观里的子项 */
+    var showUiStyle by remember { mutableStateOf(false) }
 
     // 换完头像文件已变，靠这个版本号把「重新解码」这件事推给重组
     var avatarVersion by remember { mutableIntStateOf(0) }
@@ -143,6 +147,18 @@ fun ProfileScreen(
             onBottomBarStyleChange = onBottomBarStyleChange,
             onWallpaperScrimChange = onWallpaperScrimChange,
             onBack = { showAppearance = false },
+            modifier = modifier
+        )
+        return
+    }
+
+    // 界面风格二级页：和外观平级，同样整页覆盖
+    if (showUiStyle) {
+        UiStyleScreen(
+            current = settings.uiStyle,
+            isDark = isDark,
+            onSelect = onUiStyleChange,
+            onBack = { showUiStyle = false },
             modifier = modifier
         )
         return
@@ -178,11 +194,18 @@ fun ProfileScreen(
             }
         )
 
-        // ══════ 外观（二级页）：一行入口，不再是摊开的四组控件 ══════
+        // ══════ 外观 / 界面风格：平级两个入口，同一张卡里并列 ══════
         SurfaceCard {
             ActionRow(
                 title = "外观",
+                trailing = "壁纸 · 字体",
                 onClick = { showAppearance = true }
+            )
+            Divider(tight = true)
+            UiStyleEntryRow(
+                style = settings.uiStyle,
+                isDark = isDark,
+                onClick = { showUiStyle = true }
             )
         }
 
@@ -689,6 +712,192 @@ private fun RadioDot(selected: Boolean) {
                     .size(9.dp)
                     .clip(CircleShape)
                     .background(color)
+            )
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 界面风格
+// ══════════════════════════════════════════════════════════════
+
+/** 「我的」一级列表里的界面风格入口：标题 + 三色点 + 当前风格名 + › */
+@Composable
+private fun UiStyleEntryRow(
+    style: Int,
+    isDark: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .height(SettingRowHeight),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "界面风格",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        StyleDots(style = style, isDark = isDark)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = UiStyle.label(style),
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = " ›",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * 三色点：底色 / 强调 / 正文。
+ *
+ * 只写风格名，用户看不出六套差别在哪；颜色比文字快。
+ * 描边是必需的——深色风格下深色点会彻底融进背景。
+ */
+@Composable
+private fun StyleDots(style: Int, isDark: Boolean) {
+    val colors = remember(style, isDark) { UiStyle.swatch(style, isDark) }
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        colors.forEach { c ->
+            Box(
+                modifier = Modifier
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(c)
+                    .border(
+                        0.5.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                        CircleShape
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * 界面风格二级页。
+ *
+ * 和「外观」是平级入口，不是外观里的子项：外观管壁纸/字体，
+ * 界面风格管配色/圆角/层次，两件事各改各的。
+ *
+ * 选中即生效（回调直接写 SettingsStore），没有「保存」按钮。
+ */
+@Composable
+private fun UiStyleScreen(
+    current: Int,
+    isDark: Boolean,
+    onSelect: (Int) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onBack)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(pageBackgroundColor())
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Text(
+                text = "界面风格",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = HyperSpacing.pageHorizontal,
+                    end = HyperSpacing.pageHorizontal,
+                    top = 6.dp,
+                    bottom = 24.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SurfaceCard {
+                UiStyle.all.forEachIndexed { index, style ->
+                    if (index > 0) Divider(tight = true)
+                    UiStyleOptionRow(
+                        style = style,
+                        selected = current == style,
+                        isDark = isDark,
+                        onClick = { onSelect(style) }
+                    )
+                }
+            }
+
+            Text(
+                text = "切换后立刻生效。课块颜色会跟着换成这套风格配套的一版；" +
+                    "如果你在「外观 → 课程配色」里自己改过，那套选择会按风格记住，切回来还在。",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun UiStyleOptionRow(
+    style: Int,
+    selected: Boolean,
+    isDark: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StyleDots(style = style, isDark = isDark)
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = UiStyle.label(style),
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = UiStyle.tagline(style),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "已选中",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
             )
         }
     }
