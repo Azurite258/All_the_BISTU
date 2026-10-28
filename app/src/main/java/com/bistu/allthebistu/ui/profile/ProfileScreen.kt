@@ -85,6 +85,7 @@ import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
@@ -171,15 +172,15 @@ fun ProfileScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
-                start = HyperSpacing.pageHorizontal,
-                end = HyperSpacing.pageHorizontal,
+                start = LocalUiMetrics.current.pagePadding,
+                end = LocalUiMetrics.current.pagePadding,
                 top = 14.dp
             ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
             text = "我的",
-            fontSize = 28.sp,
+            fontSize = LocalUiMetrics.current.titleSize,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(bottom = 2.dp)
@@ -243,7 +244,7 @@ fun ProfileScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { showLogoutConfirm = true }
-                        .height(SettingRowHeight),
+                        .height(LocalUiMetrics.current.rowHeight),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -497,7 +498,7 @@ private fun AccountSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = HyperSpacing.pageHorizontal)
+                .padding(horizontal = LocalUiMetrics.current.pagePadding)
                 .padding(bottom = 28.dp)
         ) {
             Text(
@@ -733,7 +734,7 @@ private fun UiStyleEntryRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .height(SettingRowHeight),
+            .height(LocalUiMetrics.current.rowHeight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -833,8 +834,8 @@ private fun UiStyleScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(
-                    start = HyperSpacing.pageHorizontal,
-                    end = HyperSpacing.pageHorizontal,
+                    start = LocalUiMetrics.current.pagePadding,
+                    end = LocalUiMetrics.current.pagePadding,
                     top = 6.dp,
                     bottom = 24.dp
                 ),
@@ -963,8 +964,8 @@ private fun AppearanceScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(
-                    start = HyperSpacing.pageHorizontal,
-                    end = HyperSpacing.pageHorizontal,
+                    start = LocalUiMetrics.current.pagePadding,
+                    end = LocalUiMetrics.current.pagePadding,
                     top = 6.dp,
                     bottom = 24.dp
                 ),
@@ -1415,19 +1416,23 @@ private fun SectionLabel(text: String) {
  * 外观 48dp、其他每行 24dp、退出登录 68dp，摞在一起很参差。
  * 统一成 44dp 后：单行卡都是 12+44+12=68dp，多行卡里每一行也是 44dp。
  */
-private val SettingRowHeight = 38.dp
 
 /** 蒙层滑块的步长（百分比）：0/10/…/100 共 11 档，太细反而是折磨 */
 private const val SCRIM_STEP = 10
 
 @Composable
 private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
+    val m = LocalUiMetrics.current
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(m.cardRadius)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .then(if (m.useShadow) Modifier.shadow(10.dp, shape) else Modifier)
+            .clip(shape)
+            .background(cs.surface)
+            .then(if (m.useBorder) Modifier.border(1.dp, cs.outline, shape) else Modifier)
+            .padding(horizontal = m.cardPadding, vertical = m.cardPadding - 2.dp),
         content = content
     )
 }
@@ -1465,7 +1470,7 @@ private fun ActionRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .height(SettingRowHeight),
+            .height(LocalUiMetrics.current.rowHeight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(

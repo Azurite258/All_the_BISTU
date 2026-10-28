@@ -46,6 +46,7 @@ import com.bistu.allthebistu.ui.life.LibrarySeatCard
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import com.bistu.allthebistu.ui.wechat.WeChatEntry
 import kotlinx.coroutines.launch
@@ -134,8 +135,8 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
-                start = HyperSpacing.pageHorizontal,
-                end = HyperSpacing.pageHorizontal,
+                start = LocalUiMetrics.current.pagePadding,
+                end = LocalUiMetrics.current.pagePadding,
                 top = 14.dp
             ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -143,7 +144,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "生活",
-                fontSize = 28.sp,
+                fontSize = LocalUiMetrics.current.titleSize,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -347,7 +348,7 @@ private fun CampusCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
             .background(Brush.linearGradient(listOf(CardGoldTop, CardGoldBottom)))
             .clickable { onClick() }
     ) {
@@ -528,8 +529,8 @@ private fun CardDetailScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = HyperSpacing.pageHorizontal)
-                .clip(RoundedCornerShape(16.dp))
+                .padding(horizontal = LocalUiMetrics.current.pagePadding)
+                .clip(RoundedCornerShape(LocalUiMetrics.current.innerRadius))
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -569,7 +570,7 @@ private fun CardDetailScreen(
             text = "全部流水 · ${overview.records.size} 笔",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = HyperSpacing.pageHorizontal)
+            modifier = Modifier.padding(horizontal = LocalUiMetrics.current.pagePadding)
         )
 
         Spacer(Modifier.height(6.dp))
@@ -589,8 +590,8 @@ private fun CardDetailScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(
-                    start = HyperSpacing.pageHorizontal,
-                    end = HyperSpacing.pageHorizontal,
+                    start = LocalUiMetrics.current.pagePadding,
+                    end = LocalUiMetrics.current.pagePadding,
                     bottom = 90.dp
                 )
             ) {

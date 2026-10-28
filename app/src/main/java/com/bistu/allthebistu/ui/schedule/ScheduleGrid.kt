@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +29,7 @@ import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.data.prefs.FontLevel
 import com.bistu.allthebistu.ui.theme.AppWallpaper
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.UiStyle
 
@@ -167,7 +169,6 @@ private fun ScheduleGridBody(
 
     // 节次范围：至少到 14 节（覆盖晚上的课）
     val maxSection = maxOf(14, coursesInWeek.maxOfOrNull { it.endSection } ?: 14)
-    val periods = 1..maxSection
 
     // 本周 7 天日期：优先用教务系统的教学周，其次用学期起始日推算
     val weekDates = remember(weekNumber, termStartDate, data.termWeeks) {
@@ -185,6 +186,23 @@ private fun ScheduleGridBody(
     // 自适应宽度：父容器有确定宽度时按比例分配，否则用固定宽度
     BoxWithConstraints(modifier = modifier) {
         val isBounded = constraints.maxWidth != androidx.compose.ui.unit.Constraints.Infinity
+
+        // 行高是固定的 56dp，卡片高度却随屏幕尺寸和底栏风格变化，除不尽时
+        // 最后一行会被卡片下边缘切掉一半，看起来像「课块卡进底栏里」。
+        // 那一行本来就露不全，不如不画——露半截比不画难看得多。
+        // 注意 constraints 给的是**像素**，必须先换成 dp 再跟行高相除。
+        // Pager 里的这一页拿到的 maxHeight 是无穷（高度不做约束），
+        // 这时退回「屏幕高度 × 0.68」估算课表卡的可视高度：
+        // 少画几行最多是晚课看不到（本来也被卡片裁掉），多画一行就是半截课块露在底边。
+        val visibleRows = run {
+            val available = if (constraints.maxHeight == androidx.compose.ui.unit.Constraints.Infinity) {
+                LocalConfiguration.current.screenHeightDp.dp * 0.68f - HeaderHeight
+            } else {
+                with(LocalDensity.current) { constraints.maxHeight.toDp() } - HeaderHeight
+            }
+            (available / PeriodRowHeight).toInt().coerceAtLeast(1)
+        }
+        val periods = 1..minOf(maxSection, visibleRows)
         val totalWidth = if (isBounded) maxWidth else GridTotalWidth
         // 7 天平分「总宽 - 时间列」
         val dayWidth = if (isBounded) {
@@ -399,7 +417,7 @@ private fun CourseBlock(
             .offset(x = x, y = y)
             .size(width = dayColumnWidth, height = blockHeight)
             .padding(1.5.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.courseRadius))
             .background(bgColor)
             // clickable 放在 clip 之后，水波纹才会被圆角裁掉
             .then(

@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -130,16 +131,18 @@ fun FloatingBottomBar(
         }
     }
 
-    // 容器 66dp → 圆角 33dp；药丸 56dp → 圆角 28dp（二者均为全胶囊）
-    val barHeight = 66.dp
-    val barShape = RoundedCornerShape(barHeight / 2)
+    // 底栏的高度/圆角/外边距都跟界面风格走：
+    // 原版/HyperOS/M3/iOS 是胶囊，Linear 只有 12dp（方正），极简 14dp。
+    val metrics = LocalUiMetrics.current
+    val barHeight = metrics.dockHeight
+    val barShape = RoundedCornerShape(metrics.dockRadius)
     val innerPadding = 5.dp
     val pillHeight = barHeight - innerPadding * 2
     val pillShape = RoundedCornerShape(pillHeight / 2)
 
     Box(
         modifier = modifier
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = metrics.dockMargin, vertical = metrics.dockMargin)
             .then(
                 if (isGlass) {
                     Modifier

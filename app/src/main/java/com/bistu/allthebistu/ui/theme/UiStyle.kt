@@ -98,6 +98,9 @@ object UiStyle {
     /** 该风格下卡片是否靠阴影分层（极简 / M3 / iOS 不用阴影） */
     fun usesShadow(style: Int): Boolean = style == ORIGINAL || style == HYPEROS
 
+    /** 形态令牌（圆角 / 间距 / 字号 / 底栏），见 [UiMetrics] */
+    fun metrics(style: Int): UiMetrics = metricsOf(sanitize(style))
+
     /**
      * 设置页里的三色点：底色 / 强调 / 正文。
      *

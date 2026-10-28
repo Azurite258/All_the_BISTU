@@ -43,6 +43,7 @@ import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.TermWeek
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -165,8 +166,8 @@ private fun ScheduleContent(
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(
-                        start = HyperSpacing.pageHorizontal,
-                        end = HyperSpacing.pageHorizontal,
+                        start = LocalUiMetrics.current.pagePadding,
+                        end = LocalUiMetrics.current.pagePadding,
                         top = 16.dp,
                         bottom = 8.dp
                     ),
@@ -176,7 +177,7 @@ private fun ScheduleContent(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "课表",
-                        fontSize = 30.sp,
+                        fontSize = LocalUiMetrics.current.titleSize,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -297,13 +298,13 @@ private fun ScheduleContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
-                            start = HyperSpacing.pageHorizontal,
-                            end = HyperSpacing.pageHorizontal,
+                            start = LocalUiMetrics.current.pagePadding,
+                            end = LocalUiMetrics.current.pagePadding,
                             // 底部留出悬浮导航栏的空间（胶囊高度 + 上下边距）
                             // 与登录引导条共用同一个常量，保证两者底边对齐
-                            bottom = HyperSpacing.contentBottom
+                            bottom = LocalUiMetrics.current.contentBottom
                         )
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
                         // 有壁纸时透出来：这张卡占满整屏，是课表页唯一挡住壁纸的东西
                         // （格子 cellBg 在壁纸开启时是透明的，只有课程块本身不透明）。
                         // 可见度 ≈ (1 - alpha) × (1 - 蒙层)，默认 0.40 / 0.70 → 约 18%。
@@ -490,11 +491,11 @@ private fun WeekSelector(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                start = HyperSpacing.pageHorizontal,
-                end = HyperSpacing.pageHorizontal,
-                bottom = HyperSpacing.cardGap
+                start = LocalUiMetrics.current.pagePadding,
+                end = LocalUiMetrics.current.pagePadding,
+                bottom = LocalUiMetrics.current.cardGap
             )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.innerRadius))
             .background(cardSurfaceColor(alpha = 0.88f))
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

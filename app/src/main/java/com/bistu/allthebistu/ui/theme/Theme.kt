@@ -48,7 +48,10 @@ fun Study1Theme(
         UiStyle.colorScheme(style, darkTheme)
     }
 
-    CompositionLocalProvider(LocalUiStyle provides style) {
+    CompositionLocalProvider(
+        LocalUiStyle provides style,
+        LocalUiMetrics provides UiStyle.metrics(style)
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

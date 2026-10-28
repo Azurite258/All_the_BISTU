@@ -29,6 +29,7 @@ import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.schedule.ScheduleUiState
 import com.bistu.allthebistu.ui.schedule.TERM_START_DATE as TERM_START_OF_TERM
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import java.util.Calendar
 
@@ -97,14 +98,14 @@ fun StudyScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .verticalScroll(rememberScrollState())
             .padding(
-                start = HyperSpacing.pageHorizontal,
-                end = HyperSpacing.pageHorizontal,
+                start = LocalUiMetrics.current.pagePadding,
+                end = LocalUiMetrics.current.pagePadding,
                 top = 16.dp
             )
     ) {
         Text(
             text = "学习",
-            fontSize = 30.sp,
+            fontSize = LocalUiMetrics.current.titleSize,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -133,11 +134,11 @@ fun StudyScreen(
                     report = report
                 )
 
-                Spacer(Modifier.height(HyperSpacing.cardGap))
+                Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
 
                 TodaySummary(courses = todayCourses, nowMinutes = nowMinutes)
 
-                Spacer(Modifier.height(HyperSpacing.cardGap))
+                Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -186,7 +187,7 @@ fun StudyScreen(
             }
         }
 
-        Spacer(Modifier.height(HyperSpacing.cardGap))
+        Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
 
         // 底部留白要同时躲开「悬浮导航栏」和「未登录提示条」，
         // 只留 100dp 时最后一张卡会被提示条盖住
@@ -216,7 +217,7 @@ private fun SemesterOverviewCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp)
     ) {
@@ -366,7 +367,7 @@ private fun TodaySummary(courses: List<Course>, nowMinutes: Int) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp)
     ) {
@@ -561,7 +562,7 @@ private fun HintCard(title: String, body: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
             .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp)
     ) {

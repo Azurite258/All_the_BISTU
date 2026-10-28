@@ -53,6 +53,7 @@ import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.Study1Theme
 import com.bistu.allthebistu.ui.theme.WallpaperBackdrop
 import kotlinx.coroutines.Job
@@ -241,7 +242,7 @@ private fun AppRoot(
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 // 与课表卡片的底部留白保持一致，两条底边才在同一条线上
-                .padding(bottom = HyperSpacing.contentBottom)
+                .padding(bottom = LocalUiMetrics.current.contentBottom)
         ) {
             LoginPromptBar(
                 onLogin = { openLogin() },
