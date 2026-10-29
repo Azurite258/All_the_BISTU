@@ -206,10 +206,12 @@ class UiStyleTest {
     }
 
     @Test
-    fun `非法风格值收敛到原版`() {
-        assertEquals(UiStyle.ORIGINAL, UiStyle.sanitize(-1))
-        assertEquals(UiStyle.ORIGINAL, UiStyle.sanitize(6))
-        assertEquals(UiStyle.ORIGINAL, UiStyle.sanitize(999))
+    fun `非法风格值收敛到默认风格`() {
+        // 0.19-i 起默认风格从「原版」改成「iOS 液态玻璃」。
+        // 这里断言 DEFAULT 而不是写死某个常量 —— 以后再换默认风格不必回来改测试。
+        assertEquals(UiStyle.DEFAULT, UiStyle.sanitize(-1))
+        assertEquals(UiStyle.DEFAULT, UiStyle.sanitize(6))
+        assertEquals(UiStyle.DEFAULT, UiStyle.sanitize(999))
         UiStyle.all.forEach { assertEquals(it, UiStyle.sanitize(it)) }
     }
 

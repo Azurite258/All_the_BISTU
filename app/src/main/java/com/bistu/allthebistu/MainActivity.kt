@@ -372,13 +372,11 @@ private fun LoginPromptBar(
             .onSizeChanged { onHeightChange(it.height) }
             .padding(horizontal = HyperSpacing.pageHorizontal)
             .clip(shape)
-            // 浮层必须不透明：iOS 的 surfaceVariant 是半透明白，直接铺会透出下面的课表
-            .background(opaqueSurface(MaterialTheme.colorScheme.surfaceVariant))
-            .border(
-                width = 0.5.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
-                shape = shape
-            )
+            // 浮层必须不透明：iOS 的 surface 是半透明白，直接铺会透出下面的课表。
+            // 底色用 surface（不是 surfaceVariant）—— surfaceVariant 只有 38% 白，
+            // 合成出来偏灰、比旁边的卡片暗一截，看着像另一套材质。
+            // 也不加描边：它和白卡片之间靠投影和位置区分就够了，多一圈线反而更脏。
+            .background(opaqueSurface(MaterialTheme.colorScheme.surface))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -22,7 +22,7 @@ import com.bistu.allthebistu.data.prefs.CourseColorScheme
  */
 object UiStyle {
 
-    /** 原版：深色蓝调，也就是 0.16 及以前的外观。默认值 */
+    /** 原版：深色蓝调，也就是 0.16 及以前的外观 */
     const val ORIGINAL = 0
 
     /** HyperOS 澎湃：浅灰底 + 橙色强调 + 26dp 大圆角 */
@@ -40,7 +40,14 @@ object UiStyle {
     /** iOS 液态玻璃：浅底 + 28dp 大圆角 + 蓝强调 + 悬浮胶囊底栏 */
     const val IOS = 5
 
-    const val DEFAULT = ORIGINAL
+    /**
+     * 新装用户的默认界面风格：**iOS 液态玻璃**（0.19-i 起）。
+     *
+     * 只影响「第一次安装、DataStore 里还没有 ui_style」的情况；
+     * 已经选过风格的老用户读的是自己存的值，不会被这次改动覆盖。
+     * `sanitize()` 遇到非法值时也退回这里。
+     */
+    const val DEFAULT = IOS
 
     val all = listOf(ORIGINAL, HYPEROS, LINEAR, MINIMAL, MATERIAL3, IOS)
 
