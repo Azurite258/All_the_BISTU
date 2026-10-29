@@ -333,9 +333,6 @@ private fun ScheduleContent(
                         // 底色另有讲究：有壁纸时要透出照片，iOS 要透出光晕。
                         .styleCard(shape = cardShape, color = cardColor)
                 ) {
-                    // Pager 的 content lambda 里没有 BoxWithConstraintsScope 的隐式接收者，
-                    // 先把实测高度取出来，再往下传
-                    val cardHeight = maxHeight
                     if (data.courses.isEmpty()) {
                         // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。
                         // 以前这种情况会被报成「登录已过期」，人直接被踢回登录页。
@@ -377,9 +374,8 @@ private fun ScheduleContent(
                                     termStartDate = TERM_START_DATE,
                                     fontLevel = settings.fontLevel,
                                     paletteIndex = paletteIndex,
-                                    onCourseClick = { selectedCourse = it },
-                                    // 卡片的实际可用高度：减掉卡片内部上下留白
-                                    heightHint = cardHeight
+                                    onCourseClick = { selectedCourse = it }
+                                    // 高度不再往下传：表格固定画满 14 节，超出的靠滚动
                                 )
                             }
                         }

@@ -115,8 +115,6 @@ fun ScheduleGrid(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
-    /** 外层卡片实测可用的高度。给了它就不必再靠屏幕高度估算可见行数 */
-    heightHint: androidx.compose.ui.unit.Dp? = null,
     modifier: Modifier = Modifier
 ) {
     val base = LocalDensity.current
@@ -133,7 +131,6 @@ fun ScheduleGrid(
             fontLevel = fontLevel,
             paletteIndex = paletteIndex,
             onCourseClick = onCourseClick,
-            heightHint = heightHint,
             modifier = modifier
         )
     }
@@ -150,7 +147,6 @@ private fun ScheduleGridBody(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
-    heightHint: androidx.compose.ui.unit.Dp? = null,
     modifier: Modifier = Modifier
 ) {
     // 表格的骨架色跟随界面风格，不再写死灰阶：
@@ -197,25 +193,13 @@ private fun ScheduleGridBody(
     BoxWithConstraints(modifier = modifier) {
         val isBounded = constraints.maxWidth != androidx.compose.ui.unit.Constraints.Infinity
 
-        // 行高是固定的 56dp，卡片高度却随屏幕尺寸和底栏风格变化，除不尽时
-        // 最后一行会被卡片下边缘切掉一半，看起来像「课块卡进底栏里」。
-        // 那一行本来就露不全，不如不画——露半截比不画难看得多。
-        // 注意 constraints 给的是**像素**，必须先换成 dp 再跟行高相除。
-        // Pager 里的这一页拿到的 maxHeight 是无穷（高度不做约束），
-        // 这时退回「屏幕高度 × 0.68」估算课表卡的可视高度：
-        // 少画几行最多是晚课看不到（本来也被卡片裁掉），多画一行就是半截课块露在底边。
-        val visibleRows = run {
-            val available = when {
-                constraints.maxHeight != androidx.compose.ui.unit.Constraints.Infinity ->
-                    with(LocalDensity.current) { constraints.maxHeight.toDp() } - HeaderHeight
-                // 外层卡片给了实测高度就用它，这是最准的
-                heightHint != null -> heightHint - HeaderHeight
-                // 兜底：按屏幕高度估算
-                else -> LocalConfiguration.current.screenHeightDp.dp * 0.68f - HeaderHeight
-            }
-            (available / PeriodRowHeight).toInt().coerceAtLeast(1)
-        }
-        val periods = 1..minOf(maxSection, visibleRows)
+        // 行数：**全部画满**，不再按可视高度截断。
+        //
+        // 之前只画「卡片放得下的那几行」（通常 8~9 行），第 9 节以后的课在界面上
+        // 根本不存在，往上滑也滑不出来 —— 这是 bug，不是设计。现在固定画满
+        // maxSection（至少 14 节），超出的部分靠外层 Box(verticalScroll) 滚出来；
+        // 卡片照旧用圆角裁切，滑到底能看到最后一节。
+        val periods = 1..maxSection
         val totalWidth = if (isBounded) maxWidth else GridTotalWidth
         // 7 天平分「总宽 - 时间列」
         val dayWidth = if (isBounded) {
@@ -356,6 +340,10 @@ private fun ScheduleGridBody(
                     }
                 }
             }
+
+            // 现在整张表比卡片高、靠滚动看晚课，滑到底时给最后一行留一点余量，
+            // 免得第 14 节正好贴在卡片下沿上
+            Spacer(Modifier.height(PeriodRowHeight * 0.35f))
         }
     }
 }

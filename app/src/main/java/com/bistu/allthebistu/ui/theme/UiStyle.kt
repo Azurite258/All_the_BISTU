@@ -87,8 +87,9 @@ object UiStyle {
      */
     fun courseTone(style: Int, isDark: Boolean): CourseTone = when (style) {
         HYPEROS -> if (isDark) {
-            // 暖橙调压暗：饱和度留一半，避免深色下变成脏褐色
-            CourseTone(saturation = 0.50f, lightness = 0.30f, textLightness = 0.95f)
+            // 深色下把饱和度砍到 0.20：0.50 那种会在黑底上炸成一块荧光橙，
+            // 用户认可的原版深色就是「低饱和 + 深底」这一挂
+            CourseTone(saturation = 0.20f, lightness = 0.30f, textLightness = 0.94f)
         } else {
             CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
         }
@@ -99,22 +100,20 @@ object UiStyle {
             CourseTone(saturation = 0.34f, lightness = 0.93f, textLightness = 0.24f)
         }
         MINIMAL -> if (isDark) {
-            // 极简是「几乎无色」，深色下也只留一丝灰调：饱和度给到 0.16 会变成
-            // 深棕 / 深橄榄那种脏色，压到 0.09 才是灰块带一点点色相冷暖
-            CourseTone(saturation = 0.09f, lightness = 0.30f, textLightness = 0.90f)
+            // 极简是「几乎无色」，深色下只留一丝灰调
+            CourseTone(saturation = 0.06f, lightness = 0.28f, textLightness = 0.90f)
         } else {
             CourseTone(saturation = 0.52f, lightness = 0.91f, textLightness = 0.30f)
         }
         MATERIAL3 -> if (isDark) {
-            // M3 深色主题本来就是 tonal surface：中等饱和、偏暗
-            CourseTone(saturation = 0.44f, lightness = 0.32f, textLightness = 0.93f)
+            // M3 深色主题的 tonal surface 本来就偏灰，不要做成彩色糖果
+            CourseTone(saturation = 0.18f, lightness = 0.30f, textLightness = 0.93f)
         } else {
             CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
         }
         IOS -> if (isDark) {
-            // 玻璃在暗底上要能透出颜色，饱和度比其余几套高；明度压到 0.30 ——
-            // 绿色（h=160）在 0.34 时压白字只有 4.18:1，不够 4.5
-            CourseTone(saturation = 0.60f, lightness = 0.30f, textLightness = 0.96f)
+            // 玻璃在暗底要透色，但仍比原来克制；明度不超过 0.32 才压得住白字
+            CourseTone(saturation = 0.26f, lightness = 0.32f, textLightness = 0.95f)
         } else {
             CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
         }
