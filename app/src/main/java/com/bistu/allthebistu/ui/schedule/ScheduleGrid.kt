@@ -409,7 +409,7 @@ private fun CourseBlock(
     // 其余配色方案继续用按亮度挑黑白的旧逻辑
     val (titleColor, subColor) = remember(bgColor, isDark, colorScheme, uiStyleNow, courseIndex) {
         if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
-            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow), bgColor, isDark)
+            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow, isDark), bgColor, isDark)
         } else {
             CourseColors.textColorOf(bgColor, isDark) to CourseColors.subTextColorOf(bgColor, isDark)
         }
@@ -426,9 +426,9 @@ private fun CourseBlock(
 
     val blockShape = RoundedCornerShape(LocalUiMetrics.current.courseRadius)
     // 方向稿里每个课块都有一圈 1px 描边（iOS 是白边），少了它课块会显得「贴在纸上」
-    val blockBorder = remember(colorScheme, uiStyleNow, courseIndex) {
+    val blockBorder = remember(colorScheme, uiStyleNow, courseIndex, isDark) {
         if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
-            CourseColors.styleBorderColor(courseIndex, UiStyle.courseTone(uiStyleNow), uiStyleNow)
+            CourseColors.styleBorderColor(courseIndex, UiStyle.courseTone(uiStyleNow, isDark), uiStyleNow)
         } else {
             Color.Transparent
         }

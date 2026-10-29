@@ -113,6 +113,8 @@ class UiStyleTest {
     /**
      * 数值来自方向稿 `ui-lab/index.html` 的 `--course-s / --course-l / --course-t`。
      * 改这里之前先去改方向稿，否则「一比一复刻」就成了随口说说。
+     *
+     * 注意：方向稿本身是深色界面，这组值对应**深色模式**。
      */
     @Test
     fun `六套风格的课程色参数与方向稿一致`() {
@@ -126,7 +128,7 @@ class UiStyleTest {
         )
         assertEquals("方向稿里有六套风格", 6, expected.size)
         expected.forEach { (style, v) ->
-            val t = UiStyle.courseTone(style)
+            val t = UiStyle.courseTone(style, isDark = true)
             assertEquals("${UiStyle.label(style)} 饱和度", v.first, t.saturation, 0.001f)
             assertEquals("${UiStyle.label(style)} 明度", v.second, t.lightness, 0.001f)
             assertEquals("${UiStyle.label(style)} 文字明度", v.third, t.textLightness, 0.001f)
@@ -135,22 +137,60 @@ class UiStyleTest {
         assertEquals(
             "六套风格的课程色参数有重复",
             6,
-            UiStyle.all.map { UiStyle.courseTone(it) }.toSet().size
+            UiStyle.all.map { UiStyle.courseTone(it, isDark = true) }.toSet().size
         )
+    }
+
+    /**
+     * 0.19-a 踩过的坑：原版 / Linear 的课块参数是照深色底配的（明度 34% / 22%），
+     * 浅色模式下直接套用 = 白页面上压一堆深灰块、文字还是同色相灰蓝，只有 3:1。
+     * 这两套必须分明暗；其余四套本来就浅底，深浅共用。
+     */
+    @Test
+    fun `深色底风格在浅色模式下翻成浅底深字`() {
+        listOf(UiStyle.ORIGINAL, UiStyle.LINEAR).forEach { style ->
+            val light = UiStyle.courseTone(style, isDark = false)
+            val dark = UiStyle.courseTone(style, isDark = true)
+            assertTrue(
+                "${UiStyle.label(style)} 浅色模式课块底明度 ${light.lightness} 太暗",
+                light.lightness > 0.85f
+            )
+            assertTrue(
+                "${UiStyle.label(style)} 浅色模式文字明度 ${light.textLightness} 太浅",
+                light.textLightness < 0.4f
+            )
+            assertNotEquals("${UiStyle.label(style)} 深浅两套参数不该相同", dark, light)
+        }
+        // 浅底课块的四套：深浅模式一套参数，切主题不会变味
+        listOf(UiStyle.HYPEROS, UiStyle.MINIMAL, UiStyle.MATERIAL3, UiStyle.IOS).forEach { style ->
+            assertEquals(
+                "${UiStyle.label(style)} 浅色模式不该改课块参数",
+                UiStyle.courseTone(style, isDark = true),
+                UiStyle.courseTone(style, isDark = false)
+            )
+        }
     }
 
     @Test
     fun `跟随风格时课块文字对比度达标`() {
         UiStyle.all.forEach { style ->
-            val tone = UiStyle.courseTone(style)
-            // 色相池有 9 个色相，逐个都要过
-            repeat(9) { i ->
-                val bg = CourseColors.styleBackground(i, tone)
-                val (fg, sub) = CourseColors.textPairStyle(i, tone, bg, isDark = false)
-                val c = CourseColors.contrastRatio(fg, bg)
-                assertTrue("${UiStyle.label(style)} 第 $i 色主文字对比度只有 $c", c >= 4.5f)
-                val cs = CourseColors.contrastRatio(sub, bg)
-                assertTrue("${UiStyle.label(style)} 第 $i 色副文字对比度只有 $cs", cs >= 3f)
+            darkModes.forEach { dark ->
+                val tone = UiStyle.courseTone(style, isDark = dark)
+                // 色相池有 9 个色相，逐个都要过
+                repeat(9) { i ->
+                    val bg = CourseColors.styleBackground(i, tone)
+                    val (fg, sub) = CourseColors.textPairStyle(i, tone, bg, isDark = dark)
+                    val c = CourseColors.contrastRatio(fg, bg)
+                    assertTrue(
+                        "${UiStyle.label(style)}（${scenario(style, dark)}）第 $i 色主文字对比度只有 $c",
+                        c >= 4.5f
+                    )
+                    val cs = CourseColors.contrastRatio(sub, bg)
+                    assertTrue(
+                        "${UiStyle.label(style)}（${scenario(style, dark)}）第 $i 色副文字对比度只有 $cs",
+                        cs >= 3f
+                    )
+                }
             }
         }
     }

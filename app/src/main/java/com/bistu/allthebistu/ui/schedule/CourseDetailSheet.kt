@@ -68,7 +68,7 @@ fun CourseDetailSheet(
     }
     val onAccent = remember(accent, isDark, colorScheme, uiStyleNow, courseIndex) {
         if (colorScheme == CourseColorScheme.FOLLOW_STYLE) {
-            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow), accent, isDark).first
+            CourseColors.textPairStyle(courseIndex, UiStyle.courseTone(uiStyleNow, isDark), accent, isDark).first
         } else {
             CourseColors.textColorOf(accent, isDark)
         }

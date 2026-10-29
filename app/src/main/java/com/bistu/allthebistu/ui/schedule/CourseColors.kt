@@ -128,7 +128,7 @@ object CourseColors {
         return when (scheme) {
             // 跟随界面风格：按该风格的 HSL 参数实时算，与方向稿一比一
             CourseColorScheme.FOLLOW_STYLE ->
-                styleBackground(index, UiStyle.courseTone(style))
+                styleBackground(index, UiStyle.courseTone(style, isDark))
 
             CourseColorScheme.MORANDI -> {
                 val palette = if (isDark) MORANDI_DARK else MORANDI_LIGHT
@@ -161,7 +161,7 @@ object CourseColors {
     ): List<Color> = when (scheme) {
         // 跟随风格：色卡直接按当前风格的 HSL 参数算，所见即所得
         CourseColorScheme.FOLLOW_STYLE ->
-            (0 until count).map { styleBackground(it, UiStyle.courseTone(style)) }
+            (0 until count).map { styleBackground(it, UiStyle.courseTone(style, isDark)) }
 
         // 色板是「色相 × 明度」交错的，直接取前 N 个会全是同一两个色相，
         // 这里按步长跳着取，预览里能看出这是一套多色相色板

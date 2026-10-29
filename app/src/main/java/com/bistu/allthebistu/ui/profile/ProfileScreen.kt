@@ -1355,7 +1355,7 @@ private fun FontPreview(level: Int) {
     // 预览卡要和真实课块长得一样，所以文字也走同一套
     val (fg, sub) = CourseColors.textPairStyle(
         index = CourseColors.indexOf(sample),
-        tone = UiStyle.courseTone(previewStyle),
+        tone = UiStyle.courseTone(previewStyle, isDark),
         background = bg,
         isDark = isDark
     )

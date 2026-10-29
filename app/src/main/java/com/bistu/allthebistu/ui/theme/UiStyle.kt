@@ -80,16 +80,30 @@ object UiStyle {
      * 背景 = `hsl(h, s, l)`，文字 = `hsl(h, 48%, t)`，描边 = `hsl(h, 40%, t / .13)`。
      * 色相 h 由课程序号从固定色相池里取，见 CourseColors.COURSE_HUES。
      *
-     * 注意这里**不区分明暗**：方向稿里每套风格就是一套固定的课块观感，
-     * 跟着 themeMode 变会让「切风格」的辨识度被稀释。
+     * **为什么原版 / Linear 要分明暗**：方向稿里这两套本身就是深色界面，
+     * `--course-l` 是照着深底配的（34% / 22%）——放到浅色页面上就变成白底压
+     * 一堆深灰块，字还是同色相的灰蓝，对比度只有 3:1，看着又脏又糊（0.19-a 的
+     * 实测截图就是这个结果）。所以这两套在浅色模式下换成「浅底 + 深字」的反向参数，
+     * 深色模式仍用方向稿原值。
+     * 其余四套本来就是浅底课块，深浅模式共用一套参数不变。
      */
-    fun courseTone(style: Int): CourseTone = when (style) {
+    fun courseTone(style: Int, isDark: Boolean): CourseTone = when (style) {
         HYPEROS -> CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
-        LINEAR -> CourseTone(saturation = 0.36f, lightness = 0.22f, textLightness = 0.84f)
+        LINEAR -> if (isDark) {
+            CourseTone(saturation = 0.36f, lightness = 0.22f, textLightness = 0.84f)
+        } else {
+            // 浅色：近白底 + 淡紫灰，保住 Linear 的「冷、克制的紫」辨识度
+            CourseTone(saturation = 0.34f, lightness = 0.93f, textLightness = 0.24f)
+        }
         MINIMAL -> CourseTone(saturation = 0.52f, lightness = 0.91f, textLightness = 0.30f)
         MATERIAL3 -> CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
         IOS -> CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
-        else -> CourseTone(saturation = 0.11f, lightness = 0.34f, textLightness = 0.97f)
+        else -> if (isDark) {
+            CourseTone(saturation = 0.11f, lightness = 0.34f, textLightness = 0.97f)
+        } else {
+            // 浅色：低饱和的冷灰蓝，与方向稿里原版的「灰调 + 蓝强调」是一路的
+            CourseTone(saturation = 0.24f, lightness = 0.90f, textLightness = 0.26f)
+        }
     }
 
     /**
