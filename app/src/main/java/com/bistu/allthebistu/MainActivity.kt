@@ -56,6 +56,7 @@ import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.Study1Theme
 import com.bistu.allthebistu.ui.theme.StyleGlow
+import com.bistu.allthebistu.ui.theme.opaqueSurface
 import com.bistu.allthebistu.ui.theme.WallpaperBackdrop
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -347,7 +348,8 @@ private fun LoginPromptBar(
             .fillMaxWidth()
             .padding(horizontal = HyperSpacing.pageHorizontal)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            // 浮层必须不透明：iOS 的 surfaceVariant 是半透明白，直接铺会透出下面的课表
+            .background(opaqueSurface(MaterialTheme.colorScheme.surfaceVariant))
             .border(
                 width = 0.5.dp,
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),

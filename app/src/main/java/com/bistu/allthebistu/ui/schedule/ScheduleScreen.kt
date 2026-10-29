@@ -31,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +48,10 @@ import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.LocalUiStyle
+import com.bistu.allthebistu.ui.theme.UiStyle
+import com.bistu.allthebistu.ui.theme.glassEdge
+import com.bistu.allthebistu.ui.theme.styleCard
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -307,7 +313,9 @@ private fun ScheduleContent(
                     metrics.glowBackdrop -> MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
                     else -> cardSurfaceColor()
                 }
-                Box(
+                // 用 BoxWithConstraints 而不是 Box：这里的高度是确定的，
+                // 传给网格让它算「能完整放下几行」，比按屏幕高度估算准
+                androidx.compose.foundation.layout.BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
@@ -317,23 +325,14 @@ private fun ScheduleContent(
                             // 与登录引导条共用同一个常量，保证两者底边对齐
                             bottom = metrics.contentBottom
                         )
-                        .clip(cardShape)
-                        // 有壁纸时透出来：这张卡占满整屏，是课表页唯一挡住壁纸的东西
-                        // （格子 cellBg 在壁纸开启时是透明的，只有课程块本身不透明）。
-                        // 可见度 ≈ (1 - alpha) × (1 - 蒙层)，默认 0.40 / 0.70 → 约 18%。
-                        // 之前写 0.72 只剩 8%，肉眼基本看不出来，这次一起改小。
-                        // 想更明显让用户拖「蒙层」滑块，别改这个常量。
-                        .background(cardColor)
-                        // 靠边框分层的风格（Linear / 极简 / M3 / iOS）在这里也要有边，
-                        // 否则整屏一张白卡浮在背景上，边界完全消失
-                        .then(
-                            if (metrics.useBorder) {
-                                Modifier.border(1.dp, MaterialTheme.colorScheme.outline, cardShape)
-                            } else {
-                                Modifier
-                            }
-                        )
+                        // 这张卡就是方向稿里的 .grid-wrap：圆角 --r-card、阴影/描边/玻璃边
+                        // 全部跟风格走（HyperOS 有阴影、Linear 有描边、iOS 有白边 + 内高光）。
+                        // 底色另有讲究：有壁纸时要透出照片，iOS 要透出光晕。
+                        .styleCard(shape = cardShape, color = cardColor)
                 ) {
+                    // Pager 的 content lambda 里没有 BoxWithConstraintsScope 的隐式接收者，
+                    // 先把实测高度取出来，再往下传
+                    val cardHeight = maxHeight
                     if (data.courses.isEmpty()) {
                         // 接口通了、但本学期确实没排课（新生 / 毕业年级 / 休学）。
                         // 以前这种情况会被报成「登录已过期」，人直接被踢回登录页。
@@ -375,7 +374,9 @@ private fun ScheduleContent(
                                     termStartDate = TERM_START_DATE,
                                     fontLevel = settings.fontLevel,
                                     paletteIndex = paletteIndex,
-                                    onCourseClick = { selectedCourse = it }
+                                    onCourseClick = { selectedCourse = it },
+                                    // 卡片的实际可用高度：减掉卡片内部上下留白
+                                    heightHint = cardHeight
                                 )
                             }
                         }
@@ -462,17 +463,57 @@ private fun HyperIconButton(
     onClick: () -> Unit
 ) {
     val m = LocalUiMetrics.current
-    // iOS 液态玻璃的顶栏按钮是半透明圆钮 + 白边（方向稿 .icon-btn），
-    // 其余风格仍是实心圆底
-    val bg = if (m.glowBackdrop) Color.White.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface
+    val uiStyle = LocalUiStyle.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // 方向稿 .icon-btn：36dp 圆钮（iOS 38dp），底色 --surface + --shadow；
+    // Linear 换成 1px --line 描边、无阴影；极简用 surface-2 + 描边；
+    // M3 用 accent-soft 底 + accent-text 图标；iOS 半透明白 + 白边 + 内高光。
+    val bg = when (uiStyle) {
+        UiStyle.MATERIAL3 -> UiStyle.accentSoft(uiStyle, isDark)
+        UiStyle.IOS -> Color.White.copy(alpha = 0.55f)
+        // 极简的按钮底色是 --surface-2，也就是列表里的纯白（与卡片同色，靠描边分离）
+        else -> MaterialTheme.colorScheme.surface
+    }
+    val tint = when (uiStyle) {
+        UiStyle.MATERIAL3 -> UiStyle.accentText(uiStyle, isDark)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(m.iconButtonSize)
+            .then(
+                if (m.usesShadow) {
+                    Modifier.shadow(
+                        elevation = 3.dp,
+                        shape = CircleShape,
+                        clip = false,
+                        ambientColor = Color(0x14000000),
+                        spotColor = Color(0x24000000)
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clip(CircleShape)
             .background(bg)
             .then(
-                if (m.glowBackdrop) Modifier.border(1.dp, Color.White.copy(alpha = 0.75f), CircleShape)
-                else Modifier
+                if (m.usesBorder) {
+                    Modifier.border(
+                        1.dp,
+                        if (uiStyle == UiStyle.IOS) Color.White.copy(alpha = 0.72f)
+                        else MaterialTheme.colorScheme.outline,
+                        CircleShape
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                if (uiStyle == UiStyle.IOS) {
+                    Modifier.glassEdge(m.iconButtonSize / 2, topAlpha = 0.95f, bottomAlpha = 0f)
+                } else {
+                    Modifier
+                }
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -480,8 +521,8 @@ private fun HyperIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(20.dp)
+            tint = tint,
+            modifier = Modifier.size(19.dp)
         )
     }
 }
@@ -517,26 +558,43 @@ private fun WeekSelector(
         }
     }
 
+    val m = LocalUiMetrics.current
+    val uiStyle = LocalUiStyle.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // 方向稿里周次卡就是一张普通 .card：圆角 --r-card、padding 11 / --cardpad、
+    // 阴影/描边跟着风格走。之前用的是 innerRadius + 半透明底，两处都不对。
+    // 周切换圆钮 30dp，底色 accent-soft（Linear 用 surface-2、iOS 用半透明白）
+    val navBg = when (uiStyle) {
+        UiStyle.LINEAR -> MaterialTheme.colorScheme.surfaceVariant
+        UiStyle.IOS -> Color.White.copy(alpha = 0.58f)
+        else -> UiStyle.accentSoft(uiStyle, isDark)
+    }
+    val navTint = when (uiStyle) {
+        UiStyle.LINEAR, UiStyle.MINIMAL -> MaterialTheme.colorScheme.onSurface
+        else -> UiStyle.accentText(uiStyle, isDark)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                start = LocalUiMetrics.current.pagePadding,
-                end = LocalUiMetrics.current.pagePadding,
-                bottom = LocalUiMetrics.current.cardGap
-            )
-            .clip(RoundedCornerShape(LocalUiMetrics.current.innerRadius))
-            .background(cardSurfaceColor(alpha = 0.88f))
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(start = m.pagePadding, end = m.pagePadding, bottom = m.cardGap)
+            .styleCard(shape = RoundedCornerShape(m.cardRadius))
+            .padding(horizontal = m.cardPadding, vertical = 11.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 上一周
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(m.weekNavSize)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(navBg)
+                .then(
+                    if (uiStyle == UiStyle.IOS) {
+                        Modifier.border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
+                    } else {
+                        Modifier
+                    }
+                )
                 .clickable(enabled = currentWeek > weekRange.first) {
                     if (currentWeek > weekRange.first) onWeekChange(currentWeek - 1)
                 },
@@ -545,11 +603,8 @@ private fun WeekSelector(
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = "上一周",
-                tint = if (currentWeek > weekRange.first)
-                    MaterialTheme.colorScheme.onSurface
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.size(20.dp)
+                tint = if (currentWeek > weekRange.first) navTint else navTint.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp)
             )
         }
 
@@ -557,20 +612,20 @@ private fun WeekSelector(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "第 $currentWeek 周",
-                fontSize = 18.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "$courseCount 节课",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 10.5.sp,
+                    color = UiStyle.accentText(uiStyle, isDark)
                 )
                 if (weekDateRange != null) {
                     Text(
                         text = " · $weekDateRange",
-                        fontSize = 12.sp,
+                        fontSize = 10.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -580,9 +635,16 @@ private fun WeekSelector(
         // 下一周
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(m.weekNavSize)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(navBg)
+                .then(
+                    if (uiStyle == UiStyle.IOS) {
+                        Modifier.border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
+                    } else {
+                        Modifier
+                    }
+                )
                 .clickable(enabled = currentWeek < weekRange.last) {
                     if (currentWeek < weekRange.last) onWeekChange(currentWeek + 1)
                 },
@@ -591,11 +653,8 @@ private fun WeekSelector(
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "下一周",
-                tint = if (currentWeek < weekRange.last)
-                    MaterialTheme.colorScheme.onSurface
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.size(20.dp)
+                tint = if (currentWeek < weekRange.last) navTint else navTint.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp)
             )
         }
     }

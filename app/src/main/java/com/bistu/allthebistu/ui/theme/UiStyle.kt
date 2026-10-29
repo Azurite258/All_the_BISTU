@@ -16,18 +16,19 @@ import com.bistu.allthebistu.data.prefs.CourseColorScheme
  * 主题模式决定明暗，界面风格决定配色、圆角、层次手段。所以每种风格都要有
  * 浅色和深色两份 ColorScheme。
  *
- * 六套风格共用同一套页面结构，**只换令牌**。这条是「让用户自选界面」能不能成立的判据：
- * 如果换风格需要改布局，那用户换一次就会遇到一次布局 Bug。
+ * 六套风格的**浅色**取值逐项照抄方向稿 `ui-lab/index.html` 的主题令牌
+ * （`--bg` / `--surface` / `--fg` / `--fg-2` / `--line` / `--accent` / `--accent-soft` …），
+ * 深色是把同一套色相压到深底上重新配的（方向稿只给了浅色）。
  */
 object UiStyle {
 
-    /** 原版：深色蓝调，也就是 0.16 及以前的外观。默认值，保证老用户不受影响 */
+    /** 原版：深色蓝调，也就是 0.16 及以前的外观。默认值 */
     const val ORIGINAL = 0
 
     /** HyperOS 澎湃：浅灰底 + 橙色强调 + 26dp 大圆角 */
     const val HYPEROS = 1
 
-    /** Linear：冷调深色 + 靛蓝 + 10dp 小圆角 + 细边框 */
+    /** Linear：冷调 + 靛蓝 + 10dp 小圆角 + 细边框 */
     const val LINEAR = 2
 
     /** 极简：近白、单色、无阴影、黑强调 */
@@ -36,7 +37,7 @@ object UiStyle {
     /** Material 3：Google 基线紫 + tonal 卡片 + 16dp */
     const val MATERIAL3 = 4
 
-    /** iOS 液态玻璃：浅底 + 28dp 大圆角 + 蓝强调，配合悬浮胶囊底栏 */
+    /** iOS 液态玻璃：浅底 + 28dp 大圆角 + 蓝强调 + 悬浮胶囊底栏 */
     const val IOS = 5
 
     const val DEFAULT = ORIGINAL
@@ -67,8 +68,7 @@ object UiStyle {
     /**
      * 每种风格配套的课程配色。
      *
-     * 现在六套风格都走「跟随风格」——课块颜色由 [courseTone] 的 HSL 参数实时算，
-     * 这是与方向稿一比一复刻的要求（方向稿里课块本来就不是固定色板）。
+     * 现在六套风格都走「跟随风格」——课块颜色由 [courseTone] 的 HSL 参数实时算。
      * 用户显式选了学校 / 莫兰迪 / 多巴胺时才不跟随，见 SettingsStore。
      */
     fun defaultCourseScheme(@Suppress("UNUSED_PARAMETER") style: Int): Int =
@@ -81,8 +81,7 @@ object UiStyle {
      * 色相 h 由课程序号从固定色相池里取，见 CourseColors.COURSE_HUES。
      *
      * 注意这里**不区分明暗**：方向稿里每套风格就是一套固定的课块观感，
-     * 跟着 themeMode 变会让「切风格」的辨识度被稀释。原版 / Linear 的 l 本来就很低，
-     * 那正是它们「深色风格」的一部分。
+     * 跟着 themeMode 变会让「切风格」的辨识度被稀释。
      */
     fun courseTone(style: Int): CourseTone = when (style) {
         HYPEROS -> CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
@@ -91,6 +90,32 @@ object UiStyle {
         MATERIAL3 -> CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
         IOS -> CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
         else -> CourseTone(saturation = 0.11f, lightness = 0.34f, textLightness = 0.97f)
+    }
+
+    /**
+     * 强调色的「填充版」`--accent`：用于按钮底、指示块、进度条。
+     * 直接当文字色会掉到 3.x:1（`#FF6A00` 压白只有 2.87:1），文字请用 [accentText]。
+     */
+    fun accent(style: Int, isDark: Boolean): Color = colorScheme(style, isDark).primary
+
+    /** 强调色的「文字版」`--accent-text`：小字和图标专用，保证 ≥4.5:1 */
+    fun accentText(style: Int, isDark: Boolean): Color = when (style) {
+        HYPEROS -> if (isDark) Color(0xFFFFB067) else Color(0xFFB34700)
+        LINEAR -> if (isDark) Color(0xFF7C87FF) else Color(0xFF4F58CC)
+        MINIMAL -> if (isDark) Color(0xFFEDEDED) else Color(0xFF000000)
+        MATERIAL3 -> if (isDark) Color(0xFFD0BCFF) else Color(0xFF6750A4)
+        IOS -> if (isDark) Color(0xFF4DA3FF) else Color(0xFF0A63D8)
+        else -> if (isDark) Color(0xFF7FA8FF) else Color(0xFF2A6FE0)
+    }
+
+    /** 强调色的淡底 `--accent-soft`：选中态、圆钮底色 */
+    fun accentSoft(style: Int, isDark: Boolean): Color = when (style) {
+        HYPEROS -> if (isDark) Color(0xFF3A2410) else Color(0xFFFFF0E5)
+        LINEAR -> if (isDark) Color(0xFF2A2B44) else Color(0xFFE4E6FB)
+        MINIMAL -> if (isDark) Color(0xFF2A2A2A) else Color(0xFFEDEDED)
+        MATERIAL3 -> if (isDark) Color(0xFF3B2E4F) else Color(0xFFEADDFF)
+        IOS -> if (isDark) Color(0x380A84FF) else Color(0x210A84FF)
+        else -> if (isDark) Color(0xFF22304F) else Color(0xFFE3EFFF)
     }
 
     /** 课表「今天」那一列的高亮底色 */
@@ -113,10 +138,7 @@ object UiStyle {
         else -> if (isDark) Color(0xFFFFB74D) else Color(0xFFE65100)
     }
 
-    /** 该风格下卡片是否靠阴影分层（极简 / M3 / iOS 不用阴影） */
-    fun usesShadow(style: Int): Boolean = style == ORIGINAL || style == HYPEROS
-
-    /** 形态令牌（圆角 / 间距 / 字号 / 底栏），见 [UiMetrics] */
+    /** 形态令牌（圆角 / 间距 / 字号 / 底栏 / 卡片分层），见 [UiMetrics] */
     fun metrics(style: Int): UiMetrics = metricsOf(sanitize(style))
 
     /**
@@ -198,73 +220,80 @@ data class CourseTone(
 val LocalUiStyle = staticCompositionLocalOf { UiStyle.DEFAULT }
 
 // ═══════════════════════════════════════════════════════════════
-// 六套配色（浅 / 深各一份）
+// 十二份配色（六套 × 浅/深）
+//
+// 浅色逐项照抄方向稿的 CSS 变量，映射关系：
+//   --bg → background        --surface → surface      --surface-2 → surfaceVariant
+//   --fg → onBackground/onSurface   --fg-2 → onSurfaceVariant
+//   --line → outline         --accent → primary       --accent-soft → primaryContainer
+//   --accent-text → onPrimaryContainer   --accent-fg → onPrimary
+// 极简的卡片用的是 `--surface-2`（比页面更白），所以这里把 surface 直接设成 #FFFFFF。
 // ═══════════════════════════════════════════════════════════════
 
-/** 原版：沿用 0.16 的 HyperOS 配色，切过来外观完全不变 */
+/** 原版（方向稿是深色主题，浅色版按同一色相提亮） */
 internal val OriginalLight = lightColorScheme(
-    primary = HyperPrimary,
-    onPrimary = Color.White,
+    primary = Color(0xFF5B8DEF),
+    onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE3EFFF),
-    onPrimaryContainer = HyperPrimaryDark,
-    secondary = HyperPrimaryDark,
-    onSecondary = Color.White,
-    background = HyperBackground,
-    onBackground = HyperOnBackground,
-    surface = HyperSurface,
-    onSurface = HyperOnBackground,
-    surfaceVariant = HyperSurfaceVariant,
-    onSurfaceVariant = HyperOnSurfaceVariant,
-    outline = HyperOutline,
-    outlineVariant = HyperOutline,
-    error = HyperRed,
-    onError = Color.White
+    onPrimaryContainer = Color(0xFF2A6FE0),
+    secondary = Color(0xFF2A6FE0),
+    onSecondary = Color(0xFFFFFFFF),
+    background = Color(0xFFF2F4F8),
+    onBackground = Color(0xFF101114),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF101114),
+    surfaceVariant = Color(0xFFEDEFF5),
+    onSurfaceVariant = Color(0xFF63676E),
+    outline = Color(0xFFE2E5EC),
+    outlineVariant = Color(0xFFEAEDF2),
+    error = Color(0xFFD93025),
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val OriginalDark = darkColorScheme(
-    primary = HyperPrimaryDarkMode,
-    onPrimary = Color(0xFF00325C),
-    primaryContainer = Color(0xFF1A3A5C),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = HyperPrimaryDarkMode,
-    onSecondary = Color(0xFF00325C),
-    background = HyperBackgroundDark,
-    onBackground = HyperOnBackgroundDark,
-    surface = HyperSurfaceDark,
-    onSurface = HyperOnBackgroundDark,
-    surfaceVariant = HyperSurfaceVariantDark,
-    onSurfaceVariant = HyperOnSurfaceVariantDark,
-    outline = HyperOutlineDark,
-    outlineVariant = HyperOutlineDark,
-    error = HyperRed,
-    onError = Color.White
+    primary = Color(0xFF5B8DEF),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFF22304F),
+    onPrimaryContainer = Color(0xFF7FA8FF),
+    secondary = Color(0xFF7FA8FF),
+    onSecondary = Color(0xFF0E0E10),
+    background = Color(0xFF0E0E10),
+    onBackground = Color(0xFFFFFFFF),
+    surface = Color(0xFF1B1B1D),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF242427),
+    onSurfaceVariant = Color(0xFF9A9AA0),
+    outline = Color(0xFF2E2E33),
+    outlineVariant = Color(0xFF26262A),
+    error = Color(0xFFFF6B60),
+    onError = Color(0xFF2A0503)
 )
 
 /** HyperOS 澎湃：橙色强调。按钮上压深色字——白字压 #FF6A00 只有 2.87:1，不合格 */
 internal val HyperOsLight = lightColorScheme(
     primary = Color(0xFFFF6A00),
     onPrimary = Color(0xFF1A1206),
-    primaryContainer = Color(0xFFFFE8D6),
-    onPrimaryContainer = Color(0xFF7A3300),
+    primaryContainer = Color(0xFFFFF0E5),
+    onPrimaryContainer = Color(0xFFB34700),
     secondary = Color(0xFFD95500),
-    onSecondary = Color.White,
+    onSecondary = Color(0xFFFFFFFF),
     background = Color(0xFFF2F3F7),
     onBackground = Color(0xFF101114),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF101114),
-    surfaceVariant = Color(0xFFEDEFF3),
+    surfaceVariant = Color(0xFFFFFFFF),
     onSurfaceVariant = Color(0xFF63676E),
-    outline = Color(0xFFDDE0E6),
-    outlineVariant = Color(0xFFE6E8ED),
+    outline = Color(0xFFE6E8EF),
+    outlineVariant = Color(0xFFEDEFF3),
     error = Color(0xFFD93025),
-    onError = Color.White
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val HyperOsDark = darkColorScheme(
     primary = Color(0xFFFF8A3D),
     onPrimary = Color(0xFF2A1400),
-    primaryContainer = Color(0xFF4A2400),
-    onPrimaryContainer = Color(0xFFFFD9BC),
+    primaryContainer = Color(0xFF3A2410),
+    onPrimaryContainer = Color(0xFFFFB067),
     secondary = Color(0xFFFFB067),
     onSecondary = Color(0xFF2A1400),
     background = Color(0xFF0E0E10),
@@ -279,14 +308,16 @@ internal val HyperOsDark = darkColorScheme(
     onError = Color(0xFF2A0503)
 )
 
-/** Linear：冷调深色系，靛蓝强调，小圆角 */
+/** Linear：冷调深色系，靛蓝强调，小圆角（浅色版按同一色相提亮） */
 internal val LinearLight = lightColorScheme(
-    primary = Color(0xFF4F58CC),
-    onPrimary = Color.White,
+    primary = Color(0xFF6B77FF),
+    // 白字压 #6B77FF 只有 3.68:1；方向稿里 Linear 从不用白字压实底
+    // （选中态是淡底 + 强调色字），所以实底按钮改用深靛蓝字
+    onPrimary = Color(0xFF10123A),
     primaryContainer = Color(0xFFE4E6FB),
-    onPrimaryContainer = Color(0xFF232878),
-    secondary = Color(0xFF5C63D6),
-    onSecondary = Color.White,
+    onPrimaryContainer = Color(0xFF4F58CC),
+    secondary = Color(0xFF4F58CC),
+    onSecondary = Color(0xFFFFFFFF),
     background = Color(0xFFF7F8FA),
     onBackground = Color(0xFF14151F),
     surface = Color(0xFFFFFFFF),
@@ -296,46 +327,46 @@ internal val LinearLight = lightColorScheme(
     outline = Color(0xFFE1E4EA),
     outlineVariant = Color(0xFFEAEDF1),
     error = Color(0xFFD93036),
-    onError = Color.White
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val LinearDark = darkColorScheme(
-    primary = Color(0xFF8E97FF),
+    primary = Color(0xFF6B77FF),
     onPrimary = Color(0xFF10123A),
-    primaryContainer = Color(0xFF262A55),
-    onPrimaryContainer = Color(0xFFDDE0FF),
+    primaryContainer = Color(0xFF2A2B44),
+    onPrimaryContainer = Color(0xFF7C87FF),
     secondary = Color(0xFF7C87FF),
     onSecondary = Color(0xFF10123A),
-    background = Color(0xFF0F1017),
-    onBackground = Color(0xFFE9EAF2),
-    surface = Color(0xFF1A1B26),
-    onSurface = Color(0xFFE9EAF2),
-    surfaceVariant = Color(0xFF242634),
-    onSurfaceVariant = Color(0xFF9DA1B4),
-    outline = Color(0xFF2E3040),
-    outlineVariant = Color(0xFF272938),
+    background = Color(0xFF191A24),
+    onBackground = Color(0xFFFFFFFF),
+    surface = Color(0xFF1F202D),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF272A3A),
+    onSurfaceVariant = Color(0xFF9B9EAB),
+    outline = Color(0xFF38394C),
+    outlineVariant = Color(0xFF2E3040),
     error = Color(0xFFFF8A8A),
     onError = Color(0xFF3A0A0A)
 )
 
-/** 极简：近白底、单色、无阴影。强调色就是黑，靠字重和留白建立层次 */
+/** 极简：页面 #F5F5F5、卡片 #FFFFFF、单色黑强调，靠描边与色阶分层 */
 internal val MinimalLight = lightColorScheme(
-    primary = Color(0xFF111111),
-    onPrimary = Color.White,
+    primary = Color(0xFF000000),
+    onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFEDEDED),
-    onPrimaryContainer = Color(0xFF111111),
-    secondary = Color(0xFF333333),
-    onSecondary = Color.White,
-    background = Color(0xFFFAFAFA),
-    onBackground = Color(0xFF111111),
+    onPrimaryContainer = Color(0xFF000000),
+    secondary = Color(0xFF2E3034),
+    onSecondary = Color(0xFFFFFFFF),
+    background = Color(0xFFF5F5F5),
+    onBackground = Color(0xFF2E3034),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF111111),
-    surfaceVariant = Color(0xFFF2F2F2),
-    onSurfaceVariant = Color(0xFF6B6B6B),
-    outline = Color(0xFFE8E8E8),
-    outlineVariant = Color(0xFFF0F0F0),
+    onSurface = Color(0xFF2E3034),
+    surfaceVariant = Color(0xFFF7F7F7),
+    onSurfaceVariant = Color(0xFF707070),
+    outline = Color(0xFFD9D9D9),
+    outlineVariant = Color(0xFFE4E4E4),
     error = Color(0xFFB3261E),
-    onError = Color.White
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val MinimalDark = darkColorScheme(
@@ -357,38 +388,38 @@ internal val MinimalDark = darkColorScheme(
     onError = Color(0xFF3A0A0A)
 )
 
-/** Material 3 基线：紫 + tonal 卡片（靠色阶分层，不靠阴影） */
+/** Material 3 基线：紫 + tonal 卡片（靠色阶分层，无阴影无描边） */
 internal val M3Light = lightColorScheme(
     primary = Color(0xFF6750A4),
-    onPrimary = Color.White,
+    onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFEADDFF),
-    onPrimaryContainer = Color(0xFF21005D),
+    onPrimaryContainer = Color(0xFF6750A4),
     secondary = Color(0xFF625B71),
-    onSecondary = Color.White,
+    onSecondary = Color(0xFFFFFFFF),
     background = Color(0xFFFFFBFE),
     onBackground = Color(0xFF1D1B20),
     surface = Color(0xFFF3EDF7),
     onSurface = Color(0xFF1D1B20),
-    surfaceVariant = Color(0xFFE7E0EC),
+    surfaceVariant = Color(0xFFFFFBFE),
     onSurfaceVariant = Color(0xFF49454F),
     outline = Color(0xFFCAC4D0),
     outlineVariant = Color(0xFFE7E0EC),
     error = Color(0xFFB3261E),
-    onError = Color.White
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val M3Dark = darkColorScheme(
     primary = Color(0xFFD0BCFF),
     onPrimary = Color(0xFF381E72),
-    primaryContainer = Color(0xFF4F378B),
-    onPrimaryContainer = Color(0xFFEADDFF),
+    primaryContainer = Color(0xFF3B2E4F),
+    onPrimaryContainer = Color(0xFFD0BCFF),
     secondary = Color(0xFFCCC2DC),
     onSecondary = Color(0xFF332D41),
     background = Color(0xFF141218),
     onBackground = Color(0xFFE6E0E9),
     surface = Color(0xFF211F26),
     onSurface = Color(0xFFE6E0E9),
-    surfaceVariant = Color(0xFF49454F),
+    surfaceVariant = Color(0xFF2B2830),
     onSurfaceVariant = Color(0xFFCAC4D0),
     outline = Color(0xFF49454F),
     outlineVariant = Color(0xFF3A363F),
@@ -399,33 +430,34 @@ internal val M3Dark = darkColorScheme(
 /**
  * iOS 液态玻璃。
  *
- * primary 取 #0A6FE0 而不是 iOS 常用的 #0A84FF：后者压白只有 3.65:1，
- * 拿来做按钮文字或图标都不合格。#0A6FE0 压白 4.9:1，视觉上仍然是那个蓝。
+ * `--accent` 是 #0A84FF，但**文字**必须用 `--accent-text` #0A63D8：
+ * 前者压白只有 3.65:1，当按钮文字或图标都不合格。
+ * surface 是半透明白（方向稿 `rgba(255,255,255,.55)`），让底下的彩色光晕透上来。
  */
 internal val IosLight = lightColorScheme(
-    primary = Color(0xFF0A6FE0),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE6F0FF),
-    onPrimaryContainer = Color(0xFF0A3D7A),
-    secondary = Color(0xFF0A84FF),
-    onSecondary = Color.White,
+    primary = Color(0xFF0A84FF),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0x210A84FF),
+    onPrimaryContainer = Color(0xFF0A63D8),
+    secondary = Color(0xFF0A63D8),
+    onSecondary = Color(0xFFFFFFFF),
     background = Color(0xFFEDEFF5),
     onBackground = Color(0xFF0B0B0F),
-    surface = Color(0xFFFFFFFF),
+    surface = Color(0x8CFFFFFF),
     onSurface = Color(0xFF0B0B0F),
-    surfaceVariant = Color(0xFFE9EBF2),
+    surfaceVariant = Color(0x61FFFFFF),
     onSurfaceVariant = Color(0xFF585E66),
-    outline = Color(0xFFD8DCE6),
-    outlineVariant = Color(0xFFE4E7EE),
+    outline = Color(0x1A0B0B0F),
+    outlineVariant = Color(0x120B0B0F),
     error = Color(0xFFD70015),
-    onError = Color.White
+    onError = Color(0xFFFFFFFF)
 )
 
 internal val IosDark = darkColorScheme(
     primary = Color(0xFF4DA3FF),
     onPrimary = Color(0xFF00224A),
-    primaryContainer = Color(0xFF10305A),
-    onPrimaryContainer = Color(0xFFD0E4FF),
+    primaryContainer = Color(0x380A84FF),
+    onPrimaryContainer = Color(0xFF4DA3FF),
     secondary = Color(0xFF6FB4FF),
     onSecondary = Color(0xFF00224A),
     background = Color(0xFF0B0B0F),

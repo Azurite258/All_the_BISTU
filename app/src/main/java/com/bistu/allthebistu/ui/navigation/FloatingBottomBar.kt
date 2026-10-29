@@ -27,6 +27,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.DockPill
+import com.bistu.allthebistu.ui.theme.LocalUiStyle
+import com.bistu.allthebistu.ui.theme.UiStyle
+import com.bistu.allthebistu.ui.theme.glassEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -97,22 +101,42 @@ fun FloatingBottomBar(
     val latestSelectedIndex by rememberUpdatedState(selectedIndex)
 
     val surfaceColor = MaterialTheme.colorScheme.surface
-    val primaryColor = MaterialTheme.colorScheme.primary
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // 深色下药丸要更亮一点才看得出来，浅色下则要淡，否则像块灰砖
-    val isDarkSurface = surfaceColor.luminance() < 0.5f
+    // 明暗按「页面底色」判断，不能用 surface —— iOS 的 surface 是半透明白，
+    // 亮度算出来永远是亮色，深色模式下会误判
+    val isDarkSurface = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     val metrics = LocalUiMetrics.current
+    val uiStyle = LocalUiStyle.current
+
+    // 方向稿把强调色拆成两个令牌：--accent 只用于填充，--accent-text 用于文字。
+    // #FF6A00 当小字压白只有 2.87:1，必须换深一档的那个。
+    val accentColor = UiStyle.accent(uiStyle, isDarkSurface)
+    val accentText = UiStyle.accentText(uiStyle, isDarkSurface)
+    val accentSoft = UiStyle.accentSoft(uiStyle, isDarkSurface)
+    val fgOnSurface = MaterialTheme.colorScheme.onSurface
+    // 极简的选中块是固定灰 #EDEDED + 近黑字，不用强调色
+    val greyPill = if (isDarkSurface) Color(0xFF2A2A2A) else Color(0xFFEDEDED)
+    val greyPillText = if (isDarkSurface) Color(0xFFEDEDED) else Color(0xFF111111)
 
     // 材质由**界面风格**决定（原版 / HyperOS / iOS 是玻璃，其余三套实心），
-    // 「外观 → 底栏风格」里的光效开关作为额外覆盖：风格要求玻璃、或用户自己选了光效，都走玻璃。
-    // 唯一做不到的是「在玻璃风格上强制扁平」——那等于把 iOS 的液态玻璃拆掉，不再是这套风格。
+    // 「外观 → 底栏风格」里的光效开关作为额外覆盖。
     val isGlass = metrics.dockGlass || style == BottomBarStyle.GLASS
     val hairline = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
-    // 扁平模式的选中块。比最初那版（浅色 0.12 / 深色 0.22）深一档——
-    // 底栏本身是纯白，选中块太淡等于没选
-    val flatPillColor = primaryColor.copy(alpha = if (isDarkSurface) 0.28f else 0.20f)
+    // 选中块的底色；DockPill.NONE 时压根不画（HyperOS 只靠文字变色）
+    val pillColor = when (metrics.dockPill) {
+        DockPill.SOLID_ACCENT -> accentColor
+        DockPill.SOFT_ACCENT -> accentSoft
+        DockPill.GREY -> greyPill
+        DockPill.GLASS_WHITE -> Color.White.copy(alpha = 0.92f)
+        else -> Color.Transparent
+    }
+    val pillTextColor = when (metrics.dockPill) {
+        DockPill.SOLID_ACCENT -> Color.White
+        DockPill.GREY -> greyPillText
+        else -> accentText
+    }
 
     val scope = rememberCoroutineScope()
 
@@ -136,17 +160,27 @@ fun FloatingBottomBar(
         }
     }
 
-    // 底栏的高度/圆角/外边距都跟界面风格走：
-    // 原版/HyperOS/M3/iOS 是胶囊，Linear 只有 12dp（方正），极简 14dp。
+    // 底栏尺寸与形状逐项对照方向稿：
+    // 高 60（iOS 64）、圆角 = --r-card（iOS 全胶囊）、左右 12（iOS 14）、底部 14。
+    // 之前把六套都当成了胶囊，是错的。
     val barHeight = metrics.dockHeight
     val barShape = RoundedCornerShape(metrics.dockRadius)
-    val innerPadding = 5.dp
-    val pillHeight = barHeight - innerPadding * 2
-    val pillShape = RoundedCornerShape(pillHeight / 2)
+    val innerPadding = 6.dp
+    val buttonHeight = if (metrics.dockPill == DockPill.GLASS_WHITE) 48.dp else 46.dp
+    // 选中块圆角 = --r-inner，只有 iOS 是胶囊
+    val pillShape = if (metrics.dockPill == DockPill.GLASS_WHITE) {
+        RoundedCornerShape(buttonHeight / 2)
+    } else {
+        RoundedCornerShape(metrics.innerRadius)
+    }
 
     Box(
         modifier = modifier
-            .padding(horizontal = metrics.dockMargin, vertical = metrics.dockMargin)
+            .padding(
+                start = metrics.dockMarginH,
+                end = metrics.dockMarginH,
+                bottom = metrics.dockMarginBottom
+            )
             .then(
                 if (isGlass) {
                     Modifier
@@ -212,36 +246,50 @@ fun FloatingBottomBar(
                 }
             }
 
-            // ── 选中药丸：与容器同弧度的全胶囊 ──
-            // 光效模式：比底栏再亮一档的另一块玻璃（小玻璃浮在大玻璃上）
-            // 扁平模式：一块淡色底，选中语义主要由「图标文字变蓝 + 字重加粗」承担
-            Box(
-                modifier = Modifier
-                    .offset { IntOffset((displayPos * itemWidthPx).roundToInt(), 0) }
-                    .width(itemWidth)
-                    .fillMaxHeight()
-                    .padding(horizontal = 3.dp)
-                    .then(
-                        if (isGlass) {
-                            Modifier.liquidGlass(
-                                shape = pillShape,
-                                isDark = isDarkSurface,
-                                bodyColor = if (isDarkSurface) Color(0xFF4C4C57) else Color.White,
-                                bodyAlpha = if (isDarkSurface) 0.90f else 0.88f,
-                                edgeWidth = 0.8.dp
-                            )
-                        } else {
-                            Modifier.background(flatPillColor, pillShape)
-                        }
-                    )
-            )
+            // ── 选中块 ──
+            // 方向稿六套形态各不相同（见 DockPill）：
+            // HyperOS 只有文字变色、原版是强调色实底、Linear/M3 是 accent-soft 淡底、
+            // 极简是固定灰、iOS 是白色半透明胶囊 + 内高光。
+            if (metrics.dockPill != DockPill.NONE) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset((displayPos * itemWidthPx).roundToInt(), 0) }
+                        .width(itemWidth)
+                        .height(buttonHeight)
+                        // 必须是 CenterStart：Alignment.Center 会把选中块先摆到正中间，
+                        // 再叠加 offset，结果四个 Tab 的药丸都偏到中间去
+                        .align(Alignment.CenterStart)
+                        .padding(horizontal = 3.dp)
+                        .then(
+                            if (metrics.dockPill == DockPill.GLASS_WHITE) {
+                                Modifier
+                                    .shadow(
+                                        elevation = 3.dp,
+                                        shape = pillShape,
+                                        clip = false,
+                                        ambientColor = Color(0x14101828),
+                                        spotColor = Color(0x2E101828)
+                                    )
+                                    .background(pillColor, pillShape)
+                                    // 方向稿 inset 0 1px 0 #FFFFFF：只有上沿是全白，下沿不反光
+                                    .glassEdge(
+                                        radius = buttonHeight / 2,
+                                        topAlpha = 1f,
+                                        bottomAlpha = 0f
+                                    )
+                            } else {
+                                Modifier.background(pillColor, pillShape)
+                            }
+                        )
+                )
+            }
 
             // ── 四个 Tab ──
             Row(modifier = Modifier.fillMaxSize()) {
                 tabs.forEachIndexed { index, tab ->
                     val selected = index == visualIndex
                     val contentColor by animateColorAsState(
-                        targetValue = if (selected) primaryColor else onSurfaceVariant,
+                        targetValue = if (selected) pillTextColor else onSurfaceVariant,
                         animationSpec = tween(durationMillis = 160),
                         label = "navContentColor"
                     )
@@ -249,7 +297,9 @@ fun FloatingBottomBar(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight(),
+                            .height(buttonHeight)
+                            // Row 里纵向居中用 RowScope 的重载
+                            .align(Alignment.CenterVertically),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -257,13 +307,14 @@ fun FloatingBottomBar(
                             imageVector = tab.icon,
                             contentDescription = tab.label,
                             tint = contentColor,
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
                             text = tab.label,
-                            fontSize = 10.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            fontSize = 9.5.sp,
+                            // 方向稿所有标签都是 600，粗细不随选中变化，只有颜色变
+                            fontWeight = FontWeight.SemiBold,
                             color = contentColor
                         )
                     }

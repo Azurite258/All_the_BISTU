@@ -115,6 +115,8 @@ fun ScheduleGrid(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
+    /** 外层卡片实测可用的高度。给了它就不必再靠屏幕高度估算可见行数 */
+    heightHint: androidx.compose.ui.unit.Dp? = null,
     modifier: Modifier = Modifier
 ) {
     val base = LocalDensity.current
@@ -131,6 +133,7 @@ fun ScheduleGrid(
             fontLevel = fontLevel,
             paletteIndex = paletteIndex,
             onCourseClick = onCourseClick,
+            heightHint = heightHint,
             modifier = modifier
         )
     }
@@ -147,6 +150,7 @@ private fun ScheduleGridBody(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
+    heightHint: androidx.compose.ui.unit.Dp? = null,
     modifier: Modifier = Modifier
 ) {
     // 表格的骨架色跟随界面风格，不再写死灰阶：
@@ -201,10 +205,13 @@ private fun ScheduleGridBody(
         // 这时退回「屏幕高度 × 0.68」估算课表卡的可视高度：
         // 少画几行最多是晚课看不到（本来也被卡片裁掉），多画一行就是半截课块露在底边。
         val visibleRows = run {
-            val available = if (constraints.maxHeight == androidx.compose.ui.unit.Constraints.Infinity) {
-                LocalConfiguration.current.screenHeightDp.dp * 0.68f - HeaderHeight
-            } else {
-                with(LocalDensity.current) { constraints.maxHeight.toDp() } - HeaderHeight
+            val available = when {
+                constraints.maxHeight != androidx.compose.ui.unit.Constraints.Infinity ->
+                    with(LocalDensity.current) { constraints.maxHeight.toDp() } - HeaderHeight
+                // 外层卡片给了实测高度就用它，这是最准的
+                heightHint != null -> heightHint - HeaderHeight
+                // 兜底：按屏幕高度估算
+                else -> LocalConfiguration.current.screenHeightDp.dp * 0.68f - HeaderHeight
             }
             (available / PeriodRowHeight).toInt().coerceAtLeast(1)
         }

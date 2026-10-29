@@ -9,21 +9,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * 卡片底：按当前界面风格决定「阴影 / 圆角 / 描边」三件事。
+ * 卡片底：按当前界面风格决定「阴影 / 圆角 / 描边 / 顶部内高光」。
  *
- * 为什么要有它：六套风格的层次手段不一样——HyperOS 靠阴影浮起来，
- * Linear / 极简 / M3 / iOS 靠 1dp 描边，而这三件事散落在每个页面的
- * `.clip().background()` 里各写一遍，结果就是「只有颜色跟着换了」。
- * 统一走这里，加新风格时不用回头改每个页面。
+ * 方向稿里六套风格分层手段不同（见 [CardStyle]），而这三件事原来散落在每个页面的
+ * `.clip().background()` 里各写一遍，结果就是「只有颜色跟着换了」。统一走这里。
  *
  * 用法：
  * ```
@@ -39,9 +42,9 @@ fun Modifier.styleCard(
     val m = LocalUiMetrics.current
     return this
         .then(
-            if (m.useShadow && m.cardElevation > 0.dp) {
-                // 不显式给 spotColor 的话，Compose 默认阴影在浅色底上几乎看不见，
-                // 深色主题里又会糊成一圈灰晕。这里两个色都压得比较克制。
+            if (m.usesShadow && m.cardElevation > 0.dp) {
+                // Compose 的阴影只有一个 elevation，方向稿的 box-shadow 是两层，
+                // 取大范围那层的量级；两个色都压得克制，深色主题里不会糊成一圈灰晕
                 Modifier.shadow(
                     elevation = m.cardElevation,
                     shape = shape,
@@ -55,7 +58,82 @@ fun Modifier.styleCard(
         )
         .clip(shape)
         .background(color)
-        .then(if (m.useBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
+        .then(if (m.usesBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
+        .then(
+            // iOS 液态玻璃的「厚度」全在这两条内高光上：
+            // `inset 0 1px 0 rgba(255,255,255,.94)` + `inset 0 -1px 0 rgba(255,255,255,.28)`
+            if (m.cardStyle == CardStyle.GLASS) {
+                Modifier.glassEdge(m.cardRadius)
+            } else {
+                Modifier
+            }
+        )
+}
+
+/**
+ * 顶部亮线 + 底部弱反光。
+ *
+ * CSS 的 `inset` 阴影在 Compose 里没有对应能力，用一条竖直渐变的圆角描边模拟：
+ * 上沿接近纯白、下沿只有 28% 白 —— 视觉上就是「一块有厚度的玻璃」。
+ * 描边画在 clip 之内，所以圆角处会被自然裁切，不需要额外处理。
+ */
+fun Modifier.glassEdge(
+    radius: Dp,
+    topAlpha: Float = 0.94f,
+    bottomAlpha: Float = 0.28f,
+    strokeWidth: Dp = 1.dp
+): Modifier = drawWithContent {
+    drawContent()
+    val w = strokeWidth.toPx()
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = topAlpha),
+                Color.White.copy(alpha = 0f),
+                Color.White.copy(alpha = bottomAlpha)
+            )
+        ),
+        topLeft = Offset(w / 2f, w / 2f),
+        size = Size(size.width - w, size.height - w),
+        cornerRadius = CornerRadius(radius.toPx() - w / 2f),
+        style = Stroke(width = w)
+    )
+}
+
+/**
+ * 把半透明色合成到页面底色上，得到一个不透明版本。
+ *
+ * iOS 的 `--surface` / `--surface-2` 是半透明白（`rgba(255,255,255,.55)`），
+ * 铺在卡片上正好能透出底下的光晕，这是想要的效果；
+ * 但**浮层**（登录提示条、弹窗、菜单）不能透 —— 一透就能看见下面滚动的课表，
+ * 字压在格子上完全没法读。这两个场景必须用合成后的实色。
+ */
+@Composable
+fun opaqueSurface(base: Color): Color {
+    if (base.alpha >= 0.999f) return base
+    val bg = MaterialTheme.colorScheme.background
+    return Color(
+        red = base.red * base.alpha + bg.red * (1f - base.alpha),
+        green = base.green * base.alpha + bg.green * (1f - base.alpha),
+        blue = base.blue * base.alpha + bg.blue * (1f - base.alpha),
+        alpha = 1f
+    )
+}
+
+/**
+ * 卡片默认底色。
+ *
+ * 液态玻璃风格（iOS）要**半透明**，否则卡片是块实心白板，底下的彩色光晕一点都透不上来。
+ * 其余风格是实色。例外：设了壁纸时一律实色 —— 照片明暗不可控，半透明卡片压在照片上文字会飘。
+ */
+@Composable
+private fun defaultCardColor(): Color {
+    val surface = MaterialTheme.colorScheme.surface
+    return when {
+        AppWallpaper.enabled -> surface
+        LocalUiMetrics.current.glowBackdrop -> surface.copy(alpha = 0.55f)
+        else -> surface
+    }
 }
 
 /**
@@ -67,28 +145,10 @@ fun Modifier.styleCard(
 @Composable
 private fun defaultCardBorderColor(): Color =
     if (LocalUiMetrics.current.glowBackdrop) {
-        Color.White.copy(alpha = 0.72f)
+        Color.White.copy(alpha = 0.66f)
     } else {
         MaterialTheme.colorScheme.outline
     }
-
-/**
- * 卡片默认底色。
- *
- * 液态玻璃风格（iOS）要**半透明**，否则卡片是块实心白板，底下的彩色光晕一点都透不上来，
- * 「玻璃」就名不副实。其余风格是实色。
- *
- * 例外：设了壁纸时一律实色。照片的明暗不可控，半透明卡片压在照片上文字会飘。
- */
-@Composable
-private fun defaultCardColor(): Color {
-    val surface = MaterialTheme.colorScheme.surface
-    return when {
-        AppWallpaper.enabled -> surface
-        LocalUiMetrics.current.glowBackdrop -> surface.copy(alpha = 0.64f)
-        else -> surface
-    }
-}
 
 /**
  * 页面背景的彩色光晕（目前只有 iOS 液态玻璃用）。
@@ -127,7 +187,7 @@ fun StyleGlow(modifier: Modifier = Modifier) {
             )
         }
 
-        // 位置对着方向稿里的三个椭圆：左上蓝、右上粉、底部绿
+        // 位置与半径照抄方向稿的三个 radial-gradient
         glow(w * 0.12f, h * 0.02f, w * 1.18f, glowA)
         glow(w * 0.96f, h * 0.26f, w * 1.10f, glowB)
         glow(w * 0.44f, h * 1.06f, w * 1.28f, glowC)
