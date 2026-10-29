@@ -224,21 +224,26 @@ private fun ScheduleGridBody(
                 ) {
                     val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
                     if (monthLabel != null) {
-                        // 往下挪 3dp：贴着卡片圆角时「10」看着发挤
+                        // 「10」单独往右下挪，落进角落里、离「月」更近；
+                        // 「月」不动，所以两者不是整体平移，而是 10 靠过去
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.offset(y = 3.dp)
+                            modifier = Modifier.offset(y = 4.dp)
                         ) {
                             Text(
                                 text = monthLabel,
                                 fontSize = HeaderMonthSize,
+                                lineHeight = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = timeTextColor
+                                color = timeTextColor,
+                                modifier = Modifier.offset(x = 4.dp)
                             )
                             Text(
                                 text = "月",
                                 fontSize = 9.sp,
-                                color = timeTextColor
+                                lineHeight = 10.sp,
+                                color = timeTextColor,
+                                modifier = Modifier.offset(y = (-1).dp)
                             )
                         }
                     }
