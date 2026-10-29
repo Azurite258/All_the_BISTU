@@ -227,8 +227,8 @@ object CourseColors {
      *    这是液态玻璃「有厚度」的线索，换成同色相暗边会立刻变回普通卡片
      */
     fun styleBorderColor(index: Int, tone: CourseTone, style: Int): Color = when (style) {
-        // 玻璃白边只对浅色课块成立：深色课块配 55% 白边会变成一圈发光的框
-        UiStyle.IOS -> Color.White.copy(alpha = if (tone.lightness < 0.5f) 0.16f else 0.55f)
+        // 玻璃白边只对浅色课块成立：深色课块上几乎没有意义，留 5% 只为勾勒边缘
+        UiStyle.IOS -> Color.White.copy(alpha = if (tone.lightness < 0.5f) 0.05f else 0.55f)
         UiStyle.LINEAR -> Color.hsl(hueOf(index), 0.40f, tone.textLightness).copy(alpha = 0.20f)
         else -> Color.hsl(hueOf(index), 0.40f, tone.textLightness).copy(alpha = 0.13f)
     }

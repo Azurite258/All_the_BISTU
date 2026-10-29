@@ -112,8 +112,8 @@ object UiStyle {
             CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
         }
         IOS -> if (isDark) {
-            // 玻璃在暗底要透色，但仍比原来克制；明度不超过 0.32 才压得住白字
-            CourseTone(saturation = 0.26f, lightness = 0.32f, textLightness = 0.95f)
+            // 深色下再收敛一档：玻璃只是「透一点色」，不是彩色糖果
+            CourseTone(saturation = 0.18f, lightness = 0.30f, textLightness = 0.95f)
         } else {
             CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
         }

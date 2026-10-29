@@ -62,8 +62,14 @@ fun Modifier.styleCard(
         .then(
             // iOS 液态玻璃的「厚度」全在这两条内高光上：
             // `inset 0 1px 0 rgba(255,255,255,.94)` + `inset 0 -1px 0 rgba(255,255,255,.28)`
+            // 深色下这两条同样要压暗，否则卡片四周会发光
             if (m.cardStyle == CardStyle.GLASS) {
-                Modifier.glassEdge(m.cardRadius)
+                val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                Modifier.glassEdge(
+                    m.cardRadius,
+                    topAlpha = if (isDark) 0.20f else 0.94f,
+                    bottomAlpha = if (isDark) 0.04f else 0.28f
+                )
             } else {
                 Modifier
             }
@@ -137,6 +143,19 @@ private fun defaultCardColor(): Color {
 }
 
 /**
+ * 玻璃描边色。
+ *
+ * 浅色页面上玻璃边是近白高光（方向稿 `rgba(255,255,255,.66)`），必须够亮才像玻璃；
+ * 但同一份白边搬到深色页面上就成了「卡片外面套了一圈白线」，非常假 ——
+ * 所以深色下压到 10% 左右，只留一丝边缘感。
+ */
+@Composable
+fun glassBorderColor(light: Float = 0.72f, dark: Float = 0.10f): Color {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return Color.White.copy(alpha = if (isDark) dark else light)
+}
+
+/**
  * 卡片默认描边色。
  *
  * 液态玻璃的边必须是**近白**（方向稿 `rgba(255,255,255,.66)`）：玻璃的边缘高光
@@ -145,7 +164,7 @@ private fun defaultCardColor(): Color {
 @Composable
 private fun defaultCardBorderColor(): Color =
     if (LocalUiMetrics.current.glowBackdrop) {
-        Color.White.copy(alpha = 0.66f)
+        glassBorderColor(light = 0.66f, dark = 0.09f)
     } else {
         MaterialTheme.colorScheme.outline
     }

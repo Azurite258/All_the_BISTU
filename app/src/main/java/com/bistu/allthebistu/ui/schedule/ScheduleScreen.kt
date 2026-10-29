@@ -53,6 +53,7 @@ import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.UiStyle
+import com.bistu.allthebistu.ui.theme.glassBorderColor
 import com.bistu.allthebistu.ui.theme.glassEdge
 import com.bistu.allthebistu.ui.theme.styleCard
 import java.text.SimpleDateFormat
@@ -499,7 +500,7 @@ private fun HyperIconButton(
                 if (m.usesBorder) {
                     Modifier.border(
                         1.dp,
-                        if (uiStyle == UiStyle.IOS) Color.White.copy(alpha = 0.72f)
+                        if (uiStyle == UiStyle.IOS) glassBorderColor()
                         else MaterialTheme.colorScheme.outline,
                         CircleShape
                     )
@@ -509,7 +510,11 @@ private fun HyperIconButton(
             )
             .then(
                 if (uiStyle == UiStyle.IOS) {
-                    Modifier.glassEdge(m.iconButtonSize / 2, topAlpha = 0.95f, bottomAlpha = 0f)
+                    Modifier.glassEdge(
+                        m.iconButtonSize / 2,
+                        topAlpha = if (isDark) 0.18f else 0.95f,
+                        bottomAlpha = 0f
+                    )
                 } else {
                     Modifier
                 }
@@ -590,7 +595,7 @@ private fun WeekSelector(
                 .background(navBg)
                 .then(
                     if (uiStyle == UiStyle.IOS) {
-                        Modifier.border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
+                        Modifier.border(1.dp, glassBorderColor(), CircleShape)
                     } else {
                         Modifier
                     }
@@ -648,7 +653,7 @@ private fun WeekSelector(
                 .background(navBg)
                 .then(
                     if (uiStyle == UiStyle.IOS) {
-                        Modifier.border(1.dp, Color.White.copy(alpha = 0.72f), CircleShape)
+                        Modifier.border(1.dp, glassBorderColor(), CircleShape)
                     } else {
                         Modifier
                     }
