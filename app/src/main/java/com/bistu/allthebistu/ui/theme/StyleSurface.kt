@@ -58,17 +58,39 @@ fun Modifier.styleCard(
         )
         .clip(shape)
         .background(color)
+        .then(
+            // 卡片底是不透明的（见 defaultCardColor 的注释），这里再叠一层极淡的冷/暖渐变，
+            // 模拟「透出一点环境光」。它是一条平滑的线性渐变，且 alpha 只有 5%~7%，
+            // 即使背景怎么变，也不会在卡片里形成能看见的台阶 —— 这就是和 alpha 混合的区别。
+            if (m.cardStyle == CardStyle.GLASS) {
+                val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                Modifier.background(
+                    Brush.linearGradient(
+                        listOf(
+                            (if (isDark) Color(0xFF16294A) else Color(0xFFD3E4FF))
+                                .copy(alpha = if (isDark) 0.22f else 0.07f),
+                            Color.Transparent,
+                            (if (isDark) Color(0xFF3D1B2E) else Color(0xFFFFDAEE))
+                                .copy(alpha = if (isDark) 0.18f else 0.05f)
+                        )
+                    ),
+                    shape
+                )
+            } else {
+                Modifier
+            }
+        )
         .then(if (m.usesBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
         .then(
             // iOS 液态玻璃的「厚度」全靠这一条内高光：`inset 0 1px 0 rgba(255,255,255,.94)`。
-            // 浅色下从 0.94 压到 0.55 —— 描边已经改成淡黑了，上沿再挂一条纯白亮线
-            // 就变成用户说的「白色重影」。深色下同样压暗，否则卡片四周会发光。
+            // 0.19-i 一度压到 0.55，玻璃立刻变得像塑料板，退回到 0.86/0.26。
+            // 深色下仍然压暗，否则卡片四周会发光。
             if (m.cardStyle == CardStyle.GLASS) {
                 val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
                 Modifier.glassEdge(
                     m.cardRadius,
-                    topAlpha = if (isDark) 0.18f else 0.55f,
-                    bottomAlpha = if (isDark) 0.04f else 0.16f
+                    topAlpha = if (isDark) 0.18f else 0.86f,
+                    bottomAlpha = if (isDark) 0.04f else 0.26f
                 )
             } else {
                 Modifier
@@ -129,20 +151,24 @@ fun opaqueSurface(base: Color): Color {
 /**
  * 卡片默认底色。
  *
- * 液态玻璃风格（iOS）要**半透明**，否则卡片是块实心白板，底下的彩色光晕一点都透不上来。
- * 其余风格是实色。例外：设了壁纸时一律实色 —— 照片明暗不可控，半透明卡片压在照片上文字会飘。
+ * 其余风格是实色；设了壁纸时也一律实色（照片明暗不可控，半透明卡片压在照片上文字会飘）。
  *
- * ⚠️ 透明度别给太低。0.55 时页面光晕的粉/白分段会原样透进卡片，
- * 一栏泛粉、一栏发白，看着就像「卡片底下还压着块白色的东西」。
- * 0.88 还能看出玻璃透色，但底下的明暗差被压到 2~3 个色阶，肉眼几乎看不出断层。
+ * ⚠️ iOS 这张卡片**必须是不透明的**，但颜色要像「透过来的」。
+ * 0.19-i 之前用的是 `surface.copy(alpha = 0.55/0.58/0.88)`，全都是 alpha 混合：
+ * 页面光晕是一大片渐变，卡片一透明就把这层渐变原样透进来，同一张卡上半截 217、
+ * 下半截 214 —— 差 3 个色阶，还是硬跳变，手机上一眼就是「卡片里有一块白色色块」。
+ * 微信传图再压一道，台阶更明显。提不透明度也没用：0.88 仍然透 12%，用户照样看得见。
+ *
+ * 现在用 [opaqueSurface] 把 surface 和**主题背景色**（不是光晕）混成实色：
+ * 卡片自己就带一点冷调的环境色，看着仍像玻璃，但它是不透明的，背景再怎么渐变也透不进来。
+ * 玻璃的「厚度」交给 `glassEdge` 上沿高光 + 投影，那两样才是液态玻璃真正的辨识点。
  */
 @Composable
 private fun defaultCardColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
     return when {
         AppWallpaper.enabled -> surface
-        // copy(alpha) 是**覆盖**原 alpha，不是相乘：iOS 的 surface 本身已经是 55% 白
-        LocalUiMetrics.current.glowBackdrop -> surface.copy(alpha = 0.88f)
+        LocalUiMetrics.current.glowBackdrop -> opaqueSurface(surface)
         else -> surface
     }
 }
