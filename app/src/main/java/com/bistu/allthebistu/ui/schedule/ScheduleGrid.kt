@@ -318,13 +318,6 @@ private fun ScheduleGridBody(
                                         color = timeTextColor,
                                         textAlign = TextAlign.Center
                                     )
-                                    Text(
-                                        text = pt.endTime,
-                                        fontSize = PeriodTimeSize,
-                                        lineHeight = 10.sp,
-                                        color = timeTextColor,
-                                        textAlign = TextAlign.Center
-                                    )
                                 }
                             }
                         }
@@ -472,18 +465,6 @@ private fun CourseBlock(
                 maxLines = if (sections >= 3) 4 else if (showRoom) 3 else 2,
                 overflow = TextOverflow.Ellipsis
             )
-
-            // 时间（如 08:00）
-            if (showTime) {
-                Text(
-                    text = course.beginTime,
-                    fontSize = text.time,
-                    // 行高必须跟着字号走，写死会在最大档把字裁掉半截
-                    lineHeight = text.time * 1.25f,
-                    color = subColor.copy(alpha = 0.8f),
-                    maxLines = 1
-                )
-            }
 
             // 教室
             if (showRoom) {

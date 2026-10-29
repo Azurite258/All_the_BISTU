@@ -21,6 +21,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
 
 import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -579,7 +582,8 @@ private fun WeekSelector(
             .padding(start = m.pagePadding, end = m.pagePadding, bottom = m.cardGap)
             .styleCard(shape = RoundedCornerShape(m.cardRadius))
             .padding(horizontal = m.cardPadding, vertical = 11.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        // 方向稿 .week-card 是 gap:10px，圆钮固定 30dp，中间自适应
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 上一周
@@ -604,31 +608,39 @@ private fun WeekSelector(
                 Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = "上一周",
                 tint = if (currentWeek > weekRange.first) navTint else navTint.copy(alpha = 0.4f),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
 
-        // 中间信息
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "第 $currentWeek 周",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // 中间信息。方向稿是「第 8 周 · 12 节课」同一行（节数用 accent-text），
+        // 第二行只放日期范围 —— 之前把节数挤到第二行，跟示例图不一样。
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.weight(1f)
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = "$courseCount 节课",
-                    fontSize = 10.5.sp,
-                    color = UiStyle.accentText(uiStyle, isDark)
+                    text = "第 $currentWeek 周",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                if (weekDateRange != null) {
-                    Text(
-                        text = " · $weekDateRange",
-                        fontSize = 10.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = " · $courseCount 节课",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = UiStyle.accentText(uiStyle, isDark),
+                    // 数字等宽，切换周次时不会左右跳动
+                    style = LocalTextStyle.current.copy(fontFeatureSettings = "tnum")
+                )
+            }
+            if (weekDateRange != null) {
+                Text(
+                    text = weekDateRange,
+                    fontSize = 10.5.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -654,7 +666,7 @@ private fun WeekSelector(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "下一周",
                 tint = if (currentWeek < weekRange.last) navTint else navTint.copy(alpha = 0.4f),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
     }
