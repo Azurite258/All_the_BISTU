@@ -75,29 +75,49 @@ object UiStyle {
         CourseColorScheme.FOLLOW_STYLE
 
     /**
-     * 课程块的颜色参数，**逐项照抄方向稿 `ui-lab/index.html` 的 `--course-l/s/t`**。
+     * 课程块的颜色参数，**浅色值逐项照抄方向稿 `ui-lab/index.html` 的 `--course-l/s/t`**。
      *
      * 背景 = `hsl(h, s, l)`，文字 = `hsl(h, 48%, t)`，描边 = `hsl(h, 40%, t / .13)`。
      * 色相 h 由课程序号从固定色相池里取，见 CourseColors.COURSE_HUES。
      *
-     * **为什么原版 / Linear 要分明暗**：方向稿里这两套本身就是深色界面，
-     * `--course-l` 是照着深底配的（34% / 22%）——放到浅色页面上就变成白底压
-     * 一堆深灰块，字还是同色相的灰蓝，对比度只有 3:1，看着又脏又糊（0.19-a 的
-     * 实测截图就是这个结果）。所以这两套在浅色模式下换成「浅底 + 深字」的反向参数，
-     * 深色模式仍用方向稿原值。
-     * 其余四套本来就是浅底课块，深浅模式共用一套参数不变。
+     * **为什么要分明暗**：方向稿是浅色界面，它的 `--course-l` 是照着**当前页面的明暗**配的。
+     * 直接把浅色参数搬到深色页面上，或者把原版 / Linear 那套深底参数搬到浅色页面上，
+     * 都会得到「一页深灰块 + 同色相灰蓝字」，对比度只有 3:1，观感发脏（0.19-a 踩过）。
+     * 所以规则统一成一句：**浅页面配浅块深字，深页面配深块浅字**，色相不变。
      */
     fun courseTone(style: Int, isDark: Boolean): CourseTone = when (style) {
-        HYPEROS -> CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
+        HYPEROS -> if (isDark) {
+            // 暖橙调压暗：饱和度留一半，避免深色下变成脏褐色
+            CourseTone(saturation = 0.50f, lightness = 0.30f, textLightness = 0.95f)
+        } else {
+            CourseTone(saturation = 0.62f, lightness = 0.90f, textLightness = 0.30f)
+        }
         LINEAR -> if (isDark) {
             CourseTone(saturation = 0.36f, lightness = 0.22f, textLightness = 0.84f)
         } else {
             // 浅色：近白底 + 淡紫灰，保住 Linear 的「冷、克制的紫」辨识度
             CourseTone(saturation = 0.34f, lightness = 0.93f, textLightness = 0.24f)
         }
-        MINIMAL -> CourseTone(saturation = 0.52f, lightness = 0.91f, textLightness = 0.30f)
-        MATERIAL3 -> CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
-        IOS -> CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
+        MINIMAL -> if (isDark) {
+            // 极简是「几乎无色」，深色下也只留一丝灰调：饱和度给到 0.16 会变成
+            // 深棕 / 深橄榄那种脏色，压到 0.09 才是灰块带一点点色相冷暖
+            CourseTone(saturation = 0.09f, lightness = 0.30f, textLightness = 0.90f)
+        } else {
+            CourseTone(saturation = 0.52f, lightness = 0.91f, textLightness = 0.30f)
+        }
+        MATERIAL3 -> if (isDark) {
+            // M3 深色主题本来就是 tonal surface：中等饱和、偏暗
+            CourseTone(saturation = 0.44f, lightness = 0.32f, textLightness = 0.93f)
+        } else {
+            CourseTone(saturation = 0.52f, lightness = 0.88f, textLightness = 0.25f)
+        }
+        IOS -> if (isDark) {
+            // 玻璃在暗底上要能透出颜色，饱和度比其余几套高；明度压到 0.30 ——
+            // 绿色（h=160）在 0.34 时压白字只有 4.18:1，不够 4.5
+            CourseTone(saturation = 0.60f, lightness = 0.30f, textLightness = 0.96f)
+        } else {
+            CourseTone(saturation = 0.74f, lightness = 0.84f, textLightness = 0.26f)
+        }
         else -> if (isDark) {
             CourseTone(saturation = 0.11f, lightness = 0.34f, textLightness = 0.97f)
         } else {

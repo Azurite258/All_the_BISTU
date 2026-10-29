@@ -114,11 +114,13 @@ class UiStyleTest {
      * 数值来自方向稿 `ui-lab/index.html` 的 `--course-s / --course-l / --course-t`。
      * 改这里之前先去改方向稿，否则「一比一复刻」就成了随口说说。
      *
-     * 注意：方向稿本身是深色界面，这组值对应**深色模式**。
+     * 方向稿是浅色界面：原版 / Linear 这两套在稿子里本身就是深色风格，
+     * 它们的方向稿值对应**深色模式**；其余四套对应**浅色模式**。
      */
     @Test
     fun `六套风格的课程色参数与方向稿一致`() {
-        val expected = mapOf(
+        // 稿子里的原值，以及它对应的是哪一端
+        val fromDoc = mapOf(
             UiStyle.HYPEROS to Triple(0.62f, 0.90f, 0.30f),
             UiStyle.LINEAR to Triple(0.36f, 0.22f, 0.84f),
             UiStyle.MINIMAL to Triple(0.52f, 0.91f, 0.30f),
@@ -126,48 +128,56 @@ class UiStyleTest {
             UiStyle.MATERIAL3 to Triple(0.52f, 0.88f, 0.25f),
             UiStyle.IOS to Triple(0.74f, 0.84f, 0.26f)
         )
-        assertEquals("方向稿里有六套风格", 6, expected.size)
-        expected.forEach { (style, v) ->
-            val t = UiStyle.courseTone(style, isDark = true)
-            assertEquals("${UiStyle.label(style)} 饱和度", v.first, t.saturation, 0.001f)
-            assertEquals("${UiStyle.label(style)} 明度", v.second, t.lightness, 0.001f)
-            assertEquals("${UiStyle.label(style)} 文字明度", v.third, t.textLightness, 0.001f)
+        // 方向稿里就是深色界面的两套
+        val docIsDark = setOf(UiStyle.ORIGINAL, UiStyle.LINEAR)
+        assertEquals("方向稿里有六套风格", 6, fromDoc.size)
+        fromDoc.forEach { (style, v) ->
+            val isDark = style in docIsDark
+            val t = UiStyle.courseTone(style, isDark)
+            val where = if (isDark) "深色" else "浅色"
+            assertEquals("${UiStyle.label(style)}（$where）饱和度", v.first, t.saturation, 0.001f)
+            assertEquals("${UiStyle.label(style)}（$where）明度", v.second, t.lightness, 0.001f)
+            assertEquals("${UiStyle.label(style)}（$where）文字明度", v.third, t.textLightness, 0.001f)
         }
         // 六套参数不能重复，否则「换风格课块跟着变」是假的
         assertEquals(
-            "六套风格的课程色参数有重复",
+            "六套风格的课程色参数有重复（深色）",
             6,
             UiStyle.all.map { UiStyle.courseTone(it, isDark = true) }.toSet().size
+        )
+        assertEquals(
+            "六套风格的课程色参数有重复（浅色）",
+            6,
+            UiStyle.all.map { UiStyle.courseTone(it, isDark = false) }.toSet().size
         )
     }
 
     /**
-     * 0.19-a 踩过的坑：原版 / Linear 的课块参数是照深色底配的（明度 34% / 22%），
-     * 浅色模式下直接套用 = 白页面上压一堆深灰块、文字还是同色相灰蓝，只有 3:1。
-     * 这两套必须分明暗；其余四套本来就浅底，深浅共用。
+     * 0.19-a 踩过的坑：把课块参数跨明暗搬运，会得到「一页深灰块 + 同色相灰蓝字」，
+     * 对比度只有 3:1，观感发脏。规矩统一成一句：浅页面配浅块深字、深页面配深块浅字。
      */
     @Test
-    fun `深色底风格在浅色模式下翻成浅底深字`() {
-        listOf(UiStyle.ORIGINAL, UiStyle.LINEAR).forEach { style ->
+    fun `六套风格的课块明暗两套方向相反`() {
+        UiStyle.all.forEach { style ->
             val light = UiStyle.courseTone(style, isDark = false)
             val dark = UiStyle.courseTone(style, isDark = true)
             assertTrue(
                 "${UiStyle.label(style)} 浅色模式课块底明度 ${light.lightness} 太暗",
-                light.lightness > 0.85f
+                light.lightness > 0.8f
             )
             assertTrue(
                 "${UiStyle.label(style)} 浅色模式文字明度 ${light.textLightness} 太浅",
                 light.textLightness < 0.4f
             )
-            assertNotEquals("${UiStyle.label(style)} 深浅两套参数不该相同", dark, light)
-        }
-        // 浅底课块的四套：深浅模式一套参数，切主题不会变味
-        listOf(UiStyle.HYPEROS, UiStyle.MINIMAL, UiStyle.MATERIAL3, UiStyle.IOS).forEach { style ->
-            assertEquals(
-                "${UiStyle.label(style)} 浅色模式不该改课块参数",
-                UiStyle.courseTone(style, isDark = true),
-                UiStyle.courseTone(style, isDark = false)
+            assertTrue(
+                "${UiStyle.label(style)} 深色模式课块底明度 ${dark.lightness} 太亮",
+                dark.lightness < 0.45f
             )
+            assertTrue(
+                "${UiStyle.label(style)} 深色模式文字明度 ${dark.textLightness} 太深",
+                dark.textLightness > 0.8f
+            )
+            assertNotEquals("${UiStyle.label(style)} 深浅两套参数不该相同", dark, light)
         }
     }
 
