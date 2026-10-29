@@ -450,10 +450,13 @@ private fun CourseBlock(
                 if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
             )
     ) {
+        // 圆角会咬掉第一行文字的头（半径最大 14dp 时，左上角弧线能吃掉 5dp 高）。
+        // 字整体往下挪 5dp 避开弧线；横向只留 3dp，再多就会把四字课程名挤成三行、
+        // 把教室那一行顶出块外。
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 2.dp, vertical = 2.dp)
+                .padding(start = 3.dp, end = 2.dp, top = 5.dp, bottom = 2.dp)
         ) {
             // 课程名
             Text(
