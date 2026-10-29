@@ -224,8 +224,10 @@ private fun ScheduleGridBody(
                 ) {
                     val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
                     if (monthLabel != null) {
-                        // 「10」单独往右下挪，落进角落里、离「月」更近；
-                        // 「月」不动，所以两者不是整体平移，而是 10 靠过去
+                        // 「10」与「月」同属一个 Column，靠 horizontalAlignment 居中对齐，
+                        // 两者的中轴天然重合。**横向偏移必须加在 Column 上、或者干脆不加**——
+                        // 只给「10」加 offset 会把「月」甩到左边去（0.19-g 就是这个毛病）。
+                        // 这里横向不偏移，让它和下方节次数字（1 / 2 / 08:00）落在同一条竖轴上。
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.offset(y = 4.dp)
@@ -235,8 +237,7 @@ private fun ScheduleGridBody(
                                 fontSize = HeaderMonthSize,
                                 lineHeight = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = timeTextColor,
-                                modifier = Modifier.offset(x = 4.dp)
+                                color = timeTextColor
                             )
                             Text(
                                 text = "月",
