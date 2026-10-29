@@ -102,6 +102,15 @@ data class UiMetrics(
     val dockGlass: Boolean,
     /** 页面背景是否铺彩色光晕（只有 iOS） */
     val glowBackdrop: Boolean,
+    /**
+     * 底栏之外还要额外让出的底部高度。
+     *
+     * 未登录时那条「还没登录」引导条是浮在所有页面之上的一层，
+     * 它压在课表卡的最后一两行上、也压住各页滚到底的内容。
+     * MainActivity 量到它的真实高度后写进这里，课表卡就会整体缩短到它上方，
+     * 而不是被它盖住半截。平时是 0。
+     */
+    val extraBottom: Dp = 0.dp,
 ) {
     /**
      * 内容区底部要给底栏让出的空间。
@@ -109,7 +118,7 @@ data class UiMetrics(
      * 底栏占 `dockHeight + dockMarginBottom`，再加 8dp 呼吸位。
      * 写死 88dp 的时候比实际占位小 2dp，课表卡的下边缘会钻进底栏。
      */
-    val contentBottom: Dp get() = dockHeight + dockMarginBottom + 8.dp
+    val contentBottom: Dp get() = dockHeight + dockMarginBottom + 8.dp + extraBottom
 
     /** 卡片是否需要阴影 */
     val usesShadow: Boolean get() = cardStyle == CardStyle.SHADOW || cardStyle == CardStyle.GLASS

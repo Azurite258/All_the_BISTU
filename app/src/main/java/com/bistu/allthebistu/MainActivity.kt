@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -198,60 +199,80 @@ private fun AppRoot(
     }
 
     // ── 主框架：内容区 + 悬浮导航栏 ──
+    // 未登录时底部还会浮一条「还没登录」引导条，它压在页面之上。
+    // 先把它的真实高度量出来，再从内容区底部扣掉，否则它会把课表卡最后
+    // 一两行盖掉（看起来像课表被裁断了），也会盖住各页滚到底的内容。
+    val showLoginPrompt = uiState.showLoginPrompt && !uiState.isLoggedIn
+    var loginBarHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val baseMetrics = LocalUiMetrics.current
+    val contentMetrics = remember(baseMetrics, showLoginPrompt, loginBarHeightPx) {
+        if (showLoginPrompt && loginBarHeightPx > 0) {
+            // 加 8dp 空隙，让卡片下沿和引导条之间有呼吸位，不至于贴成一块
+            baseMetrics.copy(extraBottom = with(density) { loginBarHeightPx.toDp() } + 8.dp)
+        } else {
+            baseMetrics
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
-        when (currentTab) {
-            MainTab.SCHEDULE -> ScheduleScreen(
-                uiState = uiState,
-                settings = settings,
-                isDark = isDark,
-                onRefresh = viewModel::refresh,
-                onAddEvent = { pendingFeature = "添加日程" },
-                onReminderSettings = { showReminderSheet = true },
-                onOpenLogin = { openLogin() }
-            )
+        CompositionLocalProvider(LocalUiMetrics provides contentMetrics) {
+            when (currentTab) {
+                MainTab.SCHEDULE -> ScheduleScreen(
+                    uiState = uiState,
+                    settings = settings,
+                    isDark = isDark,
+                    onRefresh = viewModel::refresh,
+                    onAddEvent = { pendingFeature = "添加日程" },
+                    onReminderSettings = { showReminderSheet = true },
+                    onOpenLogin = { openLogin() }
+                )
 
-            MainTab.STUDY -> StudyScreen(
-                uiState = uiState,
-                colorScheme = settings.colorScheme,
-                isDark = isDark,
-                report = uiState.studyReport
-            )
+                MainTab.STUDY -> StudyScreen(
+                    uiState = uiState,
+                    colorScheme = settings.colorScheme,
+                    isDark = isDark,
+                    report = uiState.studyReport
+                )
 
-            MainTab.LIFE -> LifeScreen()
-            MainTab.PROFILE -> ProfileScreen(
-                settings = settings,
-                isLoggedIn = uiState.isLoggedIn,
-                onUiStyleChange = { style -> scope.launch { settingsStore.setUiStyle(style) } },
-                onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
-                onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
-                onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
-                onBottomBarStyleChange = { style ->
-                    scope.launch { settingsStore.setBottomBarStyle(style) }
-                },
-                onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
-                onWallpaperScrimChange = { v ->
-                    scope.launch { settingsStore.setWallpaperScrim(v) }
-                },
-                onLogin = { openLogin() },
-                onLogout = { viewModel.logout() }
-            )
+                MainTab.LIFE -> LifeScreen()
+                MainTab.PROFILE -> ProfileScreen(
+                    settings = settings,
+                    isLoggedIn = uiState.isLoggedIn,
+                    onUiStyleChange = { style -> scope.launch { settingsStore.setUiStyle(style) } },
+                    onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
+                    onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
+                    onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
+                    onBottomBarStyleChange = { style ->
+                        scope.launch { settingsStore.setBottomBarStyle(style) }
+                    },
+                    onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
+                    onWallpaperScrimChange = { v ->
+                        scope.launch { settingsStore.setWallpaperScrim(v) }
+                    },
+                    onLogin = { openLogin() },
+                    onLogout = { viewModel.logout() }
+                )
+            }
         }
 
         // 未登录 → 每次启动在底部提示一次（不记忆、不打扰已登录用户）
         AnimatedVisibility(
-            visible = uiState.showLoginPrompt && !uiState.isLoggedIn,
+            visible = showLoginPrompt,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                // 与课表卡片的底部留白保持一致，两条底边才在同一条线上
-                .padding(bottom = LocalUiMetrics.current.contentBottom)
+                // 底边和底栏的让位线对齐；内容区（课表卡）已经按本条的高度往上缩过，
+                // 所以它不会再压住卡片
+                .padding(bottom = baseMetrics.contentBottom)
         ) {
             LoginPromptBar(
                 onLogin = { openLogin() },
-                onDismiss = { viewModel.dismissLoginPrompt() }
+                onDismiss = { viewModel.dismissLoginPrompt() },
+                onHeightChange = { loginBarHeightPx = it }
             )
         }
 
@@ -340,12 +361,15 @@ private fun toast(context: android.content.Context, message: String) {
 @Composable
 private fun LoginPromptBar(
     onLogin: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onHeightChange: (Int) -> Unit = {}
 ) {
     val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 高度上报给 MainActivity：内容区要按这个高度缩短，卡片才不会被盖住
+            .onSizeChanged { onHeightChange(it.height) }
             .padding(horizontal = HyperSpacing.pageHorizontal)
             .clip(shape)
             // 浮层必须不透明：iOS 的 surfaceVariant 是半透明白，直接铺会透出下面的课表
