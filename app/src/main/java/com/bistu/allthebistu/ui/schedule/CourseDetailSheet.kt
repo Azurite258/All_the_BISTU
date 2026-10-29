@@ -30,6 +30,7 @@ import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.UiStyle
+import com.bistu.allthebistu.ui.theme.opaqueSurface
 
 private val DayNames = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
@@ -77,7 +78,7 @@ fun CourseDetailSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = opaqueSurface(MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = {
             // 自定义拖动条：默认的偏窄，HyperOS 风格用更宽更淡的一条

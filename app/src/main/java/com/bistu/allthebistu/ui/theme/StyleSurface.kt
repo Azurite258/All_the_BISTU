@@ -60,15 +60,15 @@ fun Modifier.styleCard(
         .background(color)
         .then(if (m.usesBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
         .then(
-            // iOS 液态玻璃的「厚度」全在这两条内高光上：
-            // `inset 0 1px 0 rgba(255,255,255,.94)` + `inset 0 -1px 0 rgba(255,255,255,.28)`
-            // 深色下这两条同样要压暗，否则卡片四周会发光
+            // iOS 液态玻璃的「厚度」全靠这一条内高光：`inset 0 1px 0 rgba(255,255,255,.94)`。
+            // 浅色下从 0.94 压到 0.55 —— 描边已经改成淡黑了，上沿再挂一条纯白亮线
+            // 就变成用户说的「白色重影」。深色下同样压暗，否则卡片四周会发光。
             if (m.cardStyle == CardStyle.GLASS) {
                 val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
                 Modifier.glassEdge(
                     m.cardRadius,
-                    topAlpha = if (isDark) 0.20f else 0.94f,
-                    bottomAlpha = if (isDark) 0.04f else 0.28f
+                    topAlpha = if (isDark) 0.18f else 0.55f,
+                    bottomAlpha = if (isDark) 0.04f else 0.16f
                 )
             } else {
                 Modifier
@@ -131,40 +131,52 @@ fun opaqueSurface(base: Color): Color {
  *
  * 液态玻璃风格（iOS）要**半透明**，否则卡片是块实心白板，底下的彩色光晕一点都透不上来。
  * 其余风格是实色。例外：设了壁纸时一律实色 —— 照片明暗不可控，半透明卡片压在照片上文字会飘。
+ *
+ * ⚠️ 透明度别给太低。0.55 时页面光晕的粉/白分段会原样透进卡片，
+ * 一栏泛粉、一栏发白，看着就像「卡片底下还压着块白色的东西」。
+ * 0.88 还能看出玻璃透色，但底下的明暗差被压到 2~3 个色阶，肉眼几乎看不出断层。
  */
 @Composable
 private fun defaultCardColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
     return when {
         AppWallpaper.enabled -> surface
-        LocalUiMetrics.current.glowBackdrop -> surface.copy(alpha = 0.55f)
+        // copy(alpha) 是**覆盖**原 alpha，不是相乘：iOS 的 surface 本身已经是 55% 白
+        LocalUiMetrics.current.glowBackdrop -> surface.copy(alpha = 0.88f)
         else -> surface
     }
 }
 
 /**
- * 玻璃描边色。
+ * 玻璃件的「分界线」色。
  *
- * 浅色页面上玻璃边是近白高光（方向稿 `rgba(255,255,255,.66)`），必须够亮才像玻璃；
- * 但同一份白边搬到深色页面上就成了「卡片外面套了一圈白线」，非常假 ——
- * 所以深色下压到 10% 左右，只留一丝边缘感。
+ * 浅色用**极淡的深色**、深色用**极淡的白色**。它是用来和背景划清界限的，
+ * 不是高光 —— 高光交给 [glassEdge]。两者混用过一次（都给了白），
+ * 结果每一张卡片和圆钮外面都套了两条白线，看着就是白色重影。
  */
 @Composable
-fun glassBorderColor(light: Float = 0.72f, dark: Float = 0.10f): Color {
+fun glassHairlineColor(): Color {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    return Color.White.copy(alpha = if (isDark) dark else light)
+    return if (isDark) {
+        Color.White.copy(alpha = 0.10f)
+    } else {
+        Color(0xFF1C1C1E).copy(alpha = 0.07f)
+    }
 }
 
 /**
  * 卡片默认描边色。
  *
- * 液态玻璃的边必须是**近白**（方向稿 `rgba(255,255,255,.66)`）：玻璃的边缘高光
- * 来自折射，用灰色 outline 画出来就成了普通描边，一眼看出「不是玻璃」。
+ * ⚠️ iOS 玻璃卡片**不能再用白色描边**。之前这里是 `rgba(255,255,255,.66)`，
+ * 而下面 `glassEdge` 又会在同一圈内侧再画一条 94% 白的内高光 ——
+ * 两条白线并排，在浅色页面上一眼就是「双线 / 白色重影」。
+ *
+ * 现在分工：描边只负责和背景划清界限，玻璃的厚度感全部交给 `glassEdge` 那一条。
  */
 @Composable
 private fun defaultCardBorderColor(): Color =
     if (LocalUiMetrics.current.glowBackdrop) {
-        glassBorderColor(light = 0.66f, dark = 0.09f)
+        glassHairlineColor()
     } else {
         MaterialTheme.colorScheme.outline
     }

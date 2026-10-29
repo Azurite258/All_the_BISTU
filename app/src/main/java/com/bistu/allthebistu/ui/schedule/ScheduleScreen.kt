@@ -53,7 +53,7 @@ import com.bistu.allthebistu.ui.theme.AppWallpaper
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.UiStyle
-import com.bistu.allthebistu.ui.theme.glassBorderColor
+import com.bistu.allthebistu.ui.theme.glassHairlineColor
 import com.bistu.allthebistu.ui.theme.glassEdge
 import com.bistu.allthebistu.ui.theme.styleCard
 import java.text.SimpleDateFormat
@@ -500,7 +500,7 @@ private fun HyperIconButton(
                 if (m.usesBorder) {
                     Modifier.border(
                         1.dp,
-                        if (uiStyle == UiStyle.IOS) glassBorderColor()
+                        if (uiStyle == UiStyle.IOS) glassHairlineColor()
                         else MaterialTheme.colorScheme.outline,
                         CircleShape
                     )
@@ -512,7 +512,7 @@ private fun HyperIconButton(
                 if (uiStyle == UiStyle.IOS) {
                     Modifier.glassEdge(
                         m.iconButtonSize / 2,
-                        topAlpha = if (isDark) 0.18f else 0.95f,
+                        topAlpha = if (isDark) 0.18f else 0.55f,
                         bottomAlpha = 0f
                     )
                 } else {
@@ -595,7 +595,7 @@ private fun WeekSelector(
                 .background(navBg)
                 .then(
                     if (uiStyle == UiStyle.IOS) {
-                        Modifier.border(1.dp, glassBorderColor(), CircleShape)
+                        Modifier.border(1.dp, glassHairlineColor(), CircleShape)
                     } else {
                         Modifier
                     }
@@ -653,7 +653,7 @@ private fun WeekSelector(
                 .background(navBg)
                 .then(
                     if (uiStyle == UiStyle.IOS) {
-                        Modifier.border(1.dp, glassBorderColor(), CircleShape)
+                        Modifier.border(1.dp, glassHairlineColor(), CircleShape)
                     } else {
                         Modifier
                     }

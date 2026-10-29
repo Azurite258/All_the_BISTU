@@ -47,6 +47,7 @@ import com.bistu.allthebistu.data.reminder.CourseCalendarSync
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import com.bistu.allthebistu.ui.components.WheelColumn
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.opaqueSurface
 
 /**
  * 课程提醒设置。
@@ -171,7 +172,10 @@ fun ReminderSettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        // 必须是**不透明**底色。iOS 液态玻璃风格里 surface 是半透明白，
+        // 直接拿它当底色会让整个弹窗透出下面的课表，字压在课程块上完全没法看。
+        // opaqueSurface 会把它和页面底色合成成实色。
+        containerColor = opaqueSurface(MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier

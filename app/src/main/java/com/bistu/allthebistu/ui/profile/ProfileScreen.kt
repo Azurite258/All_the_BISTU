@@ -91,6 +91,7 @@ import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.rememberWallpaperPreview
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
+import com.bistu.allthebistu.ui.theme.opaqueSurface
 
 /**
  * 「我的」页。
@@ -495,7 +496,7 @@ private fun AccountSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = opaqueSurface(MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
@@ -1442,7 +1443,9 @@ private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .styleCard()
-            .padding(horizontal = m.cardPadding, vertical = m.cardPadding - 2.dp),
+            // 上下留白比卡片内边距再收 6dp：一行 38dp 撑起厚厚的上下留白，
+            // 整张卡看着就是「一栏占了一大片」，用户明确嫌高
+            .padding(horizontal = m.cardPadding, vertical = m.cardPadding - 6.dp),
         content = content
     )
 }
@@ -1463,8 +1466,15 @@ private fun Divider(tight: Boolean = false) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = if (tight) 2.dp else 12.dp)
-            .height(0.5.dp)
-            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+            // 高度必须是 1dp：0.5dp 在 2.75x 密度下是 1.375 物理像素，
+            // 落在两个像素之间会被抗锯齿摊成「一条灰线 + 两侧白边」。
+            .height(1.dp)
+            // ⚠️ 颜色不能用 outline。iOS 的 outline 本身就是 `#0B0B0F @ 10%`，
+            // 再 `.copy(alpha = 0.42f)` 会把透明度**覆盖**成 42%（不是相乘），
+            // 一条本该若有若无的线就变成实打实的深灰；其它风格下 outline 又不带 alpha，
+            // 同一条线在六套风格里深浅完全对不上。
+            // 统一改用文字色的 8%：浅色=淡灰、深色=淡白，六套都成立。
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
     )
 }
 

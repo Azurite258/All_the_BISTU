@@ -436,7 +436,11 @@ private fun TimelineRow(
     isLast: Boolean,
     nowMinutes: Int
 ) {
-    val dotColor = remember(colorHex, course.name, colorScheme, isDark, paletteIndex) {
+    // 时间线上那个小圆点表达的是「这节课现在什么状态」，不是「哪门课」，
+    // 所以按状态上色，并且和右侧标签用同一个色源（见 stateColor 里的注释）：
+    // 进行中绿、即将开始主题色、已结束灰。还没轮到的课保留课程本色，
+    // 否则今天后面几节课全成了灰点，反而分不清是「已结束」还是「还没上」。
+    val courseTint = remember(colorHex, course.name, colorScheme, isDark, paletteIndex) {
         CourseColors.backgroundOf(
             originalHex = colorHex,
             courseName = course.name,
@@ -444,6 +448,10 @@ private fun TimelineRow(
             isDark = isDark,
             paletteIndex = paletteIndex
         )
+    }
+    val dotColor = when (state) {
+        ClassState.UPCOMING -> courseTint
+        else -> state.stateColor()
     }
     val dimmed = state == ClassState.DONE
 
@@ -486,7 +494,9 @@ private fun TimelineRow(
                 modifier = Modifier
                     .size(if (state == ClassState.RUNNING) 12.dp else 9.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(if (dimmed) dotColor.copy(alpha = 0.35f) else dotColor)
+                    // 不再对「已结束」额外压 alpha：它本来就是灰的，
+                    // 再乘 0.35 就淡到看不见，和右侧「已结束」标签也对不上色
+                    .background(dotColor)
             )
             if (!isLast) {
                 Box(
@@ -532,15 +542,35 @@ private fun TimelineRow(
     }
 }
 
+/**
+ * 课程状态的强调色。**时间线上的小圆点和右侧状态标签必须共用这一个色源**，
+ * 否则两处各写一遍迟早会分叉（改一处忘另一处，颜色就对不上）。
+ *
+ *  - RUNNING 用固定绿 #2E7D32：主题色里没有「绿」，而「进行中」在中文语境里
+ *    默认就该是绿，用主题蓝会跟「即将开始」撞车；
+ *  - NEXT 用主题色（默认是蓝），和顶栏按钮、进度条同一套强调色；
+ *  - DONE 用 onSurfaceVariant，即次要文字灰。
+ *
+ * UPCOMING（今天还没轮到、且不是下一节）不走这里——它保留课程本色，
+ * 所以调用方要先判掉它。
+ */
+@Composable
+private fun ClassState.stateColor(): Color = when (this) {
+    ClassState.RUNNING -> Color(0xFF2E7D32)
+    ClassState.NEXT -> MaterialTheme.colorScheme.primary
+    ClassState.DONE -> MaterialTheme.colorScheme.onSurfaceVariant
+    ClassState.UPCOMING -> MaterialTheme.colorScheme.outline
+}
+
 @Composable
 private fun StateChip(state: ClassState, course: Course, nowMinutes: Int) {
     val (text, color) = when (state) {
         ClassState.RUNNING -> {
             val left = (minutesOf(course.endTime) ?: nowMinutes) - nowMinutes
-            "进行中 · 还剩 ${durationText(left)}" to Color(0xFF2E7D32)
+            "进行中 · 还剩 ${durationText(left)}" to state.stateColor()
         }
-        ClassState.NEXT -> "即将开始" to MaterialTheme.colorScheme.primary
-        ClassState.DONE -> "已结束" to MaterialTheme.colorScheme.onSurfaceVariant
+        ClassState.NEXT -> "即将开始" to state.stateColor()
+        ClassState.DONE -> "已结束" to state.stateColor()
         ClassState.UPCOMING -> return
     }
     Text(

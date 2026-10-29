@@ -57,6 +57,7 @@ import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.theme.HyperSpacing
+import com.bistu.allthebistu.ui.theme.opaqueSurface
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -283,7 +284,7 @@ private fun EmptyRoomSheet(onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = opaqueSurface(MaterialTheme.colorScheme.surface),
         sheetState = sheetState,
     ) {
         Column(
