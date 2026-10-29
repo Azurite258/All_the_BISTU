@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.bistu.allthebistu.R
+import com.bistu.allthebistu.data.auth.TestAccount
 import com.bistu.allthebistu.data.card.PortalCardApi
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.ui.life.EmptyRoomCard
@@ -93,6 +94,11 @@ fun LifeScreen(modifier: Modifier = Modifier) {
     val settingsStore = remember { SettingsStore(context) }
 
     fun load() {
+        // 测试账号：本地随机数据，余额是 ∞，不发请求
+        if (AuthHolder.isTestSession) {
+            overview = TestAccount.cardOverview()
+            return
+        }
         val auth = AuthHolder.auth ?: return
         if (loading) return
         loading = true

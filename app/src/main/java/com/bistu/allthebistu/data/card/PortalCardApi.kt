@@ -353,6 +353,9 @@ object PortalCardApi {
 
     /** 金额格式化：¥12.50 / -¥12.50 */
     fun formatMoney(v: Double, withSign: Boolean = false): String {
+        // 测试账号的余额是 Double.POSITIVE_INFINITY，
+        // "%.2f".format(∞) 会输出 "Infinity"，直接显示无穷符号更好认
+        if (v.isInfinite() || v.isNaN()) return if (v < 0) "-¥∞" else "¥∞"
         val sign = when {
             !withSign -> ""
             v > 0 -> "+"

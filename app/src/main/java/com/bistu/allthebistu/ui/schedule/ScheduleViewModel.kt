@@ -8,6 +8,7 @@ import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.auth.JwxtApi
+import com.bistu.allthebistu.data.auth.TestAccount
 import com.bistu.allthebistu.data.net.RetryPolicy
 import com.bistu.allthebistu.data.privacy.UserDataCleaner
 import com.bistu.allthebistu.ui.login.AuthHolder
@@ -175,7 +176,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun loadWithRetry(forceRefresh: Boolean): LoadResult {
         val startedAt = System.currentTimeMillis()
-        val first = repository.loadSchedule(forceRefresh = forceRefresh)
+        val first = repository.loadSchedule(forceRefresh = forceRefresh).asTestSession()
         val error = first.error ?: return first
         val elapsed = System.currentTimeMillis() - startedAt
         if (!RetryPolicy.shouldRetryUi(error, elapsed)) return first
@@ -186,8 +187,22 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     "${UI_RETRY_DELAY_MS}ms 后自动重试一次"
         )
         delay(UI_RETRY_DELAY_MS)
-        return repository.loadSchedule(forceRefresh = forceRefresh)
+        return repository.loadSchedule(forceRefresh = forceRefresh).asTestSession()
     }
+
+    /**
+     * 测试会话下把「示例数据」标成「已同步」。
+     *
+     * 测试账号没有真实会话，仓库拿不到网络课表，只能回落到 assets 示例；
+     * 但界面上「示例数据 · 橙色」会让人以为没连上服务器。这里只改 [LoadResult] 的来源标签，
+     * 不动课程内容，也不写入 Room。
+     */
+    private fun LoadResult.asTestSession(): LoadResult =
+        if (AuthHolder.isTestSession && source == Source.ASSETS) {
+            copy(source = Source.NETWORK, timestamp = System.currentTimeMillis(), error = null)
+        } else {
+            this
+        }
 
     /**
      * 重新加载。
@@ -299,6 +314,13 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
      * 挂了不该影响课表本身的使用。
      */
     fun refreshStudyReport() {
+        // 测试账号：本地随机一份报告，不走网络
+        if (AuthHolder.isTestSession) {
+            val report = TestAccount.studyReport()
+            reportStore.save(report)
+            _uiState.update { it.copy(studyReport = report, reportLoading = false) }
+            return
+        }
         val auth = AuthHolder.auth ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(reportLoading = true) }

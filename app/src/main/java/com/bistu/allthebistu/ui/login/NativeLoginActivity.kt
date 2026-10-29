@@ -27,9 +27,12 @@ import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.auth.BistuAuth
 import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.auth.SessionStore
+import com.bistu.allthebistu.data.auth.TestAccount
+import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.ui.schedule.LoadErrorText
 import com.bistu.allthebistu.ui.theme.Study1Theme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -51,6 +54,15 @@ object AuthHolder {
 
     /** Compose 可观察的登录状态 */
     var isLoggedIn by mutableStateOf(false)
+        private set
+
+    /**
+     * 当前是否是[TestAccount]的本地测试会话。
+     *
+     * 测试会话没有 [auth]（不出网、没有 Cookie），但 [isLoggedIn] 为 true，
+     * 界面按「已登录」渲染；各业务模块看到这个标记就走本地随机数据。
+     */
+    var isTestSession by mutableStateOf(false)
         private set
 
     /** 会话是否已从磁盘恢复过（避免重复恢复） */
@@ -80,6 +92,27 @@ object AuthHolder {
     }
 
     /**
+     * 测试账号登录：只记状态，不建真实会话。
+     *
+     * 刻意把 [auth] 置空 —— 业务层凡是 `auth ?: return` 的地方都会自动跳过网络，
+     * 这样「模拟登录」不可能因为某个漏改的分支真的去请求学校服务器。
+     */
+    fun setTestSession(context: Context, profile: TestAccount.Profile) {
+        auth?.onCookiesChanged = null
+        auth = null
+        isTestSession = true
+        isLoggedIn = true
+        restoredFromDisk = false
+        restored = true
+        appContext = context.applicationContext
+        // 「我的」页的学号读的是 SessionStore，这里存一份随机学号
+        SessionStore(context).saveUsername(profile.studentNo)
+        context.getSharedPreferences(TEST_PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(TEST_ACTIVE, true).apply()
+        AppLog.d("AuthHolder", "setTestSession: 测试账号 ${profile.studentNo} 已启用")
+    }
+
+    /**
      * App 启动时调用：从磁盘恢复会话。
      *
      * @return 恢复成功返回 true（此时 isLoggedIn 已为 true）
@@ -88,6 +121,8 @@ object AuthHolder {
         if (restored) return isLoggedIn
         restored = true
         appContext = context.applicationContext
+
+        if (restoreTestSession(context)) return true
 
         val stored = SessionStore(context).load()
         if (stored.isEmpty()) {
@@ -174,6 +209,16 @@ object AuthHolder {
     fun autoLogin(context: Context): AutoLoginResult {
         appContext = context.applicationContext
 
+        // ⓪ 测试账号：冷启动时按磁盘里的标记直接恢复，不再走 Cookie 那一套
+        if (isTestSession) {
+            AppLog.d("AuthHolder", "autoLogin: 测试会话可用，直接复用")
+            return AutoLoginResult.Success(reusedFromMemory = true)
+        }
+        if (restoreTestSession(context)) {
+            AppLog.d("AuthHolder", "autoLogin: 已从磁盘恢复测试会话")
+            return AutoLoginResult.Success(reusedFromMemory = true)
+        }
+
         // ① 内存里已经有可用会话 → 直接复用
         val existing = auth
         if (existing != null && existing.isLoggedIn()) {
@@ -216,13 +261,34 @@ object AuthHolder {
         auth?.onCookiesChanged = null
         auth?.clearCookies()
         auth = null
+        isTestSession = false
         isLoggedIn = false
         restoredFromDisk = false
         // 复位恢复标记：退出后若用户重新登录并重启，仍应能正常恢复
         restored = false
         val ctx = context ?: appContext
-        if (ctx != null) SessionStore(ctx).clearAll()
+        if (ctx != null) {
+            SessionStore(ctx).clearAll()
+            ctx.getSharedPreferences(TEST_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        }
         AppLog.d("AuthHolder", "clear: 已退出登录")
+    }
+
+    /**
+     * 磁盘上是否存着「测试会话」标记。
+     *
+     * 单独用 SharedPreferences 而不是复用 [SessionStore]：
+     * SessionStore 存的是 Cookie JSON，往里塞一个布尔会污染它的格式。
+     */
+    private fun restoreTestSession(context: Context): Boolean {
+        if (!TestAccount.ENABLED) return false
+        val active = context.getSharedPreferences(TEST_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(TEST_ACTIVE, false)
+        if (!active) return false
+        isTestSession = true
+        isLoggedIn = true
+        restored = true
+        return true
     }
 
     /** Application Context（由 restore / setAuth 注入） */
@@ -230,6 +296,10 @@ object AuthHolder {
 
     /** Cookie 变更后延迟多久落盘（合并一次换票里的多跳 Set-Cookie） */
     private const val PERSIST_DEBOUNCE_MS = 400L
+
+    /** 测试会话标记（不放 DataStore：启动时要同步读，不能等 Flow） */
+    private const val TEST_PREFS = "test_session"
+    private const val TEST_ACTIVE = "active"
 }
 
 /** 自动登录结果 */
@@ -356,6 +426,32 @@ fun NativeLoginScreen(
                 onClick = {
                     if (username.isBlank() || password.isBlank()) {
                         addLog("学号和密码不能为空")
+                        return@Button
+                    }
+                    // ── 测试账号：整套流程本地模拟，一个请求都不发 ──
+                    if (TestAccount.matches(username.trim(), password)) {
+                        loading = true
+                        logs = emptyList()
+                        scope.launch {
+                            val profile = TestAccount.newProfile()
+                            addLog("正在连接服务器…")
+                            delay(450)
+                            addLog("TLS 握手完成，SSO 会话已建立")
+                            delay(350)
+                            addLog("正在同步教务 / 一卡通 / 学业数据…")
+                            AuthHolder.setTestSession(context, profile)
+                            SettingsStore(context).setNickname(profile.nickname)
+                            delay(400)
+                            addLog("✅ 登录成功（本地测试会话）")
+                            addLog("服务器: info.bistu.edu.cn · 已连接")
+                            addLog("学号 ${profile.studentNo}")
+                            addLog("${profile.college} · ${profile.major} · ${profile.className}")
+                            addLog("一卡通余额: ∞")
+                            success = true
+                            loading = false
+                            delay(450)
+                            onSuccess()
+                        }
                         return@Button
                     }
                     loading = true
