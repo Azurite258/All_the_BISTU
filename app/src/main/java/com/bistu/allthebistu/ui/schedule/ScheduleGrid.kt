@@ -224,7 +224,11 @@ private fun ScheduleGridBody(
                 ) {
                     val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
                     if (monthLabel != null) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        // 往下挪 3dp：贴着卡片圆角时「10」看着发挤
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.offset(y = 3.dp)
+                        ) {
                             Text(
                                 text = monthLabel,
                                 fontSize = HeaderMonthSize,
@@ -248,7 +252,9 @@ private fun ScheduleGridBody(
 
                     Column(
                         modifier = Modifier
-                            .size(width = dayWidth, height = HeaderHeight),
+                            .size(width = dayWidth, height = HeaderHeight)
+                            // 星期这一整排也往下挪 2dp，和「10 月」一起离开卡片上沿
+                            .offset(y = 2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
