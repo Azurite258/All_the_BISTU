@@ -236,7 +236,9 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        Spacer(Modifier.height(100.dp))
+        // 底部让位：悬浮底栏 + 未登录时那条引导条（都算在 contentBottom 里）。
+        // 之前写死 100dp，未登录时最后一张「空教室」卡会被引导条压住一截。
+        Spacer(Modifier.height(LocalUiMetrics.current.contentBottom + 12.dp))
     }
 
     // ── 电费说明：第一次进生活页弹一次，讲清楚为什么这里没有电费 ──
