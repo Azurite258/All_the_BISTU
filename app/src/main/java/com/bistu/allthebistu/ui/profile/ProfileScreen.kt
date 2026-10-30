@@ -8,12 +8,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -837,14 +839,18 @@ private fun UiStyleScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(
-                    start = LocalUiMetrics.current.pagePadding,
-                    end = LocalUiMetrics.current.pagePadding,
+                    // 这里是「边切边比」的页面：左右留白也锁死，
+                    // 否则 18/20dp 两档会让整张卡横向跳 2dp
+                    start = STYLE_PAGE_PADDING,
+                    end = STYLE_PAGE_PADDING,
                     top = 6.dp,
                     bottom = 24.dp
                 ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SurfaceCard {
+            SurfaceCard(
+                fixedPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+            ) {
                 UiStyle.all.forEachIndexed { index, style ->
                     if (index > 0) Divider(tight = true)
                     UiStyleOptionRow(
@@ -876,9 +882,22 @@ private fun UiStyleOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 行高写死：选中行会加粗，字重一变行高就会跟着变一点，
+            // 六行里任意一行变高都会把下面的行整体推走，看起来就是「一直在动」
+            .height(STYLE_ROW_HEIGHT)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 9.dp),
+            // 选中底色由这里画，不再靠点击水波纹：
+            // 水波纹是「按下出现、松手淡出」的一闪，和真正选中态看起来一样，
+            // 每次点都会闪一块灰，还会按点击位置变形 —— 就是用户说的「一直在动」。
+            .background(
+                if (selected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                else Color.Transparent
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         StyleDots(style = style, isDark = isDark)
@@ -887,12 +906,14 @@ private fun UiStyleOptionRow(
             Text(
                 text = UiStyle.label(style),
                 fontSize = 14.sp,
+                lineHeight = 18.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = UiStyle.tagline(style),
                 fontSize = 11.sp,
+                lineHeight = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -1436,8 +1457,28 @@ private fun SectionLabel(text: String) {
 /** 蒙层滑块的步长（百分比）：0/10/…/100 共 11 档，太细反而是折磨 */
 private const val SCRIM_STEP = 10
 
+/**
+ * 「界面风格」页的固定几何。
+ *
+ * 这一页是拿来**对照**六套风格的：卡片内边距、行高、左右留白只要跟着风格变，
+ * 每切一次列表就整体挪一下，看起来像一直在动。所以这里锁死一套数值，
+ * 与当前选中的风格无关。
+ */
+private val STYLE_PAGE_PADDING = 20.dp
+private val STYLE_ROW_HEIGHT = 52.dp
+
 @Composable
-private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
+private fun SurfaceCard(
+    /**
+     * 固定内边距。
+     *
+     * 各风格自己的 cardPadding 是 13~16dp 不等，普通设置页跟着走没关系；
+     * 但「界面风格」这种**一边切风格一边对照**的页面，卡片内边距一变，
+     * 六行的位置就整体上下跳 3dp，看着像一直在动。传了它就锁死。
+     */
+    fixedPadding: PaddingValues? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
     val m = LocalUiMetrics.current
     Column(
         modifier = Modifier
@@ -1445,7 +1486,12 @@ private fun SurfaceCard(content: @Composable ColumnScope.() -> Unit) {
             .styleCard()
             // 上下留白比卡片内边距再收 6dp：一行 38dp 撑起厚厚的上下留白，
             // 整张卡看着就是「一栏占了一大片」，用户明确嫌高
-            .padding(horizontal = m.cardPadding, vertical = m.cardPadding - 6.dp),
+            .padding(
+                fixedPadding ?: PaddingValues(
+                    horizontal = m.cardPadding,
+                    vertical = m.cardPadding - 6.dp
+                )
+            ),
         content = content
     )
 }

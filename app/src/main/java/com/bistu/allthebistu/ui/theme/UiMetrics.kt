@@ -115,10 +115,13 @@ data class UiMetrics(
     /**
      * 内容区底部要给底栏让出的空间。
      *
-     * 底栏占 `dockHeight + dockMarginBottom`，再加 8dp 呼吸位。
-     * 写死 88dp 的时候比实际占位小 2dp，课表卡的下边缘会钻进底栏。
+     * 底栏占 `dockHeight + dockMarginBottom`，剩下的按 [cardGap] 让出来。
+     *
+     * **这里必须用 cardGap，不能写死 8dp**：课表卡上方到周次卡的间距就是 cardGap，
+     * 底部只让 8dp 的话，卡片上下两边的空隙不一样宽（18/20 两套能差 6dp），
+     * 看着就是「卡片贴在底栏上」。
      */
-    val contentBottom: Dp get() = dockHeight + dockMarginBottom + 8.dp + extraBottom
+    val contentBottom: Dp get() = dockHeight + dockMarginBottom + cardGap + extraBottom
 
     /** 卡片是否需要阴影 */
     val usesShadow: Boolean get() = cardStyle == CardStyle.SHADOW || cardStyle == CardStyle.GLASS
@@ -157,7 +160,10 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         weekNavSize = 30.dp,
         cardElevation = 14.dp,
         cardStyle = CardStyle.SHADOW,
-        dockPill = DockPill.NONE,
+        // 方向稿里 HyperOS 的选中项只靠文字变色，没有底块；
+        // 但实际用起来「只有一个橙色图标」太素，用户明确要求补上淡橙药丸。
+        // 用 accent-soft 而不是实底，和澎湃本体的选中态一致。
+        dockPill = DockPill.SOFT_ACCENT,
         dockGlass = true,
         glowBackdrop = false
     )
