@@ -31,8 +31,6 @@ data class AppSettings(
     val fontLevel: Int = FontLevel.MEDIUM,
     /** 自建昵称。空字符串 = 没设，账号卡上退回显示「点击设置昵称」 */
     val nickname: String = "",
-    /** 底部导航风格：[BottomBarStyle.FLAT] / [BottomBarStyle.GLASS] */
-    val bottomBarStyle: Int = BottomBarStyle.DEFAULT,
     /** 课程提醒总开关。关掉后闹钟会被全部撤销，不是「只是不弹」 */
     val reminderEnabled: Boolean = false,
     /** 上课前多少分钟提醒。0..240，5 分钟一档，收敛逻辑见 ReminderPlanner.sanitizeAdvance */
@@ -127,9 +125,6 @@ class SettingsStore(private val context: Context) {
         /** 自建昵称（只存本机，不跟学校系统同步） */
         val NICKNAME = stringPreferencesKey("nickname")
 
-        /** 底部导航风格（扁平 / 光效） */
-        val BOTTOM_BAR_STYLE = intPreferencesKey("bottom_bar_style")
-
         /** 课程提醒开关 */
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
 
@@ -152,9 +147,6 @@ class SettingsStore(private val context: Context) {
             courseSchemeOverrides = readCourseOverrides(prefs),
             fontLevel = FontLevel.sanitize(prefs[Keys.FONT_LEVEL] ?: FontLevel.MEDIUM),
             nickname = prefs[Keys.NICKNAME].orEmpty(),
-            bottomBarStyle = BottomBarStyle.sanitize(
-                prefs[Keys.BOTTOM_BAR_STYLE] ?: BottomBarStyle.DEFAULT
-            ),
             reminderEnabled = prefs[Keys.REMINDER_ENABLED] ?: false,
             reminderAdvanceMinutes = ReminderPlanner.sanitizeAdvance(
                 prefs[Keys.REMINDER_ADVANCE] ?: ReminderPlanner.DEFAULT_ADVANCE
@@ -213,11 +205,6 @@ class SettingsStore(private val context: Context) {
     /** 设置字体挡位（课表排版 + 全局字体一起变） */
     suspend fun setFontLevel(level: Int) {
         context.dataStore.edit { it[Keys.FONT_LEVEL] = FontLevel.sanitize(level) }
-    }
-
-    /** 设置底部导航风格 */
-    suspend fun setBottomBarStyle(style: Int) {
-        context.dataStore.edit { it[Keys.BOTTOM_BAR_STYLE] = BottomBarStyle.sanitize(style) }
     }
 
     /** 开关课程提醒 */

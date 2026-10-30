@@ -255,9 +255,6 @@ private fun AppRoot(
                     onThemeModeChange = { mode -> scope.launch { settingsStore.setThemeMode(mode) } },
                     onColorSchemeChange = { scheme -> scope.launch { settingsStore.setColorScheme(scheme) } },
                     onFontLevelChange = { level -> scope.launch { settingsStore.setFontLevel(level) } },
-                    onBottomBarStyleChange = { style ->
-                        scope.launch { settingsStore.setBottomBarStyle(style) }
-                    },
                     onNicknameChange = { name -> scope.launch { settingsStore.setNickname(name) } },
                     onWallpaperScrimChange = { v ->
                         scope.launch { settingsStore.setWallpaperScrim(v) }
@@ -291,7 +288,6 @@ private fun AppRoot(
         FloatingBottomBar(
             currentTab = currentTab,
             onTabSelected = { currentTab = it },
-            style = settings.bottomBarStyle,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)

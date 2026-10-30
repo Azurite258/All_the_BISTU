@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,10 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
@@ -76,13 +71,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.prefs.AvatarStore
-import com.bistu.allthebistu.data.prefs.BottomBarStyle
 import com.bistu.allthebistu.data.prefs.CourseColorScheme
 import com.bistu.allthebistu.data.prefs.FontLevel
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.prefs.ThemeMode
 import com.bistu.allthebistu.ui.components.DiscreteSlider
-import com.bistu.allthebistu.ui.components.liquidGlass
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.CourseTypography
 import com.bistu.allthebistu.ui.theme.AppWallpaper
@@ -115,7 +108,6 @@ fun ProfileScreen(
     onThemeModeChange: (Int) -> Unit,
     onColorSchemeChange: (Int) -> Unit,
     onFontLevelChange: (Int) -> Unit,
-    onBottomBarStyleChange: (Int) -> Unit,
     onNicknameChange: (String) -> Unit,
     onWallpaperScrimChange: (Int) -> Unit,
     onLogin: () -> Unit,
@@ -150,7 +142,6 @@ fun ProfileScreen(
             onThemeModeChange = onThemeModeChange,
             onColorSchemeChange = onColorSchemeChange,
             onFontLevelChange = onFontLevelChange,
-            onBottomBarStyleChange = onBottomBarStyleChange,
             onWallpaperScrimChange = onWallpaperScrimChange,
             onBack = { showAppearance = false },
             modifier = modifier
@@ -948,7 +939,6 @@ private fun AppearanceScreen(
     onThemeModeChange: (Int) -> Unit,
     onColorSchemeChange: (Int) -> Unit,
     onFontLevelChange: (Int) -> Unit,
-    onBottomBarStyleChange: (Int) -> Unit,
     onWallpaperScrimChange: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1024,16 +1014,6 @@ private fun AppearanceScreen(
                 FontLevelBlock(
                     level = settings.fontLevel,
                     onChange = onFontLevelChange
-                )
-
-                Divider()
-
-                SettingRowTitle("底栏风格")
-                Spacer(Modifier.height(8.dp))
-                BottomBarStyleRow(
-                    current = settings.bottomBarStyle,
-                    isDark = isDark,
-                    onChange = onBottomBarStyleChange
                 )
             }
 
@@ -1155,137 +1135,6 @@ private fun ColorSchemeRow(current: Int, isDark: Boolean, onChange: (Int) -> Uni
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-        }
-    }
-}
-
-/**
- * 底栏风格：两套材质二选一，每个都带一块**真实渲染**的迷你配图。
- *
- * 配图不走截图，而是把同一个 `liquidGlass` modifier 缩小套一遍——
- * 这样以后调玻璃参数，配图会跟着变，不会跟真实底栏对不上。
- */
-@Composable
-private fun BottomBarStyleRow(current: Int, isDark: Boolean, onChange: (Int) -> Unit) {
-    val options = listOf(
-        BottomBarStyle.FLAT to "扁平",
-        BottomBarStyle.GLASS to "光效"
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        options.forEach { (style, label) ->
-            val selected = current == style
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    .border(
-                        width = if (selected) 1.dp else 0.dp,
-                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .clickable { onChange(style) }
-                    .padding(vertical = 9.dp, horizontal = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                BottomBarMiniPreview(style = style, isDark = isDark)
-                Spacer(Modifier.height(7.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (selected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Spacer(Modifier.width(2.dp))
-                    }
-                    Text(
-                        text = label,
-                        fontSize = 11.sp,
-                        fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                        color = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 底栏迷你配图：一个缩小的胶囊 + 四个点，第一个点后面是选中药丸。
- *
- * 尺寸只有 22dp 高，所以细节（文字、图标）全部省略，只保留「有没有玻璃感」这个区别：
- * 扁平是纯白底 + 淡蓝块，光效是同款玻璃材质 + 白块。
- */
-@Composable
-private fun BottomBarMiniPreview(style: Int, isDark: Boolean, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(11.dp)
-    val isGlass = style == BottomBarStyle.GLASS
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(22.dp)
-            .then(
-                if (isGlass) {
-                    Modifier
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = shape,
-                            clip = false,
-                            ambientColor = Color(0x14000000),
-                            spotColor = Color(0x1C000000)
-                        )
-                        .liquidGlass(
-                            shape = shape,
-                            isDark = isDark,
-                            bodyColor = if (isDark) null else Color(0xFFDDE4EF),
-                            bodyAlpha = if (isDark) 0.78f else 0.80f,
-                            edgeWidth = 0.8.dp
-                        )
-                } else {
-                    Modifier
-                        .clip(shape)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(
-                            0.5.dp,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
-                            shape
-                        )
-                }
-            )
-    ) {
-        val primary = MaterialTheme.colorScheme.primary
-        val dot = MaterialTheme.colorScheme.onSurfaceVariant
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cell = size.width / 4f
-            val h = size.height
-
-            // 选中药丸（第一格）
-            drawRoundRect(
-                color = if (isGlass) Color.White.copy(alpha = if (isDark) 0.92f else 0.95f)
-                else primary.copy(alpha = if (isDark) 0.28f else 0.20f),
-                topLeft = Offset(cell * 0.08f, h * 0.18f),
-                size = Size(cell * 0.84f, h * 0.64f),
-                cornerRadius = CornerRadius(h * 0.32f)
-            )
-
-            // 四个 Tab 的示意点
-            repeat(4) { i ->
-                drawCircle(
-                    color = if (i == 0) primary else dot.copy(alpha = 0.62f),
-                    radius = h * 0.085f,
-                    center = Offset(cell * (i + 0.5f), h * 0.5f)
-                )
             }
         }
     }

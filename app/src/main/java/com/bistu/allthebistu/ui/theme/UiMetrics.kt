@@ -164,7 +164,10 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         // 但实际用起来「只有一个橙色图标」太素，用户明确要求补上淡橙药丸。
         // 用 accent-soft 而不是实底，和澎湃本体的选中态一致。
         dockPill = DockPill.SOFT_ACCENT,
-        dockGlass = true,
+        // 澎湃 / 原版两套统一走「扁平」底栏，不再有玻璃（光效）版本：
+        // 这两套没有彩色光晕可透，玻璃体只能靠压深一档来分离，
+        // 浅色下整条底栏泛灰、压在卡片上像脏了一块，用户明确要求去掉。
+        dockGlass = false,
         glowBackdrop = false
     )
 
@@ -275,7 +278,8 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardElevation = 10.dp,
         cardStyle = CardStyle.SHADOW,
         dockPill = DockPill.SOLID_ACCENT,
-        dockGlass = true,
+        // 原版同样固定扁平，见上面对 HyperOS 的说明
+        dockGlass = false,
         glowBackdrop = false
     )
 }

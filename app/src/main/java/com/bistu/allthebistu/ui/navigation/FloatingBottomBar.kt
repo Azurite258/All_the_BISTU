@@ -54,7 +54,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bistu.allthebistu.data.prefs.BottomBarStyle
 import com.bistu.allthebistu.ui.components.liquidGlass
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -90,7 +89,6 @@ import kotlin.math.roundToInt
 fun FloatingBottomBar(
     currentTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
-    style: Int = BottomBarStyle.DEFAULT,
     modifier: Modifier = Modifier
 ) {
     val tabs = MainTab.entries
@@ -120,9 +118,10 @@ fun FloatingBottomBar(
     val greyPill = if (isDarkSurface) Color(0xFF2A2A2A) else Color(0xFFEDEDED)
     val greyPillText = if (isDarkSurface) Color(0xFFEDEDED) else Color(0xFF111111)
 
-    // 材质由**界面风格**决定（原版 / HyperOS / iOS 是玻璃，其余三套实心），
-    // 「外观 → 底栏风格」里的光效开关作为额外覆盖。
-    val isGlass = metrics.dockGlass || style == BottomBarStyle.GLASS
+    // 材质**只**由界面风格决定，没有用户开关：
+    // iOS 是玻璃，其余五套实心。澎湃 / 原版原本也是玻璃，但这两套没有彩色光晕可透，
+    // 玻璃体只能压深一档来分离，浅色下底栏泛灰、压在卡片上像脏了一块，已按用户要求去掉。
+    val isGlass = metrics.dockGlass
     val hairline = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
     // 选中块的底色；DockPill.NONE 时压根不画（HyperOS 只靠文字变色）
     val pillColor = when (metrics.dockPill) {
