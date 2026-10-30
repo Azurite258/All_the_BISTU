@@ -209,8 +209,10 @@ private fun AppRoot(
     val baseMetrics = LocalUiMetrics.current
     val contentMetrics = remember(baseMetrics, showLoginPrompt, loginBarHeightPx) {
         if (showLoginPrompt && loginBarHeightPx > 0) {
-            // 加 8dp 空隙，让卡片下沿和引导条之间有呼吸位，不至于贴成一块
-            baseMetrics.copy(extraBottom = with(density) { loginBarHeightPx.toDp() } + 8.dp)
+            // 空隙同样用 cardGap：页面上四道缝（标题 / 周次卡 / 课表卡 / 引导条）
+            // 必须一样宽。这里以前写死 8dp，比其余的 cardGap 窄一截，
+            // 卡片下沿看着就是「贴着」引导条。
+            baseMetrics.copy(extraBottom = with(density) { loginBarHeightPx.toDp() } + baseMetrics.cardGap)
         } else {
             baseMetrics
         }

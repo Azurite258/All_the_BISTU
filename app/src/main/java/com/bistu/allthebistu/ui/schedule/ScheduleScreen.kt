@@ -180,15 +180,22 @@ private fun ScheduleContent(
             // HyperOS 风格：不用 TopAppBar，自己画一个。
             // 注意：启用 enableEdgeToEdge 后内容会绘制到状态栏下方，
             // 必须自己加 statusBars inset，否则标题会压到手机时间上。
+            //
+            // 底边距按 cardGap 再减 3dp：
+            // 页面上四道缝（标题 / 周次卡 / 课表卡 / 登录引导条）要一样宽。
+            // 其余三处直接用 cardGap 就行，唯独标题这里底下压着一行 11sp 的文字，
+            // 文字行框比字形高出一截、下沿还留了约 3dp，所以 padding 要少给 3dp，
+            // 眼睛看到的缝才和另外三道一样。写死 8dp 时 iOS 上这道缝比下面窄 6dp。
+            val topMetrics = LocalUiMetrics.current
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(
-                        start = LocalUiMetrics.current.pagePadding,
-                        end = LocalUiMetrics.current.pagePadding,
+                        start = topMetrics.pagePadding,
+                        end = topMetrics.pagePadding,
                         top = 16.dp,
-                        bottom = 8.dp
+                        bottom = topMetrics.cardGap - 3.dp
                     ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
