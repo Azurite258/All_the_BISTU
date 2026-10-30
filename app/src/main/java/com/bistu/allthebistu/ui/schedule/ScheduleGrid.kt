@@ -63,7 +63,9 @@ private val HeaderDateSize = 10.sp
 private val HeaderMonthSize = 12.sp
 
 private val PeriodNumberSize = 14.sp
+private val PeriodNumberLineHeight = 16.sp
 private val PeriodTimeSize = 8.sp
+private val PeriodTimeLineHeight = 10.sp
 
 /** 课程块内三种字号的相对比例：课名 : 教室 : 时间 = 1 : 0.9 : 0.8 */
 private const val ROOM_RATIO = 0.9f
@@ -287,7 +289,11 @@ private fun ScheduleGridBody(
             // ══════ 主体 ══════
             Row(modifier = Modifier.width(totalWidth)) {
 
-                // ① 左侧节次列：节次号 + 开始/结束时间（无边框，无背景）
+                // ① 左侧节次列：节次号 + 上课时间 / 下课时间（无边框，无背景）
+                //
+                // 三行叠在一起：节次号在最上，下面依次是开始、结束时间。
+                // 纵向预算：14sp 行高 16dp + 8sp×2 行高 10dp×2 = 36dp，行高 56dp，
+                // 上下各留约 10dp，不会顶到上一行。
                 Column {
                     periods.forEach { period ->
                         val pt = PeriodTimes.of(period)
@@ -303,14 +309,24 @@ private fun ScheduleGridBody(
                                 Text(
                                     text = period.toString(),
                                     fontSize = PeriodNumberSize,
+                                    lineHeight = PeriodNumberLineHeight,
                                     fontWeight = FontWeight.Medium,
                                     color = periodTextColor
                                 )
                                 if (pt != null) {
+                                    // 两行时间同字号同颜色，只在行高上收紧，
+                                    // 读起来是「08:00 / 08:45」一组，不会和节次号抢视线
                                     Text(
                                         text = pt.startTime,
                                         fontSize = PeriodTimeSize,
-                                        lineHeight = 10.sp,
+                                        lineHeight = PeriodTimeLineHeight,
+                                        color = timeTextColor,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = pt.endTime,
+                                        fontSize = PeriodTimeSize,
+                                        lineHeight = PeriodTimeLineHeight,
                                         color = timeTextColor,
                                         textAlign = TextAlign.Center
                                     )
