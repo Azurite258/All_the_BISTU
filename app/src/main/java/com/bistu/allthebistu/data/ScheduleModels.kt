@@ -114,7 +114,18 @@ data class Course(
     val endTime: String,
     /** 学校配好的颜色，如 "#FFF0CC" */
     val colorHex: String,
-    val teachClassId: String = ""
+    val teachClassId: String = "",
+    /**
+     * 本地改动（备注 / 隐藏 / 编辑 / 复制）用来认课的**稳定键**。
+     *
+     * 它由 [com.bistu.allthebistu.data.patch.CoursePatchLogic] 在应用改动时
+     * 按「教务系统原始那条课」算出来写回去，之后再改星期/节次也不会变——
+     * 所以用户把课从周三挪到周五，备注和删除标记还认得出是同一门课。
+     * 没打过补丁的课程是空串。
+     */
+    val patchKey: String = "",
+    /** 这条是「复制」出来的克隆课程，不属于教务系统原始数据 */
+    val isClone: Boolean = false
 ) {
     /** 占几节 */
     val sectionCount: Int get() = endSection - beginSection + 1

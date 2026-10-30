@@ -47,6 +47,7 @@ import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.ScheduleData
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.TermWeek
+import com.bistu.allthebistu.data.patch.CoursePatches
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.AppWallpaper
@@ -85,7 +86,9 @@ fun ScheduleScreen(
     onAddEvent: () -> Unit,
     onReminderSettings: () -> Unit,
     onOpenLogin: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 课程详情页的写操作（备注 / 删除 / 编辑 / 复制） */
+    actions: CourseActions = CourseActions()
 ) {
     val result = uiState.loadResult
     when {
@@ -98,6 +101,8 @@ fun ScheduleScreen(
             error = result.error,
             isDark = isDark,
             settings = settings,
+            patches = uiState.patches,
+            actions = actions,
             isLoggedIn = uiState.isLoggedIn,
             isRefreshing = uiState.isRefreshing,
             autoLoginHint = uiState.autoLoginHint,
@@ -121,6 +126,8 @@ private fun ScheduleContent(
     error: Throwable? = null,
     isDark: Boolean,
     settings: AppSettings,
+    patches: CoursePatches,
+    actions: CourseActions,
     isLoggedIn: Boolean,
     isRefreshing: Boolean,
     autoLoginHint: String?,
@@ -445,10 +452,19 @@ private fun ScheduleContent(
         CourseDetailSheet(
             course = course,
             currentWeek = currentWeek,
+            patches = patches,
             colorScheme = settings.colorScheme,
             isDark = isDark,
             paletteIndex = paletteIndex[course.name],
-            onDismiss = { selectedCourse = null }
+            onDismiss = { selectedCourse = null },
+            onSaveNote = { scope, week, text -> actions.onSaveNote(course, scope, week, text) },
+            onHide = { scope, week -> actions.onHide(course, scope, week) },
+            onEdit = { day, begin, end, room, teacher ->
+                actions.onEdit(course, day, begin, end, room, teacher)
+            },
+            onClone = { day, begin -> actions.onClone(course, day, begin) },
+            onRemoveClone = { actions.onRemoveClone(course) },
+            onReset = { actions.onReset(course) }
         )
     }
 }

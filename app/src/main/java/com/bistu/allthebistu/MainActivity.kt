@@ -50,6 +50,7 @@ import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
 import com.bistu.allthebistu.ui.navigation.MainTab
+import com.bistu.allthebistu.ui.schedule.CourseActions
 import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
 import com.bistu.allthebistu.ui.theme.AppWallpaper
@@ -226,7 +227,15 @@ private fun AppRoot(
                     onRefresh = viewModel::refresh,
                     onAddEvent = { pendingFeature = "添加日程" },
                     onReminderSettings = { showReminderSheet = true },
-                    onOpenLogin = { openLogin() }
+                    onOpenLogin = { openLogin() },
+                    actions = CourseActions(
+                        onSaveNote = viewModel::saveNote,
+                        onHide = viewModel::hideCourse,
+                        onEdit = viewModel::editCourse,
+                        onClone = viewModel::cloneCourse,
+                        onRemoveClone = viewModel::removeClone,
+                        onReset = viewModel::resetCourse
+                    )
                 )
 
                 MainTab.STUDY -> StudyScreen(

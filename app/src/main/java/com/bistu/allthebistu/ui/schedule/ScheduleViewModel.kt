@@ -7,6 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.bistu.allthebistu.data.LoadResult
 import com.bistu.allthebistu.data.ScheduleRepository
 import com.bistu.allthebistu.data.Source
+import com.bistu.allthebistu.data.Course
+import com.bistu.allthebistu.data.patch.CourseClone
+import com.bistu.allthebistu.data.patch.CoursePatchLogic
+import com.bistu.allthebistu.data.patch.CoursePatches
+import com.bistu.allthebistu.data.patch.CoursePatchStore
+import com.bistu.allthebistu.data.patch.PatchScope
 import com.bistu.allthebistu.data.auth.JwxtApi
 import com.bistu.allthebistu.data.auth.TestAccount
 import com.bistu.allthebistu.data.net.RetryPolicy
@@ -44,7 +50,14 @@ data class ScheduleUiState(
     /** 学业完成情况（要求学分/已修/已选），没拿到时为 null */
     val studyReport: com.bistu.allthebistu.data.StudyReport? = null,
     /** 学业报告是否正在刷新 */
-    val reportLoading: Boolean = false
+    val reportLoading: Boolean = false,
+    /**
+     * 本机对课程的改动（备注 / 隐藏 / 编辑 / 复制）。
+     *
+     * [loadResult] 里的课程已经是套过这些改动之后的版本；这里再放一份原始集合，
+     * 是因为详情页要判断「这门课现在有没有被改过」「本周备注是什么」。
+     */
+    val patches: CoursePatches = CoursePatches.EMPTY
 )
 
 /**
@@ -65,6 +78,17 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     /** 学业报告的本地缓存（文件 + JSON），退出登录时会被清掉 */
     private val reportStore = com.bistu.allthebistu.data.StudyReportStore(app)
 
+    /**
+     * 课程本地改动（备注 / 隐藏 / 编辑 / 复制）。
+     *
+     * 存在本机 JSON 里，不进教务系统；课表每次从网络或缓存拿到原始数据后，
+     * 由 [CoursePatchLogic.applyPatches] 现场套一遍。
+     */
+    private val patchStore = CoursePatchStore(app)
+
+    /** 教务系统给的**原始**结果（没套改动），改动变化时用它重算，避免叠加两次 */
+    private var rawResult: LoadResult? = null
+
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
 
@@ -79,6 +103,10 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
         repository.onSessionExpired = {
             viewModelScope.launch { handleSessionExpired() }
         }
+        // 改动是另一条数据源：备注一保存就重算课表，不用等下一次同步
+        viewModelScope.launch {
+            patchStore.patches.collect { bundle -> publishPatches(bundle) }
+        }
         bootstrap()
     }
 
@@ -92,11 +120,11 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             // 用户打开 App 也能立刻看到自己的课表，而不是转圈等待。
             val cached = repository.loadCached()
             if (cached != null) {
+                publish(cached)
                 _uiState.update {
                     it.copy(
-                        loadResult = cached,
-                        isLoading = false,
                         // 有缓存时用顶部指示器表示「正在后台同步」，不再整页转圈
+                        isLoading = false,
                         isRefreshing = true
                     )
                 }
@@ -131,9 +159,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     if (loaded.source == Source.NETWORK) {
                         runCatching { AuthHolder.persist(getApplication()) }
                     }
-                    _uiState.update {
-                        it.copy(loadResult = loaded, isLoading = false, isRefreshing = false)
-                    }
+                    publish(loaded)
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
                     refreshStudyReport()
                 }
 
@@ -152,7 +179,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                     // 没有缓存才回落到示例数据
                     if (cached == null) {
                         val loaded = repository.loadSchedule()
-                        _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+                        publish(loaded)
+                        _uiState.update { it.copy(isLoading = false) }
                     }
                 }
             }
@@ -220,7 +248,8 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             // forceRefresh 的语义是「跳过缓存读」，而不是「删掉缓存」，
             // 拉取成功时 saveSchedule 会整学期覆盖，用不着提前清。
             val loaded = loadWithRetry(forceRefresh = forceRefresh)
-            _uiState.update { it.copy(loadResult = loaded, isLoading = false) }
+            publish(loaded)
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -236,7 +265,7 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
                 AuthHolder.auth?.let(repository::setAuth)
                 // 下拉 = 强制从网络拉最新
                 val loaded = loadWithRetry(forceRefresh = true)
-                _uiState.update { it.copy(loadResult = loaded) }
+                publish(loaded)
                 refreshStudyReport()
             } finally {
                 // 本地数据（如未登录读 assets）几毫秒就返回，
@@ -296,13 +325,17 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             val cleared = UserDataCleaner(getApplication()).wipeAll()
+            // 清除器已经把磁盘上的改动删了，这里把内存态也归零，
+            // 否则界面还拿着一份「上一个人的备注」继续渲染
+            patchStore.clear()
             // 壁纸文件刚被清掉，同步内存里的那份状态，否则界面还铺着已删的图
             AppWallpaper.refresh(getApplication())
             AppLog.d(TAG, "退出登录已清除: ${cleared.joinToString("、")}")
 
             val loaded = repository.loadSchedule()
+            publish(loaded)
             _uiState.update {
-                it.copy(loadResult = loaded, isLoading = false, studyReport = null)
+                it.copy(isLoading = false, studyReport = null)
             }
         }
     }
@@ -344,8 +377,132 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ───────────────────────────────────────────────────────────
+    // 课程改动：备注 / 删除 / 编辑 / 复制
+    //
+    // 全部只写本机（教务系统那边动不了），写完立刻重算课表：
+    // patch 一变，[publishPatches] 就用原始数据重算，网格与详情页同步刷新。
+    // ───────────────────────────────────────────────────────────
+
+    /** 保存备注。[scope] 取 [PatchScope.WEEK] / [PatchScope.ALL]，[week] 只在按周时有效 */
+    fun saveNote(course: Course, scope: Int, week: Int, text: String) {
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withNote(it, key, scope, week, text) }
+        }
+    }
+
+    /** 删除：从课表上隐藏（整门或某一周），原始数据不动，随时可以撤销 */
+    fun hideCourse(course: Course, scope: Int, week: Int) {
+        if (course.isClone && scope == PatchScope.ALL) {
+            // 克隆体本来就是本机造出来的，直接删记录，不用留「隐藏」标记
+            removeClone(course)
+            return
+        }
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withHidden(it, key, scope, week, true) }
+        }
+    }
+
+    /** 撤销隐藏（详情页的「恢复」） */
+    fun restoreCourse(course: Course, scope: Int, week: Int) {
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withHidden(it, key, scope, week, false) }
+        }
+    }
+
+    /**
+     * 编辑时间、教室、教师。
+     *
+     * [room] / [teacher] 传空串表示「清空」——与传 null（沿用原值）区分，
+     * 否则用户把教室删掉之后永远改不回来。
+     */
+    fun editCourse(
+        course: Course,
+        dayOfWeek: Int,
+        beginSection: Int,
+        endSection: Int,
+        room: String,
+        teacher: String
+    ) {
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update {
+                CoursePatchLogic.withEdit(
+                    bundle = it,
+                    key = key,
+                    dayOfWeek = dayOfWeek,
+                    beginSection = beginSection,
+                    endSection = endSection,
+                    room = room.trim(),
+                    teacher = teacher.trim()
+                )
+            }
+        }
+    }
+
+    /** 复制到别的时段（周次沿用它自己那份） */
+    fun cloneCourse(course: Course, dayOfWeek: Int, beginSection: Int) {
+        val endSection = beginSection + course.sectionCount - 1
+        val id = java.util.UUID.randomUUID().toString().replace("-", "").take(10)
+        val clone = CoursePatchLogic.cloneOf(course, id, dayOfWeek, beginSection, endSection)
+        val note = patchStore.current.patchOf(CoursePatchLogic.keyOf(course))?.note.orEmpty()
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withClone(it, clone, note) }
+        }
+    }
+
+    /** 删掉一条克隆课程 */
+    fun removeClone(course: Course) {
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withoutClone(it, key) }
+        }
+    }
+
+    /** 撤销这门课的全部本地改动（详情页的「恢复原样」） */
+    fun resetCourse(course: Course) {
+        val key = CoursePatchLogic.keyOf(course)
+        viewModelScope.launch {
+            patchStore.update { CoursePatchLogic.withoutPatch(it, key) }
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
     // 内部
     // ───────────────────────────────────────────────────────────
+
+    /**
+     * 发布课表：记住原始数据，界面只看到套过改动的结果。
+     *
+     * 记住原始的这份很重要：改动一变就要重算，如果拿已经套过补丁的数据再套一次，
+     * 「本周隐藏」会被反复摘周次、编辑过的课程 key 也会漂移。
+     */
+    private fun publish(result: LoadResult?) {
+        rawResult = result
+        _uiState.update { state ->
+            state.copy(
+                loadResult = result?.let { raw -> raw.patchedWith(patchStore.current) }
+            )
+        }
+    }
+
+    /** 改动集合变了：重算课表 + 把新集合推给界面 */
+    private fun publishPatches(bundle: CoursePatches) {
+        _uiState.update { state ->
+            state.copy(
+                patches = bundle,
+                loadResult = rawResult?.let { raw -> raw.patchedWith(bundle) }
+            )
+        }
+    }
+
+    /** 给结果套上本地改动；没有数据（未登录/加载失败）时原样返回 */
+    private fun LoadResult.patchedWith(bundle: CoursePatches): LoadResult {
+        val raw = data ?: return this
+        return copy(data = CoursePatchLogic.applyPatches(raw, bundle))
+    }
     private suspend fun handleSessionExpired() {
         // ① 先断内存登录态：后面清理磁盘即使出问题，界面也不会停留在「已登录」
         AuthHolder.clear(getApplication())
@@ -361,10 +518,10 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { AppLog.w(TAG, "会话过期：清理个人数据失败 ${it.message}") }
 
         // ③ 明确告诉用户「为什么掉线」，而不是静默变成未登录
+        publish(null)
         _uiState.update {
             it.copy(
                 isLoggedIn = false,
-                loadResult = null,
                 studyReport = null,
                 reportLoading = false,
                 autoLoginHint = "登录已过期，请重新登录",
