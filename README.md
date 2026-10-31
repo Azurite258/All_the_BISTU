@@ -16,6 +16,20 @@
 | **课程提醒** | WorkManager + AlarmManager 双链路，另可一键写进系统日历 |
 | **外观** | 六套 UI 风格（原版 / 澎湃 / 线性 / 极简 / Material 3 / iOS 液态玻璃）、深浅主题、配色、字体档位、全局壁纸（蒙层强度可调） |
 
+## 界面
+
+> 截图用的是内置测试账号，课程、姓名、一卡通数字全部本地随机生成，与真人无关。默认风格为 iOS 液态玻璃（深色）。
+
+| 课表 | 课程详情 |
+| :---: | :---: |
+| <img src="docs/screenshots/01-schedule.png" width="280" alt="课表"> | <img src="docs/screenshots/02-course-detail.png" width="280" alt="课程详情"> |
+| 周视图：节次 + 上下课时间、单双周、连堂课合并 | 点课程弹出详情，备注 / 编辑 / 复制 / 删除都只改本地 |
+
+| 生活 | 我的 |
+| :---: | :---: |
+| <img src="docs/screenshots/03-life.png" width="280" alt="生活"> | <img src="docs/screenshots/04-profile.png" width="280" alt="我的"> |
+| 一卡通当月消费与流水、图书馆空座、空教室查询 | 六套界面风格、配色、字体、壁纸，全部即时生效 |
+
 ## 技术栈
 
 - Kotlin 2.2.10 + Jetpack Compose（BOM 2026.02.01）、Material 3
