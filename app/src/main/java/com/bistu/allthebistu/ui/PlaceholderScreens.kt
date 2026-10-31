@@ -425,56 +425,66 @@ private fun CampusCard(
             Spacer(Modifier.height(16.dp))
 
             // 本月消费（门户当月接口）+ 网费充值（当月流水汇总）
-            // 两个标签统一 14sp、统一 CenterVertically，四个字落在同一条水平线上。
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "本月消费",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = monthText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = "网费充值",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = overview?.networkTopUp?.let {
-                        PortalCardApi.formatMoney(it.amount)
-                    } ?: "--",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
+            // 两个数都放大到 24sp、标签统一 12sp 小字：以前 20sp / 14sp 混排，
+            // 数字和标签挤在同一行、字号还不一样，看着像没排过版（2026-10-31 用户反馈）。
+            // 现在改成两列「标签在上、数字在下」，标签同字号所以顶边对齐，
+            // 数字同字号所以底边也对齐，整块是齐的。
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "本月消费",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.82f)
+                    )
+                    Text(
+                        text = monthText,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        text = "网费充值",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.82f)
+                    )
+                    Text(
+                        text = overview?.networkTopUp?.let {
+                            PortalCardApi.formatMoney(it.amount)
+                        } ?: "--",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
             }
 
             // 两行小字把数据边界说清楚，否则用户拿它跟 E 卡通一对账就觉得是 bug：
             //  1. 门户只给当月 → 说明「同步到哪一刻」；
             //  2. 门户没有余额接口 → 告诉他实时余额去哪看。
-            Spacer(Modifier.height(4.dp))
+            // 两行合并成一个 Text 用紧 lineHeight（以前是两个 Text + padding，
+            // 行距被撑到 13dp 以上，和上面的大数字凑在一起显得很散）。
             Text(
-                text = overview?.records?.firstOrNull()?.let {
-                    "门户只提供当月数据 · 流水同步至 ${shortTime(it.time)}"
-                } ?: "门户只提供当月数据",
+                text = buildString {
+                    append(
+                        overview?.records?.firstOrNull()?.let {
+                            "门户只提供当月数据 · 流水同步至 ${shortTime(it.time)}"
+                        } ?: "门户只提供当月数据"
+                    )
+                    append("\n")
+                    append("实时余额请在微信企业号「信息科大E卡通」查看")
+                },
                 fontSize = 9.5.sp,
-                color = Color.White.copy(alpha = 0.72f)
-            )
-            Text(
-                text = "实时余额请在微信企业号「信息科大E卡通」查看",
-                fontSize = 9.5.sp,
+                lineHeight = 11.5.sp,
                 color = Color.White.copy(alpha = 0.72f),
-                modifier = Modifier.padding(top = 1.dp)
+                modifier = Modifier.padding(top = 10.dp)
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(13.dp))
 
             // 状态条
             Row(
