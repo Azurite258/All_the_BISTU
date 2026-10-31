@@ -64,13 +64,21 @@ private val CardBadgeRed = Color(0xFF8E1B1B)
  * 生活 Tab。
  *
  * 卡面样式对齐学校「信息科大 E 卡通」：
- *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 余额 + 本月消费 + 网费充值
+ *  - 橙金渐变校园卡：真实校徽 + 校名 + 学生卡徽章 + 本月消费 + 网费充值
  *  - 流水不在本页展示，**点击卡片进入明细页** [CardDetailScreen]
  *
  * 「扫一扫」「校园码」两个入口已删（2026-10-27）：都只能把微信拉起来，
  * 跳不到具体功能，留着是块死按钮。
  *
  * 刻意**不展示**姓名、学号、学院、班级、照片。
+ *
+ * ## 为什么卡面没有「余额」（2026-10-31 定案）
+ * 用户实机对账发现卡面 16.54、官方 E 卡通 200.50，等两天也不会自己追上。
+ * 查到根因：门户这条链路**没有余额字段**，能用的只有每笔流水的 KNYE；
+ * 而门户流水**只覆盖当月**，且不含微信转账充值和开水机水控。
+ * 于是「余额」永远停在最后一笔门户可见交易，本质是个过期值。
+ * 结论：卡面主数字换成**本月消费**（门户当月接口的真数据），
+ * 余额只在明细页按「交易后余额」逐笔记账式展示，并注明实时余额去微信企业号看。
  *
  * 网费：门户没有余额接口（`items` 里只有邮件/工资/手机号/一卡通/知会五张卡），
  * 但网费充值会落进一卡通流水，所以从流水里按商户名识别，显示本月充值合计。
@@ -194,7 +202,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "余额、网费和消费流水都来自信息门户，需要先登录一次。",
+                        text = "本月消费和消费流水来自信息门户（只覆盖当月），需要先登录一次。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -349,12 +357,19 @@ private fun CampusCard(
     loading: Boolean,
     onClick: () -> Unit,
 ) {
-    val balanceText = when {
-        overview?.balance != null -> PortalCardApi.formatMoney(overview.balance)
-        loading -> "…"
-        else -> "--"
+    // ⚠️ 卡面**不再摆余额**（2026-10-31 定案，用户确认门户只给当月数据）。
+    // 门户这条链路里没有任何「余额」字段，能用的只有每笔流水的 KNYE，
+    // 而这张表只覆盖当月、且不含微信转账充值和开水机水控 ——
+    // 于是 KNYE 永远停在「最后一笔门户可见交易」，跟官方 E 卡通一比必然差
+    // （实测 16.54 vs 200.50，用户等了几天也不会自己追上）。
+    // 与其挂个永远对不上的数，不如把主数字换成**本月消费**：
+    // 它来自门户 `card.spentMonth`，是当月真数据。
+    // 余额只在明细页按「交易后余额」逐笔展示，卡面指路去微信企业号看实时余额。
+    val monthText = when {
+        overview == null -> if (loading) "…" else "--"
+        overview.error != null -> "--"
+        else -> PortalCardApi.formatMoney(overview.monthSpent)
     }
-    val monthText = PortalCardApi.formatMoney(overview?.monthSpent ?: 0.0)
 
     Box(
         modifier = Modifier
@@ -409,23 +424,9 @@ private fun CampusCard(
 
             Spacer(Modifier.height(16.dp))
 
-            // 余额 + 本月消费
-            // 两个标签统一 14sp、统一 CenterVertically，所以「余额」和「本月消费」
-            // 这四个字落在同一条水平线上（之前 12sp/11sp + 各自不同的底部留白，是歪的）。
+            // 本月消费（门户当月接口）+ 网费充值（当月流水汇总）
+            // 两个标签统一 14sp、统一 CenterVertically，四个字落在同一条水平线上。
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "余额",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = balanceText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.width(14.dp))
                 Text(
                     text = "本月消费",
                     fontSize = 14.sp,
@@ -434,35 +435,43 @@ private fun CampusCard(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = monthText,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = "网费充值",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = overview?.networkTopUp?.let {
+                        PortalCardApi.formatMoney(it.amount)
+                    } ?: "--",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
             }
 
-            // 这个「余额」不是实时余额：门户只给一页**消费流水**（微信转账充值、
-            // 开水机水控这些都不在这张表里），余额取的是最后一笔的 KNYE。
-            // 所以把"数据到哪一天"直接印在卡上 —— 否则用户拿它跟 E 卡通一比就觉得是 bug
-            // （2026-10-31 用户实机对账：门户停在 10-29 17:39，官方流水已经到 10-30 的充值）。
-            overview?.records?.firstOrNull()?.let { newest ->
-                Text(
-                    text = "门户流水同步至 ${shortTime(newest.time)}",
-                    fontSize = 9.5.sp,
-                    color = Color.White.copy(alpha = 0.72f),
-                    modifier = Modifier.padding(top = 3.dp)
-                )
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // 网费充值：门户只给了一卡通消费流水，没有网费余额接口，
-            // 但充值会落进流水（实测商户名「网络中心网费（微信）」），
-            // 所以这里显示的是**本月充值合计**，不是余额。
-            InlineStat(
-                label = "网费充值",
-                value = overview?.networkTopUp?.let {
-                    PortalCardApi.formatMoney(it.amount)
-                } ?: "--"
+            // 两行小字把数据边界说清楚，否则用户拿它跟 E 卡通一对账就觉得是 bug：
+            //  1. 门户只给当月 → 说明「同步到哪一刻」；
+            //  2. 门户没有余额接口 → 告诉他实时余额去哪看。
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = overview?.records?.firstOrNull()?.let {
+                    "门户只提供当月数据 · 流水同步至 ${shortTime(it.time)}"
+                } ?: "门户只提供当月数据",
+                fontSize = 9.5.sp,
+                color = Color.White.copy(alpha = 0.72f)
+            )
+            Text(
+                text = "实时余额请在微信企业号「信息科大E卡通」查看",
+                fontSize = 9.5.sp,
+                color = Color.White.copy(alpha = 0.72f),
+                modifier = Modifier.padding(top = 1.dp)
             )
 
             Spacer(Modifier.height(14.dp))
@@ -489,25 +498,6 @@ private fun CampusCard(
                 )
             }
         }
-    }
-}
-
-/** 标签和数值排在同一行，省掉一整行高度。两者统一 14sp，与「余额 / 本月消费」同规格 */
-@Composable
-private fun InlineStat(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            color = Color.White.copy(alpha = 0.85f)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = value,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White
-        )
     }
 }
 
@@ -549,7 +539,9 @@ private fun CardDetailScreen(
             )
         }
 
-        // 汇总条
+        // 汇总条：只放门户**真有的**两个当月数字（本月消费 / 网费充值）。
+        // 余额不在这里 —— 门户没有余额接口，且流水只覆盖当月，算出来的数必然对不上账，
+        // 见 CampusCard 顶部注释。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -559,20 +551,6 @@ private fun CardDetailScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(
-                    text = "卡内余额",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = overview.balance?.let { PortalCardApi.formatMoney(it) } ?: "--",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "本月消费",
                     fontSize = 11.sp,
@@ -585,23 +563,48 @@ private fun CardDetailScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "网费充值",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = overview.networkTopUp?.let {
+                        PortalCardApi.formatMoney(it.amount)
+                    } ?: "--",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // 卡面那个「余额」不是实时余额，而是**最新一笔流水之后的卡内余额**（门户没有余额接口，
-        // 见交接文档 15.3 / 26.11）。所以这里把它到底取自哪一笔写明，
-        // 否则用户拿它跟 E 卡通一比就会觉得"对不上、像 bug"。
+        // 数据边界写在流水标题里：门户只给**当月**流水（2026-10-31 用户确认），
+        // 所以标题不写「全部流水」，直接说清楚是哪个月的。
         Text(
             text = buildString {
-                append("全部流水 · ${overview.records.size} 笔")
+                append("当月流水 · ${overview.records.size} 笔")
                 overview.records.firstOrNull()?.let {
-                    append(" · 余额取自 ${shortTime(it.time)}")
+                    append(" · 同步至 ${shortTime(it.time)}")
                 }
             },
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = LocalUiMetrics.current.pagePadding)
+        )
+        Text(
+            text = "每笔下面的余额是那笔交易后的卡内余额；实时余额请到微信企业号「信息科大E卡通」查看。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            modifier = Modifier.padding(
+                start = LocalUiMetrics.current.pagePadding,
+                end = LocalUiMetrics.current.pagePadding,
+                top = 2.dp
+            )
         )
 
         Spacer(Modifier.height(6.dp))
@@ -644,10 +647,16 @@ private fun CardDetailScreen(
                                 maxLines = 1
                             )
                             Spacer(Modifier.height(2.dp))
+                            // 测试账号的卡内余额是 ∞（见 TestAccount），真数据偶尔也可能给 NaN。
+                            // 这两种情况下「交易后余额」没有意义，整段省掉，别在每行挂一排 ¥∞。
                             Text(
-                                text = "${shortTime(r.time)} · 余额 ${
-                                    PortalCardApi.formatMoney(r.balance)
-                                }",
+                                text = buildString {
+                                    append(shortTime(r.time))
+                                    if (r.balance.isFinite()) {
+                                        append(" · 交易后余额 ")
+                                        append(PortalCardApi.formatMoney(r.balance))
+                                    }
+                                },
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
