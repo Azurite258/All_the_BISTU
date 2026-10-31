@@ -43,15 +43,14 @@ object TestAccount {
     // 随机素材
     // ────────────────────────────────────────────────────────────
 
-    private val SURNAMES = listOf(
-        "张", "王", "李", "赵", "陈", "刘", "杨", "黄", "周", "吴",
-        "徐", "孙", "马", "朱", "胡", "郭", "何", "高", "林", "罗"
-    )
-
-    private val GIVEN_NAMES = listOf(
-        "子墨", "予安", "嘉禾", "清和", "知远", "语嫣", "沐辰", "思齐",
-        "亦舟", "书言", "南乔", "星野", "砚清", "云舒", "昱辰", "若谷"
-    )
+    /**
+     * 测试账号的昵称是**固定**的，不再从姓名库里随机拼。
+     *
+     * 原因：随机拼出来的「张子墨」「王语嫣」这类名字，很容易跟学校里真人重名，
+     * 截图发到公开仓库 / README 里会引起误会（2026-10-31 用户要求）。
+     * 「雪霁」不是常见姓氏组合，一眼能看出是占位名。
+     */
+    const val NICKNAME = "雪霁"
 
     private val COLLEGES = listOf(
         "计算机学院", "信息与通信工程学院", "自动化学院", "机电工程学院",
@@ -77,7 +76,7 @@ object TestAccount {
             repeat(8) { append(Random.nextInt(0, 10)) }
         }
         return Profile(
-            nickname = pick(SURNAMES) + pick(GIVEN_NAMES),
+            nickname = NICKNAME,
             studentNo = no,
             college = pick(COLLEGES),
             major = pick(MAJORS),
