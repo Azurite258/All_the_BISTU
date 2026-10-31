@@ -575,8 +575,16 @@ private fun CardDetailScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // 卡面那个「余额」不是实时余额，而是**最新一笔流水之后的卡内余额**（门户没有余额接口，
+        // 见交接文档 15.3 / 26.11）。所以这里把它到底取自哪一笔写明，
+        // 否则用户拿它跟 E 卡通一比就会觉得"对不上、像 bug"。
         Text(
-            text = "全部流水 · ${overview.records.size} 笔",
+            text = buildString {
+                append("全部流水 · ${overview.records.size} 笔")
+                overview.records.firstOrNull()?.let {
+                    append(" · 余额取自 ${shortTime(it.time)}")
+                }
+            },
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = LocalUiMetrics.current.pagePadding)
