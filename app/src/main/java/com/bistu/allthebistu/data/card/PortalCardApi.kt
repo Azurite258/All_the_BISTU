@@ -270,7 +270,7 @@ object PortalCardApi {
      * ⚠ JYJE 不管是消费还是缴费都是正数，没法靠符号判断收支，
      * 所以用「本条余额 - 上一条（更早）余额」来推断方向：余额变少 = 支出。
      */
-    private fun parseRecords(json: String): Pair<List<CardRecord>, Int> {
+    internal fun parseRecords(json: String): Pair<List<CardRecord>, Int> {
         val root = runCatching { JSONObject(json) }.getOrNull()
             ?: return emptyList<CardRecord>() to 0
         val d = root.optJSONObject("d") ?: root
@@ -290,9 +290,16 @@ object PortalCardApi {
             )
         }
 
-        // 用余额差补上正负号：raw 是倒序，raw[i+1] 比 raw[i] 更早
-        val signed = raw.mapIndexed { i, r ->
-            val older = raw.getOrNull(i + 1)?.balance
+        // ⚠️ 顺序不能信接口：文档说倒序，但实测出现过**升序页**（第一页是最老的 30 笔）。
+        // 以前直接拿 `raw.first()` 当「最新一笔」，一旦接口给的是升序，
+        // 余额就变成「这一页里最老那笔之后的余额」—— 表现是「余额停在几周前的数，
+        // 怎么刷都不变，而本月消费（另一条链路）却是对的」。
+        // JYRQ 是 "2026-10-13 07:44:36" 这种定宽格式，直接按字符串排就行。
+        val sorted = raw.sortedByDescending { it.time }
+
+        // 用余额差补上正负号：sorted 已是倒序，sorted[i+1] 比 sorted[i] 更早
+        val signed = sorted.mapIndexed { i, r ->
+            val older = sorted.getOrNull(i + 1)?.balance
             val delta = if (older == null) null else r.balance - older
             val amount = when {
                 delta == null -> -abs(r.amount)      // 最老一条没有参照，按支出
