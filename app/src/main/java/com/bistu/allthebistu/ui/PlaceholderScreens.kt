@@ -48,6 +48,7 @@ import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
+import com.bistu.allthebistu.ui.theme.rememberContentBottomInset
 import com.bistu.allthebistu.ui.theme.styleCard
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import com.bistu.allthebistu.ui.wechat.WeChatEntry
@@ -243,9 +244,9 @@ fun LifeScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // 底部让位：悬浮底栏 + 未登录时那条引导条（都算在 contentBottom 里）。
-        // 之前写死 100dp，未登录时最后一张「空教室」卡会被引导条压住一截。
-        Spacer(Modifier.height(LocalUiMetrics.current.contentBottom + 12.dp))
+        // 底部让位：底栏本体（contentBottom）+ 手势条 inset + 呼吸位。
+        // 之前写死 100dp，既没算 inset，未登录时最后一张「空教室」卡还会被引导条压住一截。
+        Spacer(Modifier.height(rememberContentBottomInset(extra = 12.dp)))
     }
 
     // ── 电费说明：第一次进生活页弹一次，讲清楚为什么这里没有电费 ──
@@ -439,6 +440,19 @@ private fun CampusCard(
                 )
             }
 
+            // 这个「余额」不是实时余额：门户只给一页**消费流水**（微信转账充值、
+            // 开水机水控这些都不在这张表里），余额取的是最后一笔的 KNYE。
+            // 所以把"数据到哪一天"直接印在卡上 —— 否则用户拿它跟 E 卡通一比就觉得是 bug
+            // （2026-10-31 用户实机对账：门户停在 10-29 17:39，官方流水已经到 10-30 的充值）。
+            overview?.records?.firstOrNull()?.let { newest ->
+                Text(
+                    text = "门户流水同步至 ${shortTime(newest.time)}",
+                    fontSize = 9.5.sp,
+                    color = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+            }
+
             Spacer(Modifier.height(14.dp))
 
             // 网费充值：门户只给了一卡通消费流水，没有网费余额接口，
@@ -606,10 +620,13 @@ private fun CardDetailScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
+                // 底部留白必须把底栏**和手势条 inset** 一起让出来：
+                // 之前写死 90dp，比底栏真正的顶边矮了 20~30dp，滚到底时最后一行
+                // 会钻到药丸底下、甚至从药丸下面漏出来（底栏是半透明的，穿帮更明显）。
                 contentPadding = PaddingValues(
                     start = LocalUiMetrics.current.pagePadding,
                     end = LocalUiMetrics.current.pagePadding,
-                    bottom = 90.dp
+                    bottom = rememberContentBottomInset(extra = 8.dp)
                 )
             ) {
                 items(overview.records) { r ->

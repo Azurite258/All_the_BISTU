@@ -3,7 +3,10 @@ package com.bistu.allthebistu.ui.theme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -181,6 +184,22 @@ fun cardBodyColor(): Color {
     } else {
         Color.White.copy(alpha = if (wallpaper) 0.74f else 0.62f)
     }
+}
+
+/**
+ * 页面底部要让给悬浮底栏的高度。
+ *
+ * [UiMetrics.contentBottom] 只算了底栏**本身**（`dockHeight + dockMarginBottom + cardGap`），
+ * 而底栏外面还套了一层 `windowInsetsPadding(WindowInsets.navigationBars)` ——
+ * 手势条那 24~48dp 不在里面。页面直接拿 `contentBottom` 当底部留白就会少算这一段，
+ * 表现是列表最后一行钻进药丸底下、甚至从药丸下面漏出来（0.20-c 用户截图报的就是这个）。
+ */
+@Composable
+fun rememberContentBottomInset(extra: Dp = 0.dp): Dp {
+    val nav = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    return LocalUiMetrics.current.contentBottom + nav + extra
 }
 
 /** 卡片默认底色。统一走 [cardBodyColor]，不再有第二套取色逻辑。 */
