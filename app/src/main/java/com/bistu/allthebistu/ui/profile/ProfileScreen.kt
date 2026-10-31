@@ -53,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
@@ -1035,11 +1036,22 @@ private fun ThemeSegmented(current: Int, onChange: (Int) -> Unit) {
         ThemeMode.LIGHT to "浅色",
         ThemeMode.DARK to "深色"
     )
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.background.luminance() < 0.5f
+    // 轨道用 onSurface 的极淡实色，**不能**用 surfaceVariant：
+    // iOS 的 surfaceVariant 是「白 38%」、卡片是「白 55%」，两者叠起来只差两个色阶，
+    // 整条控件等于「三个灰字直接浮在白卡上」——既看不出哪项被选中，字也发灰。
+    // 用户反馈的就是这个：对比度太低。
+    val track = colors.onSurface.copy(alpha = if (isDark) 0.07f else 0.12f)
+    // 选中块：浅色是纯白（靠一层薄影与轨道分开），深色比轨道亮一档
+    val thumb = if (isDark) colors.onSurface.copy(alpha = 0.13f) else Color.White
+    val thumbShape = RoundedCornerShape(8.dp)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(track)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -1048,11 +1060,22 @@ private fun ThemeSegmented(current: Int, onChange: (Int) -> Unit) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.surface
-                        else Color.Transparent
+                    // 阴影必须画在 clip 外面，写在 clip 之后会被裁掉
+                    .then(
+                        if (selected) {
+                            Modifier.shadow(
+                                elevation = 3.dp,
+                                shape = thumbShape,
+                                clip = false,
+                                ambientColor = Color(0x14000000),
+                                spotColor = Color(0x26000000)
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
+                    .clip(thumbShape)
+                    .background(if (selected) thumb else Color.Transparent)
                     .clickable { onChange(mode) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
@@ -1060,9 +1083,10 @@ private fun ThemeSegmented(current: Int, onChange: (Int) -> Unit) {
                 Text(
                     text = label,
                     fontSize = 12.sp,
-                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    // 选中项再加一档字重：只靠颜色区分，缩到 12sp 后很难一眼看出来
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (selected) colors.onSurface
+                    else colors.onSurface.copy(alpha = 0.78f)
                 )
             }
         }

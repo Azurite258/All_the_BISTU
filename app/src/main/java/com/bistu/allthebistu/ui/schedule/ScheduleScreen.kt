@@ -591,13 +591,21 @@ private fun WeekSelector(
     // 方向稿里周次卡就是一张普通 .card：圆角 --r-card、padding 11 / --cardpad、
     // 阴影/描边跟着风格走。之前用的是 innerRadius + 半透明底，两处都不对。
     // 周切换圆钮 30dp，底色 accent-soft（Linear 用 surface-2、iOS 用半透明白）
-    val navBg = when (uiStyle) {
-        UiStyle.LINEAR -> MaterialTheme.colorScheme.surfaceVariant
-        UiStyle.IOS -> Color.White.copy(alpha = 0.58f)
+    //
+    // iOS 那个「半透明白」是照方向稿的浅色底写的：0.58 的白压在深色卡片上算出来是
+    // #9F9FA6 一坨浅灰圆饼，箭头又是浅蓝 accentText(#4DA3FF)，两者只有 1.6:1，
+    // 深色下基本看不见（用户反馈「蓝色箭头对比度太低」）。深色改成 0.12 的 onSurface
+    // ——只是让圆钮比卡片亮一档，轮廓由发丝线交代，箭头直接跟标题同色（近白）。
+    val navBg = when {
+        uiStyle == UiStyle.LINEAR -> MaterialTheme.colorScheme.surfaceVariant
+        uiStyle == UiStyle.IOS && isDark -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+        uiStyle == UiStyle.IOS -> Color.White.copy(alpha = 0.58f)
         else -> UiStyle.accentSoft(uiStyle, isDark)
     }
-    val navTint = when (uiStyle) {
-        UiStyle.LINEAR, UiStyle.MINIMAL -> MaterialTheme.colorScheme.onSurface
+    val navTint = when {
+        uiStyle == UiStyle.LINEAR || uiStyle == UiStyle.MINIMAL -> MaterialTheme.colorScheme.onSurface
+        // 深色下 iOS 的强调蓝太暗，圆钮上的箭头改用与「第 8 周」同色的白
+        uiStyle == UiStyle.IOS && isDark -> MaterialTheme.colorScheme.onSurface
         else -> UiStyle.accentText(uiStyle, isDark)
     }
     Row(

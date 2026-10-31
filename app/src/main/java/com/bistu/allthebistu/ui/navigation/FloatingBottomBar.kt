@@ -31,6 +31,7 @@ import com.bistu.allthebistu.ui.theme.DockPill
 import com.bistu.allthebistu.ui.theme.LocalUiStyle
 import com.bistu.allthebistu.ui.theme.UiStyle
 import com.bistu.allthebistu.ui.theme.glassEdge
+import com.bistu.allthebistu.ui.theme.styleCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -54,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bistu.allthebistu.ui.components.liquidGlass
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -182,37 +182,16 @@ fun FloatingBottomBar(
             )
             .then(
                 if (isGlass) {
-                    Modifier
-                        // 玻璃要「浮」起来：elevation 拉高、颜色压淡。
-                        // 阴影画在玻璃体下面，半透明会让它透出一点灰——这正是厚度感的一部分，
-                        // 但颜色太浓就变脏了。
-                        .shadow(
-                            elevation = 22.dp,
-                            shape = barShape,
-                            clip = false,
-                            ambientColor = Color(0x1A000000),
-                            spotColor = Color(0x30000000)
-                        )
-                        .liquidGlass(
-                            shape = barShape,
-                            isDark = isDarkSurface,
-                            // 浅色体色的取法分两种：
-                            //  - iOS 液态玻璃：方向稿里是 rgba(255,255,255,.55)，要更白更透，
-                            //    靠底下的彩色光晕撑出质感，压深反而变灰板。
-                            //  - 原版 / HyperOS：没有光晕可透，得比默认值再深一档（#E6EBF3 → #DDE4EF），
-                            //    否则和纯白卡片只差 6 个色阶，用户会反馈「对比度不够」。
-                            // 深色模式都传 null——它靠「比黑底亮」分离，加深就消失了。
-                            bodyColor = when {
-                                isDarkSurface -> null
-                                metrics.glowBackdrop -> Color.White
-                                else -> Color(0xFFDDE4EF)
-                            },
-                            bodyAlpha = when {
-                                isDarkSurface -> 0.78f
-                                metrics.glowBackdrop -> 0.62f
-                                else -> 0.80f
-                            }
-                        )
+                    // 玻璃件**和卡片用同一份实现**：直接复用 styleCard()。
+                    //
+                    // 以前这里走的是 liquidGlass：整幅「上沿镜面高光 → 中段几乎全透 → 下沿冷色吸收」
+                    // 的竖向渐变，而上面的周次卡 / 课表卡是「不透明底 + 极淡环境渐变 + 一条发丝内高光」。
+                    // 两套材质并排时，深色下底栏明显更亮、更透、还带一圈高光环，
+                    // 像一块发光的塑料浮在暗色卡片上（用户原话「太奇怪了」）。
+                    //
+                    // 现在底色、环境渐变、描边、内高光、阴影全部走同一份代码，
+                    // 底栏与卡片的材质从此不会各自漂移。
+                    Modifier.styleCard(shape = barShape)
                 } else {
                     // 扁平：不透明实心胶囊 + 发丝描边。就是液态玻璃之前的做法
                     Modifier
