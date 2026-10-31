@@ -1,6 +1,7 @@
 package com.bistu.allthebistu.ui.study
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -19,11 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.StudyReport
+import com.bistu.allthebistu.data.event.EventTag
+import com.bistu.allthebistu.data.event.UserEvent
+import com.bistu.allthebistu.ui.event.EventTags
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.schedule.ScheduleUiState
@@ -50,6 +55,10 @@ fun StudyScreen(
     colorScheme: Int,
     isDark: Boolean,
     report: StudyReport? = null,
+    /** 用户自己加的日程（本地存储，见 EventStore） */
+    events: List<UserEvent> = emptyList(),
+    /** 点某条日程 → 打开编辑面板 */
+    onEventClick: (UserEvent) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val data = uiState.loadResult?.data
@@ -72,6 +81,20 @@ fun StudyScreen(
             ?.filter { it.isInWeek(week) && it.dayOfWeek == todayDow }
             ?.sortedBy { it.beginSection }
             .orEmpty()
+    }
+
+    // 今天命中的自定义日程（重复规则按天展开，见 UserEvent.occursOn）
+    val todayEvents = remember(events) {
+        val now = System.currentTimeMillis()
+        events.filter { it.occursOn(now) }.sortedBy { it.startMinutes }
+    }
+
+    // 课程和日程混在同一根时间轴上，按开始时间排；课程用节次换算成分钟
+    val agenda = remember(todayCourses, todayEvents) {
+        buildList {
+            todayCourses.forEach { add(AgendaSlot.CourseSlot(it)) }
+            todayEvents.forEach { add(AgendaSlot.EventSlot(it)) }
+        }.sortedBy { it.minutes }
     }
 
     // 学期总周数：教学周给多少算多少，没有教学周就用课程覆盖的最后一周
@@ -164,24 +187,37 @@ fun StudyScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                if (todayCourses.isEmpty()) {
+                if (agenda.isEmpty()) {
+                    // 文案保持 0.20-c 原样：之前改成「今天没有安排…」之后，
+                    // 文字变长把这张卡撑得又宽又胖，用户明确说要回原来的说法
                     HintCard(
                         title = "今天没有课",
                         body = "第 $week 周今天是空的，可以安排点自己的事"
                     )
                 } else {
                     Column {
-                        todayCourses.forEachIndexed { i, course ->
-                            TimelineRow(
-                                course = course,
-                                state = stateOf(course, todayCourses, nowMinutes),
-                                colorHex = course.colorHex,
-                                paletteIndex = paletteIndex[course.name],
-                                colorScheme = colorScheme,
-                                isDark = isDark,
-                                isLast = i == todayCourses.lastIndex,
-                                nowMinutes = nowMinutes
-                            )
+                        agenda.forEachIndexed { i, slot ->
+                            val isLast = i == agenda.lastIndex
+                            when (slot) {
+                                is AgendaSlot.CourseSlot -> {
+                                    val course = slot.course
+                                    TimelineRow(
+                                        course = course,
+                                        state = stateOf(course, todayCourses, nowMinutes),
+                                        colorHex = course.colorHex,
+                                        paletteIndex = paletteIndex[course.name],
+                                        colorScheme = colorScheme,
+                                        isDark = isDark,
+                                        isLast = isLast,
+                                        nowMinutes = nowMinutes
+                                    )
+                                }
+                                is AgendaSlot.EventSlot -> EventTimelineRow(
+                                    event = slot.event,
+                                    isLast = isLast,
+                                    onClick = { onEventClick(slot.event) }
+                                )
+                            }
                         }
                     }
                 }
@@ -674,3 +710,134 @@ internal fun weekdayLabel(dow: Int): String =
 
 /** "2026-10-23" → "10-23" */
 private fun todayLabel(): String = DateUtils.todayIso().takeLast(5)
+
+// ══════════════════════════════════════════════════════════════
+// 自定义日程
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 今日时间轴上的一项：课程或自定义日程。
+ *
+ * [minutes] 只为排序服务——课程是「第几节」，换算出分钟才能和日程混在同一根轴上。
+ * 课前那条空档（比如第 5 节到第 6 节之间有午休）不影响排序，因为两边都用开始时刻比。
+ */
+private sealed class AgendaSlot(val minutes: Int) {
+    class CourseSlot(val course: Course) : AgendaSlot(minutesOf(course.beginTime) ?: 0)
+    class EventSlot(val event: UserEvent) : AgendaSlot(event.startMinutes)
+}
+
+/**
+ * 自定义日程在时间线上的样子。
+ *
+ * 和 [TimelineRow] 共用同一套骨架（52dp 时间列 + 圆点轨道 + 右侧内容），
+ * 区别只有两处：圆点用**标签色**（课程那条线表达的是「上没上课」的状态，日程没有状态），
+ * 副标题给的是时间区间和标签，且整行可点进编辑。
+ */
+@Composable
+private fun EventTimelineRow(
+    event: UserEvent,
+    isLast: Boolean,
+    onClick: () -> Unit
+) {
+    val tint = EventTags.colorOf(event.tag)
+    // 标签名已经在左边时间列的副行里了，这里不重复，只补时间和重复方式
+    val subtitle = buildString {
+        append("${event.startClock} – ${event.endClock}")
+        if (event.repeat != 0) {
+            append(" · ")
+            append(com.bistu.allthebistu.data.event.Repeat.nameOf(event.repeat))
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+    ) {
+        // 时间列：和课程行同宽同字号，两行并排时左边是对齐的
+        Column(
+            modifier = Modifier
+                .width(52.dp)
+                .padding(top = 2.dp)
+        ) {
+            Text(
+                text = event.startClock,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = EventTag.nameOf(event.tag),
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // 轨道
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .width(20.dp)
+                .fillMaxHeight()
+                .padding(top = 6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(9.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(tint)
+            )
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .weight(1f)
+                        .padding(top = 3.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                )
+            }
+        }
+
+        Spacer(Modifier.width(10.dp))
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = 12.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onClick)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = event.title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(Modifier.width(8.dp))
+                // 用标签色的小胶囊把它和课程区分开：课程行这里是「进行中 / 已结束」状态
+                Text(
+                    text = "日程",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = tint,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(tint.copy(alpha = 0.14f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (event.note.isBlank()) subtitle else "$subtitle · ${event.note}",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}

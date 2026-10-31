@@ -1,10 +1,12 @@
 package com.bistu.allthebistu
 
 import android.app.Application
+import com.bistu.allthebistu.data.event.EventStore
 import com.bistu.allthebistu.data.log.AppLog
 import com.bistu.allthebistu.data.patch.CoursePatchStore
 import com.bistu.allthebistu.data.privacy.UserDataWipers
 import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
+import com.bistu.allthebistu.data.reminder.EventReminderScheduler
 import com.bistu.allthebistu.data.reminder.ReminderNotifier
 import com.bistu.allthebistu.data.reminder.ReminderWork
 
@@ -31,9 +33,14 @@ class BistuApp : Application() {
         // 冷启动补排一次闹钟。放在后台线程，不拖慢启动；
         // 关闭提醒时这里会顺手把残留闹钟撤销掉
         CourseReminderScheduler.rescheduleAsync(this)
+        // 自定义日程是另一条管线，同样在冷启动补排一次
+        EventReminderScheduler.rescheduleAsync(this)
 
         // 课程的备注 / 隐藏 / 编辑 / 复制都存本机，属于个人数据：
         // 退出登录时跟着一起清掉，否则换个人登录会看到上一个人的备注
         UserDataWipers.register("课程改动") { CoursePatchStore.wipe(this) }
+
+        // 自定义日程同理：是用户自己写的东西，退出登录要一起清掉
+        UserDataWipers.register("自定义日程") { EventStore.wipe(this) }
     }
 }

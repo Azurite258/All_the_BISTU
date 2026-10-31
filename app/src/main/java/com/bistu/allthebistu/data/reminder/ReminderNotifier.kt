@@ -28,12 +28,29 @@ object ReminderNotifier {
 
     const val CHANNEL_ID = "course_reminder"
 
+    /** 自定义日程用单独的渠道：设置页里可以把「日程提醒」单独静音，不影响上课提醒 */
+    const val CHANNEL_ID_EVENT = "event_reminder"
+
     private const val CHANNEL_NAME = "上课提醒"
     private const val CHANNEL_DESC = "上课前的提前提醒，时间由「我的 → 课程提醒」决定"
 
     /** 通知 id 用 requestCode：同一节课重排后仍然覆盖同一条，不会堆一串 */
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(CHANNEL_ID_EVENT) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID_EVENT,
+                    "日程提醒",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "自定义日程开始前的提醒，提前量跟「课程提醒」一致"
+                    enableVibration(true)
+                    setShowBadge(true)
+                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                }
+            )
+        }
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
 
         val channel = NotificationChannel(
@@ -99,6 +116,59 @@ object ReminderNotifier {
 
         runCatching {
             NotificationManagerCompat.from(context).notify(notificationIdOf(plan), notification)
+        }
+    }
+
+    /**
+     * 发一条日程提醒。
+     *
+     * 和上课提醒的区别：没有「第几周」「教室」这些概念，正文给的是「几点开始、还有多久」，
+     * 备注（如果有）放进展开后的长文本 —— 用户写备注就是为了到点能看见。
+     */
+    fun showEvent(
+        context: Context,
+        title: String,
+        startAt: Long,
+        advanceMinutes: Int,
+        note: String,
+        notificationId: Int
+    ) {
+        ensureChannel(context)
+
+        val timeText = SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(startAt))
+        val minutesLeft = ((startAt - System.currentTimeMillis()) / 60_000L)
+            .coerceAtLeast(0L)
+            .toInt()
+        val shortText = if (minutesLeft > 0) {
+            "$timeText · 还有 $minutesLeft 分钟"
+        } else {
+            "$timeText · 现在开始"
+        }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_EVENT)
+            .setSmallIcon(R.drawable.ic_notification_course)
+            .setContentTitle(title.ifBlank { "日程提醒" })
+            .setContentText(shortText)
+            .setSubText("日程 · 提前 $advanceMinutes 分钟")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append("$timeText 开始")
+                        if (note.isNotBlank()) append("：$note")
+                    }
+                )
+            )
+            .setWhen(startAt)
+            .setShowWhen(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent(context, notificationId))
+            .build()
+
+        runCatching {
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
         }
     }
 

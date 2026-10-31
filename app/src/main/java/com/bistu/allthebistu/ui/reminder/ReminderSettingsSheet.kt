@@ -200,14 +200,14 @@ fun ReminderSettingsSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "上课前提醒我",
+                        text = "课前提醒",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "按课表自动定时，没课的日子不会响",
+                        text = "课表和自定义日程都按开始时间提前响，没安排的日子不会响",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

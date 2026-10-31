@@ -37,12 +37,16 @@ import androidx.lifecycle.ViewModelProvider
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.prefs.AppFontScale
 import com.bistu.allthebistu.data.prefs.AppSettings
+import com.bistu.allthebistu.data.event.EventStore
+import com.bistu.allthebistu.data.event.UserEvent
 import com.bistu.allthebistu.data.prefs.SettingsStore
 import com.bistu.allthebistu.data.prefs.ThemeMode
 import com.bistu.allthebistu.data.reminder.CourseCalendarSync
 import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
+import com.bistu.allthebistu.data.reminder.EventReminderScheduler
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import com.bistu.allthebistu.ui.LifeScreen
+import com.bistu.allthebistu.ui.event.EventEditorSheet
 import com.bistu.allthebistu.ui.profile.ProfileScreen
 import com.bistu.allthebistu.ui.reminder.ReminderSettingsSheet
 import com.bistu.allthebistu.ui.study.StudyScreen
@@ -156,6 +160,11 @@ private fun AppRoot(
     var pendingFeature by remember { mutableStateOf<String?>(null) }
     // 课程提醒设置弹窗（顶栏和「我的」页两个入口共用同一个）
     var showReminderSheet by remember { mutableStateOf(false) }
+    // 自定义日程：存储 + 编辑面板
+    val eventStore = remember { EventStore(context) }
+    val events by eventStore.events.collectAsState()
+    var editorOpen by remember { mutableStateOf(false) }
+    var editingEvent by remember { mutableStateOf<UserEvent?>(null) }
     // 滑块去抖任务：拖动时每跨一档都会回调，不能每次都写库 + 重排闹钟
     var advanceJob by remember { mutableStateOf<Job?>(null) }
 
@@ -227,7 +236,11 @@ private fun AppRoot(
                     settings = settings,
                     isDark = isDark,
                     onRefresh = viewModel::refresh,
-                    onAddEvent = { pendingFeature = "添加日程" },
+                    onAddEvent = {
+                        // 默认接「现在之后」的时间，用户改两下就能存
+                        editingEvent = null
+                        editorOpen = true
+                    },
                     onReminderSettings = { showReminderSheet = true },
                     onOpenLogin = { openLogin() },
                     actions = CourseActions(
@@ -244,7 +257,12 @@ private fun AppRoot(
                     uiState = uiState,
                     colorScheme = settings.colorScheme,
                     isDark = isDark,
-                    report = uiState.studyReport
+                    report = uiState.studyReport,
+                    events = events,
+                    onEventClick = { event ->
+                        editingEvent = event
+                        editorOpen = true
+                    }
                 )
 
                 MainTab.LIFE -> LifeScreen()
@@ -306,9 +324,11 @@ private fun AppRoot(
                     settingsStore.setReminderEnabled(enabled)
                     if (enabled) {
                         CourseReminderScheduler.rescheduleAsync(context)
-                        toast(context, "已开启，未来一周的课会按设置提前提醒")
+                        EventReminderScheduler.rescheduleAsync(context)
+                        toast(context, "已开启，未来两周的课和日程会按设置提前提醒")
                     } else {
                         CourseReminderScheduler.cancelAll(context)
+                        EventReminderScheduler.cancelAll(context)
                         toast(context, "已关闭课程提醒")
                     }
                 }
@@ -321,6 +341,7 @@ private fun AppRoot(
                     delay(ADVANCE_DEBOUNCE_MS)
                     settingsStore.setReminderAdvanceMinutes(minutes)
                     CourseReminderScheduler.rescheduleAsync(context)
+                    EventReminderScheduler.rescheduleAsync(context)
                     // 提前量变了，日历里每条事件的 VALARM 也得跟着改，否则两边说法不一致
                     if (settings.calendarSyncEnabled) {
                         CourseCalendarSync.sync(context, ReminderPlanner.sanitizeAdvance(minutes))
@@ -345,6 +366,36 @@ private fun AppRoot(
                         toast(context, "已清掉日历里的 $cleared 条课程")
                     }
                 }
+            }
+        )
+    }
+
+    // ── 自定义日程：新建 / 编辑 ──
+    // 顶栏「+」和「学习」页里点某条日程共用这一个面板：
+    // editingEvent 为 null 就是新建，否则是编辑（面板右上角会多一个「删除」）
+    if (editorOpen) {
+        EventEditorSheet(
+            initial = editingEvent,
+            onDismiss = { editorOpen = false },
+            onSave = { event ->
+                scope.launch {
+                    eventStore.save(event)
+                    // 存完立刻重排日程提醒：否则要等下次冷启动才生效
+                    EventReminderScheduler.rescheduleAsync(context)
+                    toast(
+                        context,
+                        if (event.id.isBlank()) "已添加「${event.title}」" else "已保存「${event.title}」"
+                    )
+                }
+                editorOpen = false
+            },
+            onDelete = { event ->
+                scope.launch {
+                    eventStore.delete(event.id)
+                    EventReminderScheduler.rescheduleAsync(context)
+                }
+                editorOpen = false
+                toast(context, "已删除「${event.title}」")
             }
         )
     }
