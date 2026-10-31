@@ -154,35 +154,32 @@ fun opaqueSurface(base: Color): Color {
 /**
  * 卡片体色 —— **全 App 的卡片都从这里取**，不允许各页面自己写。
  *
- * 玻璃风格（iOS）返回半透明白：壁纸、彩色光晕能透上来，卡片才像玻璃，而不是一块
- * 和背景无关的实色板。非玻璃风格保持 `surface` 实色（那五套本来就没有玻璃语言）。
+ * ⚠️ 玻璃卡片**必须是不透明的**（0.20-b 的结论，2026-10-31 又被验证了一次）。
  *
- * ⚠️ 这里换过两次方案，两次都是被同一个现象逼回来的：
+ * 历史来回走了三趟，别再走第四趟：
  *
- * 1. 0.19-i 之前直接用 `surface`（iOS 是白 55%）——页面光晕是一大片渐变，卡片一透就把它
- *    原样透进来，同一张卡上半截 217、下半截 214，差 3 个色阶，手机上看着像卡里嵌了块白斑。
- * 2. 于是改成 [opaqueSurface] 混成实色：干净了，但深色下等于一块不透明的深灰板。
- *    生活页当时用的是 Material3 `Card`（`containerColor = surface`），和课表卡并排一看
- *    就是两种材质，用户的原话是「生活页的卡片完全不透明，其他的有透明感觉」。
- * 3. 现在的做法：**透明度交给一层"薄白光"**，白 alpha 很低，光晕透过来的量很小（不会出斑），
- *    但它确实会随背景变色 —— 深色下按下限 0.085（约等于原来 #1C1C1E 的观感，但会透色），
- *    浅色 0.62。有壁纸时抬到 0.16 / 0.74，保证照片上的字还读得清。
+ * 1. 0.19-i 之前直接用 `surface`（iOS 是白 55%）—— 页面光晕是一大片径向渐变，卡片一透就把它
+ *    原样透进来：同一张卡上半截 217、下半截 214，差 3 个色阶，手机上看着像卡里嵌了块白斑 / 重影。
+ * 2. 0.20 系改成 [opaqueSurface] 混成实色 —— 干净了。但当时生活页三张卡还是 Material3 `Card`
+ *    （`containerColor = surface`），和课表卡并排一看是两种材质，所以有了下面第 3 步。
+ * 3. 0.20-c（`085f8e7`，10-31 09:40）把玻璃卡换成 `Color.White.copy(alpha = 0.62 / 0.085)` 的
+ *    **半透明**白，想让卡片"更通透"。结果光晕照样透进来，**白色重影当天就回来了**
+ *    （用户 10-31 16:48 报「卡片页出现白色重影」）。
  *
- * 玻璃的「厚度」仍然交给 `glassEdge` 上沿高光 + 投影 + 发丝描边，那三样才是液态玻璃的辨识点。
+ * 所以现在：回到 0.20-b 的 [opaqueSurface]，透明度这件事彻底不谈。
+ * 「通透感」不靠 alpha 撑 —— 靠三层：`styleCard` 里极淡的冷/暖线性渐变（平滑渐变不会成台阶）、
+ * `glassEdge` 上沿高光 + 底沿反光、发丝描边。这三样才是液态玻璃的辨识点。
+ *
+ * 要改通透度，就改 `styleCard` 那层线性渐变的 alpha，**不要动这里的 alpha**。
  */
 @Composable
 fun cardBodyColor(): Color {
-    val m = LocalUiMetrics.current
-    if (m.cardStyle != CardStyle.GLASS) {
-        // 其余五套是实色卡（阴影卡 / 描边卡 / 色调卡），玻璃语义不适用
-        return MaterialTheme.colorScheme.surface
-    }
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val wallpaper = AppWallpaper.enabled
-    return if (isDark) {
-        Color.White.copy(alpha = if (wallpaper) 0.16f else 0.085f)
-    } else {
-        Color.White.copy(alpha = if (wallpaper) 0.74f else 0.62f)
+    val surface = MaterialTheme.colorScheme.surface
+    return when {
+        // 壁纸分支保持 0.20-b 原样：照片明暗不可控，只能让 surface 自己透（课表网格卡另有 0.40 分支）
+        AppWallpaper.enabled -> surface
+        LocalUiMetrics.current.glowBackdrop -> opaqueSurface(surface)
+        else -> surface
     }
 }
 
