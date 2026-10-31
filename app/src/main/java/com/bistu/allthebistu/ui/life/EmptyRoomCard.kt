@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -58,6 +56,7 @@ import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.theme.HyperSpacing
 import com.bistu.allthebistu.ui.theme.opaqueSurface
+import com.bistu.allthebistu.ui.theme.styleCard
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -87,12 +86,12 @@ import java.util.Locale
 fun EmptyRoomCard(modifier: Modifier = Modifier) {
     var showSheet by remember { mutableStateOf(false) }
 
-    Card(
+    // 同 图书馆座位卡：材质统一走 styleCard()，不自己拿 Material3 Card 拼一套
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { showSheet = true },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .styleCard()
+            .clickable { showSheet = true }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),

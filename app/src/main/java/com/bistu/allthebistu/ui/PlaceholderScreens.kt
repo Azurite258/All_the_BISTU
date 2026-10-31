@@ -178,10 +178,11 @@ fun LifeScreen(modifier: Modifier = Modifier) {
         }
 
         if (!AuthHolder.isLoggedIn) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            // 同 生活页另两张卡：材质统一走 styleCard()，不再写死 20dp 圆角 + surface
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .styleCard()
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(

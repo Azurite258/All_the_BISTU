@@ -149,29 +149,43 @@ fun opaqueSurface(base: Color): Color {
 }
 
 /**
- * 卡片默认底色。
+ * 卡片体色 —— **全 App 的卡片都从这里取**，不允许各页面自己写。
  *
- * 其余风格是实色；设了壁纸时也一律实色（照片明暗不可控，半透明卡片压在照片上文字会飘）。
+ * 玻璃风格（iOS）返回半透明白：壁纸、彩色光晕能透上来，卡片才像玻璃，而不是一块
+ * 和背景无关的实色板。非玻璃风格保持 `surface` 实色（那五套本来就没有玻璃语言）。
  *
- * ⚠️ iOS 这张卡片**必须是不透明的**，但颜色要像「透过来的」。
- * 0.19-i 之前用的是 `surface.copy(alpha = 0.55/0.58/0.88)`，全都是 alpha 混合：
- * 页面光晕是一大片渐变，卡片一透明就把这层渐变原样透进来，同一张卡上半截 217、
- * 下半截 214 —— 差 3 个色阶，还是硬跳变，手机上一眼就是「卡片里有一块白色色块」。
- * 微信传图再压一道，台阶更明显。提不透明度也没用：0.88 仍然透 12%，用户照样看得见。
+ * ⚠️ 这里换过两次方案，两次都是被同一个现象逼回来的：
  *
- * 现在用 [opaqueSurface] 把 surface 和**主题背景色**（不是光晕）混成实色：
- * 卡片自己就带一点冷调的环境色，看着仍像玻璃，但它是不透明的，背景再怎么渐变也透不进来。
- * 玻璃的「厚度」交给 `glassEdge` 上沿高光 + 投影，那两样才是液态玻璃真正的辨识点。
+ * 1. 0.19-i 之前直接用 `surface`（iOS 是白 55%）——页面光晕是一大片渐变，卡片一透就把它
+ *    原样透进来，同一张卡上半截 217、下半截 214，差 3 个色阶，手机上看着像卡里嵌了块白斑。
+ * 2. 于是改成 [opaqueSurface] 混成实色：干净了，但深色下等于一块不透明的深灰板。
+ *    生活页当时用的是 Material3 `Card`（`containerColor = surface`），和课表卡并排一看
+ *    就是两种材质，用户的原话是「生活页的卡片完全不透明，其他的有透明感觉」。
+ * 3. 现在的做法：**透明度交给一层"薄白光"**，白 alpha 很低，光晕透过来的量很小（不会出斑），
+ *    但它确实会随背景变色 —— 深色下按下限 0.085（约等于原来 #1C1C1E 的观感，但会透色），
+ *    浅色 0.62。有壁纸时抬到 0.16 / 0.74，保证照片上的字还读得清。
+ *
+ * 玻璃的「厚度」仍然交给 `glassEdge` 上沿高光 + 投影 + 发丝描边，那三样才是液态玻璃的辨识点。
  */
 @Composable
-private fun defaultCardColor(): Color {
-    val surface = MaterialTheme.colorScheme.surface
-    return when {
-        AppWallpaper.enabled -> surface
-        LocalUiMetrics.current.glowBackdrop -> opaqueSurface(surface)
-        else -> surface
+fun cardBodyColor(): Color {
+    val m = LocalUiMetrics.current
+    if (m.cardStyle != CardStyle.GLASS) {
+        // 其余五套是实色卡（阴影卡 / 描边卡 / 色调卡），玻璃语义不适用
+        return MaterialTheme.colorScheme.surface
+    }
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val wallpaper = AppWallpaper.enabled
+    return if (isDark) {
+        Color.White.copy(alpha = if (wallpaper) 0.16f else 0.085f)
+    } else {
+        Color.White.copy(alpha = if (wallpaper) 0.74f else 0.62f)
     }
 }
+
+/** 卡片默认底色。统一走 [cardBodyColor]，不再有第二套取色逻辑。 */
+@Composable
+private fun defaultCardColor(): Color = cardBodyColor()
 
 /**
  * 玻璃件的「分界线」色。

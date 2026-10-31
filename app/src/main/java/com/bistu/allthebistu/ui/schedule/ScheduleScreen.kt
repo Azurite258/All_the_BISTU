@@ -60,6 +60,7 @@ import com.bistu.allthebistu.ui.theme.styleCard
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.bistu.allthebistu.ui.theme.cardBodyColor
 import com.bistu.allthebistu.ui.theme.cardSurfaceColor
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 
@@ -322,14 +323,14 @@ private fun ScheduleContent(
 
                 val metrics = LocalUiMetrics.current
                 val cardShape = RoundedCornerShape(metrics.cardRadius)
-                // 这张卡占满整屏，是课表页唯一挡住壁纸 / 光晕的东西，所以底色分三种：
-                //  - 有壁纸：透一点让照片露出来（可见度 ≈ (1-0.40) × (1-蒙层)，默认约 18%）
-                //  - iOS 液态玻璃：透一点让彩色光晕透上来，卡片才有玻璃感
-                //  - 其余：实色
-                val cardColor = when {
-                    AppWallpaper.enabled -> cardSurfaceColor(alpha = 0.40f)
-                    metrics.glowBackdrop -> MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
-                    else -> cardSurfaceColor()
+                // 这张卡占满整屏，是课表页唯一挡住壁纸 / 光晕的东西。
+                //  - 有壁纸：透得更狠一点让照片露出来（可见度 ≈ (1-0.40) × (1-蒙层)，默认约 18%）
+                //  - 其余：交给 cardBodyColor()，和其它页的卡片、生活页的卡片是同一份取色
+                //    （0.20-c 之前这里是写死的 0.58，和默认卡片各写一套，才出现「同样的卡两个样」）
+                val cardColor = if (AppWallpaper.enabled) {
+                    cardSurfaceColor(alpha = 0.40f)
+                } else {
+                    cardBodyColor()
                 }
                 // 用 BoxWithConstraints 而不是 Box：这里的高度是确定的，
                 // 传给网格让它算「能完整放下几行」，比按屏幕高度估算准

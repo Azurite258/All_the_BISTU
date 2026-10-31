@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.library.LibrarySeatApi
+import com.bistu.allthebistu.ui.theme.styleCard
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -82,12 +81,14 @@ fun LibrarySeatCard(modifier: Modifier = Modifier) {
         label = "seatAvailable"
     )
 
-    Card(
+    // 卡片材质统一走 styleCard()：圆角 / 阴影 / 描边 / 玻璃边 / 底色全跟界面风格，
+    // 和课表页、我的页是同一份代码。之前这里用 Material3 Card + 写死 18dp + surface，
+    // 深色下就是一块和背景无关的不透明深灰板（用户反馈「生活页卡片完全不透明」）。
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { openReservation(context) },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .styleCard()
+            .clickable { openReservation(context) }
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
 
