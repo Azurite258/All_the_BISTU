@@ -425,12 +425,13 @@ private fun CampusCard(
             Spacer(Modifier.height(16.dp))
 
             // 本月消费（门户当月接口）+ 网费充值（当月流水汇总）
-            // 两个数都放大到 24sp、标签统一 12sp 小字：以前 20sp / 14sp 混排，
-            // 数字和标签挤在同一行、字号还不一样，看着像没排过版（2026-10-31 用户反馈）。
-            // 现在改成两列「标签在上、数字在下」，标签同字号所以顶边对齐，
-            // 数字同字号所以底边也对齐，整块是齐的。
+            // 两个数都放大到 24sp、标签统一 12sp 小字，两列「标签在上、数字在下」，
+            // 标签同字号所以顶边对齐、数字同字号所以底边也对齐。
+            // 2026-10-31 用户第二次反馈：右列贴右边太难看，改成**整组居中**——
+            // 两个 weight(1f) 各顶一边时，网费充值会孤零零贴在卡片右边缘，
+            // 中间空出一大片；现在两列按内容宽度排、整组在卡内居中，两边留白对称。
             Row(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     Text(
                         text = "本月消费",
                         fontSize = 12.sp,
@@ -443,10 +444,8 @@ private fun CampusCard(
                         color = Color.White
                     )
                 }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.End
-                ) {
+                Spacer(Modifier.weight(0.62f))
+                Column {
                     Text(
                         text = "网费充值",
                         fontSize = 12.sp,
@@ -461,6 +460,7 @@ private fun CampusCard(
                         color = Color.White
                     )
                 }
+                Spacer(Modifier.weight(1f))
             }
 
             // 两行小字把数据边界说清楚，否则用户拿它跟 E 卡通一对账就觉得是 bug：
