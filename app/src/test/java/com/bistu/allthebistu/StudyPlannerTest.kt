@@ -139,8 +139,60 @@ class StudyPlannerTest {
         assertTrue(prompt.contains("线性代数 前三章"))
         assertTrue(prompt.contains("跨度 3 天"))
         assertTrue(prompt.contains("高等数学"))
-        assertTrue(prompt.contains("不能占用"))
+        // 课表按天列，并且告诉模型当天几节 —— 它据此决定这天排几段
+        assertTrue(prompt.contains("2 节课"))
+        assertTrue(prompt.contains("没课，整天都可以安排"))
         assertTrue(prompt.contains("可以安排的空闲时段"))
+    }
+
+    @Test
+    fun `多天提示词给每天标出课业强度`() {
+        val courses = listOf(
+            course("高数", dow = 3, begin = "08:00", end = "09:35"),
+            course("英语", dow = 3, begin = "10:00", end = "11:35"),
+            course("物理", dow = 3, begin = "13:30", end = "15:05")
+        )
+        val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600)
+        val prompt = StudyPlanner.multiDayUserPrompt(
+            content = "线代", days = 2, courses = courses, week = 8,
+            today = TODAY, todayDow = 3, slots = slots
+        )
+
+        // 三门各 2 节 = 6 节，今天必须被标成课多的一天
+        assertTrue(prompt.contains("6 节课"))
+        // 明天（周四）没课，要明确说「整天都可以安排」
+        assertTrue(prompt.contains("没课，整天都可以安排"))
+    }
+
+    @Test
+    fun `个人需求会被拼进两套提示词的末尾`() {
+        val note = "晚上 10 点后不学，周三有社团"
+        val short = StudyPlanner.shortUserPrompt("高数", START_1400, 120, note)
+        assertTrue(short.contains("额外要求"))
+        assertTrue(short.contains("周三有社团"))
+
+        val courses = listOf(course("高数", dow = 3, begin = "08:00", end = "09:35"))
+        val multi = StudyPlanner.multiDayUserPrompt(
+            content = "线代", days = 3, courses = courses, week = 8,
+            today = TODAY, todayDow = 3,
+            slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600),
+            note = note
+        )
+        assertTrue(multi.contains("周三有社团"))
+        // 必须排在最后：先给约束和课表，最后才是「优先满足」的偏好
+        assertTrue(multi.trimEnd().endsWith("周三有社团"))
+    }
+
+    @Test
+    fun `没填个人需求时提示词里不会出现空的要求段`() {
+        val short = StudyPlanner.shortUserPrompt("高数", START_1400, 120)
+        assertTrue(!short.contains("额外要求"))
+
+        val multi = StudyPlanner.multiDayUserPrompt(
+            content = "线代", days = 2, courses = emptyList(), week = 8,
+            today = TODAY, todayDow = 3, slots = emptyList()
+        )
+        assertTrue(!multi.contains("额外要求"))
     }
 
     // ── 空闲时段 ──
@@ -201,6 +253,26 @@ class StudyPlannerTest {
         assertEquals(8 * 60, slots[0].startMinutes)
     }
 
+    @Test
+    fun `多日模式放低门槛后两节课之间的 45 分钟也能排`() {
+        // 08:00-10:00 上完，10:45 再上，中间空 45 分钟
+        val courses = listOf(
+            course("早课", dow = 1, begin = "08:00", end = "10:00"),
+            course("第二节", dow = 1, begin = "10:45", end = "12:00")
+        )
+
+        val strict = StudyPlanner.freeSlots(
+            courses, week = 8, todayDow = 1, nowMinutes = 0, horizonDays = 1
+        )
+        assertTrue("默认 60 分钟门槛应把 45 分钟空档砍掉", strict.none { it.length == 45 })
+
+        val relaxed = StudyPlanner.freeSlots(
+            courses, week = 8, todayDow = 1, nowMinutes = 0, horizonDays = 1,
+            minSlot = StudyPlanner.MULTI_MIN_SLOT
+        )
+        assertTrue("多日模式应保留 45 分钟空档", relaxed.any { it.startMinutes == 600 && it.endMinutes == 645 })
+    }
+
     // ── 示例计划（没配 Key 时给用户看效果） ──
 
     @Test
@@ -245,6 +317,27 @@ class StudyPlannerTest {
         val plan = StudyPlanner.sampleShortPlan("", START_1400, 120)
         assertTrue(plan.isNotEmpty())
         assertTrue(plan.all { it.title.isNotBlank() })
+    }
+
+    @Test
+    fun `时间窗短时不硬凑回顾段`() {
+        // 45 分钟：用户自己选的窗口，只够一整段，不能切出「学习 50 分 + 回顾 20 分」
+        val plan = StudyPlanner.sampleShortPlan("高数", START_1400, 45)
+        assertEquals(1, plan.size)
+        assertEquals(START_1400, plan[0].startAt)
+        assertEquals(START_1400 + 45 * 60_000L, plan[0].endAt)
+
+        // 100 分钟以上才值得留回顾
+        val withReview = StudyPlanner.sampleShortPlan("高数", START_1400, 100)
+        assertTrue(withReview.last().title.contains("回顾"))
+        assertEquals(START_1400 + 100 * 60_000L, withReview.last().endAt)
+    }
+
+    @Test
+    fun `窗口短到切不动时也返回一整段`() {
+        val plan = StudyPlanner.sampleShortPlan("高数", START_1400, 15)
+        assertEquals(1, plan.size)
+        assertEquals(15, plan[0].durationMinutes)
     }
 
     // ══════════════════════════════════════════════════════════

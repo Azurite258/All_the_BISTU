@@ -69,10 +69,10 @@ data class FreeSlot(
  *
  * 两种模式，对应二级页里那两组时长：
  *
- * - **短时**（3 小时 / 5 小时，今天内做完）：核心是「怎么切段效率高」——
+ * - **短时**（今天内一个时间段，几点到几点由用户自己选）：核心是「怎么切段效率高」——
  *   先难后易、每段之间留休息、最后留时间回顾。
- * - **多天**（1 / 3 / 7 天）：核心是「什么时候复习什么」——按遗忘曲线，
- *   当天学、次日第一次、第 3~4 天第二次、第 6~7 天第三次，并且**避开上课时间**。
+ * - **多天**（1 / 3 / 7 天或自定义）：核心是「什么时候复习什么」——按遗忘曲线，
+ *   当天学、次日第一次、第 3~4 天第二次、第 6~7 天第三次，并且**顺着课表来排**。
  *
  * 这一层是纯函数（除了取当前时间），单测能直接跑，不需要网络。
  * 模型返回的 JSON 永远不能全信，所以边界校验才是重点。
@@ -85,6 +85,14 @@ object StudyPlanner {
 
     /** 小于一小时的空档不排 —— 排了也做不完一件事 */
     private const val MIN_SLOT = 60
+
+    /**
+     * 多日模式的最低空档门槛。
+     *
+     * 比短时模式松 15 分钟：两节课之间那种 45~55 分钟的空档，用来过一遍昨天的复习
+     * 刚好够。按 60 分钟一刀切会把工作日切得只剩晚上，模型反而没得排。
+     */
+    const val MULTI_MIN_SLOT = 45
 
     /** 每天最多给几段，避免提示词过长、也避免模型把一天排满 */
     private const val MAX_SLOT_PER_DAY = 3
@@ -103,13 +111,16 @@ object StudyPlanner {
      *
      * @param todayDow 今天是周几（1..7），由调用方传，方便单测固定
      * @param nowMinutes 现在几点（分钟），今天只排这之后的时段
+     * @param minSlot 多短的空档就当作不存在。多日模式传 [MULTI_MIN_SLOT]：
+     *   两节课之间那 45 分钟其实能背一轮单词，按 60 分钟砍掉太浪费
      */
     fun freeSlots(
         courses: List<Course>,
         week: Int,
         todayDow: Int,
         nowMinutes: Int,
-        horizonDays: Int = 7
+        horizonDays: Int = 7,
+        minSlot: Int = MIN_SLOT
     ): List<FreeSlot> {
         val result = mutableListOf<FreeSlot>()
         for (offset in 0 until horizonDays) {
@@ -139,7 +150,7 @@ object StudyPlanner {
             }
             if (cursor < DAY_END) gaps += cursor to DAY_END
 
-            gaps.filter { it.second - it.first >= MIN_SLOT }
+            gaps.filter { it.second - it.first >= minSlot }
                 .take(MAX_SLOT_PER_DAY)
                 .forEach { (s, e) -> result += FreeSlot(offset, s, e) }
         }
@@ -147,11 +158,11 @@ object StudyPlanner {
     }
 
     // ══════════════════════════════════════════════════════════
-    // 二、短时模式（今天内 3 / 5 小时）
+    // 二、短时模式（今天内的一个时间段，起点终点自己选）
     // ══════════════════════════════════════════════════════════
 
     fun shortSystemPrompt(): String = """
-        你是一个大学学习规划助手。学生告诉你「要学什么」和「今天还有几个小时」，你要把内容拆成可执行的时段。
+        你是一个大学学习规划助手。学生告诉你「要学什么」和「今天从几点到几点有空」，你要把内容拆成可执行的时段。
 
         只输出一个 JSON 对象，不要解释、不要 markdown 代码块、不要在前后加字：
         {"items":[{"day":0,"start":"14:40","end":"15:25","title":"高数 · 极限与导数","tag":"作业","note":"先过一遍例题，再做 5 道练习"}]}
@@ -161,15 +172,24 @@ object StudyPlanner {
         2. start / end 用 24 小时制 HH:mm，必须落在给定的时间窗内，从给定开始时刻起、首尾相接排到结束时刻。
         3. 单段 30~60 分钟；相邻两段之间留 5~10 分钟休息（休息不要写进计划）。
         4. 顺序先难后易；**最后一段用来回顾今天学过的全部内容**。
+           时间窗不到 2 小时就只排 1~2 段，不要再硬留回顾段。
         5. title 不超过 12 个汉字，格式「科目 · 做什么」。
         6. tag 只能是 作业 / 考试 / 课程 / 生活 / 其他 之一。
         7. note 写具体做法（做几道题、背哪几页），20 字以内。
+        8. 如果用户给了「额外要求」，在不违反上面约束的前提下优先满足它。
     """.trimIndent()
 
+    /**
+     * 短时模式的用户消息。
+     *
+     * @param note 用户的长期偏好（可为空）。为空时**整段不出现**，
+     *   避免给模型一个空的「额外要求：」框让它自由发挥
+     */
     fun shortUserPrompt(
         content: String,
         startMillis: Long,
-        totalMinutes: Int
+        totalMinutes: Int,
+        note: String = ""
     ): String {
         val startMin = PlanDraft.clockOf(startMillis)
         val endMin = PlanDraft.clockOf(startMillis + totalMinutes * 60_000L)
@@ -180,7 +200,7 @@ object StudyPlanner {
 
             可用时间：今天 $startMin–$endMin，合计 $totalMinutes 分钟（约 $hours 小时）。
             请按系统提示的 JSON 格式，把它拆成连续的学习时段，中间留出短休息。
-        """.trimIndent()
+        """.trimIndent() + noteBlock(note)
     }
 
     // ══════════════════════════════════════════════════════════
@@ -189,6 +209,7 @@ object StudyPlanner {
 
     fun multiDaySystemPrompt(): String = """
         你是一个大学学习规划助手。学生告诉你「要学什么」和「跨几天」，你要按遗忘曲线排出「学 + 复习」的时间表。
+        学生还会给你这几天的课表，**课表不是你躲开的障碍，而是你安排节奏的依据**。
 
         只输出一个 JSON 对象，不要解释、不要 markdown 代码块、不要在前后加字：
         {"items":[{"day":0,"start":"19:00","end":"20:30","title":"高数 · 第一遍过教材","tag":"作业","note":"极限定义与两个重要极限"}]}
@@ -198,12 +219,27 @@ object StudyPlanner {
         2. start / end 用 24 小时制 HH:mm。**必须避开用户课表里的上课时间**，也不要排在 22:30 之后、08:00 之前。
         3. 同一块内容按这个节奏安排：当天第一遍学 → 第 2 天复习一次 → 第 3~4 天再复习 → 第 6~7 天最后回顾。
            跨度不够就把后面的节点省掉，不要硬塞成每天重复。
-        4. 每天 1~3 段，单段 45~90 分钟。
-        5. title 不超过 12 个汉字，写清是「学」还是「复习」、哪块内容。
-        6. tag 只能是 作业 / 考试 / 课程 / 生活 / 其他 之一；复习类用「考试」。
-        7. note 写这一遍的重点，20 字以内。
+        4. **按当天的课业强度分配，这是最重要的一条**：
+           - 当天 4 节及以上的，只排 1 段，放在晚上，不要排白天；
+           - 当天 2~3 节，排 1~2 段；
+           - 当天没课（或者只有 2 节以下），可以排 2~3 段，把重活放在这种日子。
+        5. **复习节点尽量贴着那门课当天上课的晚上**：今天上过高数，今晚复习高数效果最好；
+           不要把某门课的复习排到它没上课、但别的课很满的那天。
+        6. 考试当天的白天不要排新内容；考试前一天的晚上只安排「回顾」，不要安排新章节。
+        7. 每天 1~3 段，单段 45~90 分钟。真的排不下时，宁可少排一条，
+           并在 note 里写「这天课多，顺延」——**绝对不要挤到 22:30 之后**。
+        8. title 不超过 12 个汉字，写清是「学」还是「复习」、哪块内容。
+        9. tag 只能是 作业 / 考试 / 课程 / 生活 / 其他 之一；复习类用「考试」。
+        10. note 写这一遍的重点，20 字以内；因课多而顺延时，这里要说明。
+        11. 如果用户给了「额外要求」，在不违反上面约束的前提下优先满足它。
     """.trimIndent()
 
+    /**
+     * 多天模式的用户消息。
+     *
+     * 课表按**天**列出来，而不是按周一到周日平铺 —— 模型要按 day 排，
+     * 每天都告诉它「这是第几天、星期几、几节课、哪几门」比丢一张周课表让它自己数靠谱得多。
+     */
     fun multiDayUserPrompt(
         content: String,
         days: Int,
@@ -211,16 +247,29 @@ object StudyPlanner {
         week: Int,
         today: Long,
         todayDow: Int,
-        slots: List<FreeSlot>
+        slots: List<FreeSlot>,
+        note: String = ""
     ): String {
-        val timetable = courses
-            .filter { it.isArranged && it.isInWeek(week) }
-            .sortedWith(compareBy({ it.dayOfWeek }, { it.beginSection }))
-            .joinToString("\n") {
-                "${weekdayName(it.dayOfWeek)} ${it.beginTime}-${it.endTime} ${it.name}" +
-                        if (it.room.isBlank()) "" else "（${it.room}）"
+        val weekly = courses.filter { it.isArranged && it.isInWeek(week) }
+
+        val timetable = (0 until days).joinToString("\n") { offset ->
+            val dow = ((todayDow - 1 + offset) % 7) + 1
+            val dayCourses = weekly.filter { it.dayOfWeek == dow }.sortedBy { it.beginSection }
+            val dayName = if (offset == 0) "今天" else "第 ${offset + 1} 天"
+            val head = "$dayName（day=$offset，${dateText(startOfDay(today, offset))} ${weekdayName(dow)}）"
+            if (dayCourses.isEmpty()) {
+                "$head：没课，整天都可以安排"
+            } else {
+                // 节数按连堂算：一门 3~4 节的课实际占 2 节，模型据此判断「今天重不重」
+                val sections = dayCourses.sumOf {
+                    (it.endSection - it.beginSection + 1).coerceAtLeast(1)
+                }
+                val detail = dayCourses.joinToString("、") {
+                    "${it.beginTime}-${it.endTime} ${it.name}"
+                }
+                "$head：$sections 节课 —— $detail"
             }
-            .ifEmpty { "（本周没有排课）" }
+        }
 
         val slotText = slots.joinToString("\n") {
             val dayName = if (it.dayOffset == 0) "今天" else "第 ${it.dayOffset + 1} 天"
@@ -233,14 +282,26 @@ object StudyPlanner {
             要学的内容：
             ${content.trim()}
 
-            本周课表（这些时间不能占用）：
+            这几天的课表（后面是当天节数，节数多的天要少排，没课的天可以多排）：
             $timetable
 
             可以安排的空闲时段：
             $slotText
 
             请按系统提示的 JSON 格式，排出「学习 + 复习」的时间表。
-        """.trimIndent()
+        """.trimIndent() + noteBlock(note)
+    }
+
+    /**
+     * 「额外要求」段。
+     *
+     * 没有就不拼 —— 空的「额外要求：」会让模型自己往里编内容，
+     * 比如凭空假设用户有考试。同一条文本两套提示词都用。
+     */
+    private fun noteBlock(note: String): String {
+        val text = note.trim()
+        if (text.isEmpty()) return ""
+        return "\n\n学生的额外要求（优先满足，但不能违反上面的约束）：\n$text"
     }
 
     // ══════════════════════════════════════════════════════════
@@ -301,9 +362,14 @@ object StudyPlanner {
     /**
      * 示例计划（没配 Key 时给用户看效果）。
      *
-     * 按真实时长切段：50 分钟一段、中间 10 分钟休息，最后一段做回顾。
+     * 按真实时长切段：50 分钟一段、中间 10 分钟休息，末尾留 20 分钟回顾。
      * 内容按「、，,；;换行」拆成若干主题轮流分配 —— 所以用户看到的就是
      * 他自己输入的内容被排进了真实的时间槽，不是随机编的假条目。
+     *
+     * 时间窗是**用户自己选的**，从 45 分钟到一整天都有可能，所以这里不能写死段数：
+     * - 窗口 < 100 分钟：不留回顾段。否则「50 分钟学习 + 20 分钟回顾」看起来像凑数
+     * - 窗口 < 90 分钟：连 5 分钟准备也不留，整窗用来学
+     * - 窗口 < 20 分钟：切不动，直接一整段（不然会算出空计划）
      */
     fun sampleShortPlan(
         content: String,
@@ -317,28 +383,44 @@ object StudyPlanner {
             .ifEmpty { listOf("今天的内容") }
 
         val drafts = mutableListOf<PlanDraft>()
-        var cursor = startMillis + 5 * 60_000L      // 先留 5 分钟准备
         val hardEnd = startMillis + totalMinutes * 60_000L
+        val reviewMillis = if (totalMinutes >= 100) 20 * 60_000L else 0L
+        val learnEnd = hardEnd - reviewMillis
+
+        var cursor = startMillis + if (totalMinutes >= 90) 5 * 60_000L else 0L
         var index = 0
 
-        while (cursor + 30 * 60_000L <= hardEnd - 30 * 60_000L && drafts.size < 8) {
-            val block = minOf(50 * 60_000L, (hardEnd - cursor).coerceAtLeast(0L))
-            if (block < 25 * 60_000L) break
-            val topic = topics[index % topics.size]
+        while (cursor < learnEnd && drafts.size < 8) {
+            val remaining = learnEnd - cursor
+            if (remaining < 20 * 60_000L) break
+            val block = minOf(50 * 60_000L, remaining)
             drafts += PlanDraft(
                 startAt = cursor,
                 endAt = cursor + block,
-                title = "学习 · $topic".take(24),
+                title = "学习 · ${topics[index % topics.size]}".take(24),
                 tag = EventTag.HOMEWORK
             )
             cursor += block + 10 * 60_000L
             index++
         }
 
+        // 窗口短到切不出任何一段（比如用户只选了 20 分钟）也要给出一条，
+        // 空列表会被上层当成「没排出计划」弹错误
+        if (drafts.isEmpty()) {
+            return listOf(
+                PlanDraft(
+                    startAt = startMillis,
+                    endAt = hardEnd,
+                    title = "学习 · ${topics.first()}".take(24),
+                    tag = EventTag.HOMEWORK
+                )
+            )
+        }
+
         // 末尾补一段「回顾」——和提示词里对模型的要求保持一致
-        if (hardEnd - cursor >= 15 * 60_000L) {
+        if (reviewMillis > 0) {
             drafts += PlanDraft(
-                startAt = cursor,
+                startAt = learnEnd,
                 endAt = hardEnd,
                 title = "回顾 · 今天学过的内容",
                 tag = EventTag.EXAM

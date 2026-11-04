@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +72,7 @@ import com.bistu.allthebistu.ui.event.EventTags
 import com.bistu.allthebistu.ui.theme.LocalUiMetrics
 import com.bistu.allthebistu.ui.theme.pageBackgroundColor
 import com.bistu.allthebistu.ui.theme.styleCard
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -77,13 +80,17 @@ import java.util.Calendar
  * AI 学习计划 —— 二级页。
  *
  * 学习页只留一张两行的小入口卡，真正的操作都在这一页：
- * 一项一项添加要学的内容 → 选时间跨度（今天几小时 / 今天几点到几点 / 几天内）
+ * 一项一项添加要学的内容 → 选时间（**今天几点到几点自己定** / 几天内）
  * → 生成 → 勾选要的条目 → **勾上「加入日程」并确认**才落库。
  *
  * ## 两种跨度，两套提示词
  * - **今天内**：解决「怎么切段效率高」——先难后易、段间留休息、最后留时间回顾。
  * - **几天内**：解决「什么时候复习什么」——按遗忘曲线，当天学、次日复习、
- *   第 3~4 天再复习，并避开课表里的上课时间。
+ *   第 3~4 天再复习，并且**顺着课表排**（课多的天少排、复习贴着当天那门课的晚上）。
+ *
+ * ## 为什么「今天内」不给 3 小时 / 5 小时这种预设
+ * 用户 2026-11-04 明确要求去掉：每个人每天的空档不一样，给两档固定值等于逼人选一个
+ * 不合适的数。现在直接让用户点开始和结束时刻，默认值只作为「懒得改时的合理猜测」。
  */
 @Composable
 fun AiPlanScreen(
@@ -91,6 +98,8 @@ fun AiPlanScreen(
     week: Int,
     todayDow: Int,
     config: AiConfig,
+    studyNote: String,
+    onStudyNoteChange: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
     onSavePlan: (List<PlanDraft>) -> Unit,
@@ -107,10 +116,27 @@ fun AiPlanScreen(
     var adding by remember { mutableStateOf(false) }
     var draftText by remember { mutableStateOf("") }
 
-    // ── 时长 ──
-    var duration by remember { mutableStateOf<Duration>(Duration.Hours(3)) }
+    val now = remember { System.currentTimeMillis() }
+    val nowMinutes = remember(now) {
+        Calendar.getInstance().apply { timeInMillis = now }
+            .let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
+    }
+    val autoStart = remember(now) { ceilToQuarter(now + 5 * 60_000L) }
+
+    // ── 时长：今天内只有一个「自选时段」，不再有固定几小时的预设 ──
+    var duration by remember { mutableStateOf<Duration>(Duration.defaultRange(now, autoStart)) }
     var rangeDialog by remember { mutableStateOf(false) }
     var daysDialog by remember { mutableStateOf(false) }
+
+    // ── 个人情况：长期偏好，跨次保留 ──
+    var note by remember { mutableStateOf(studyNote) }
+    // 每敲一个字就写一次 DataStore 太浪费，停下来 600ms 再落盘
+    LaunchedEffect(note) {
+        if (note.trim() != studyNote.trim()) {
+            delay(600)
+            onStudyNoteChange(note)
+        }
+    }
 
     // ── 生成 ──
     var loading by remember { mutableStateOf(false) }
@@ -121,13 +147,6 @@ fun AiPlanScreen(
     var hint by remember { mutableStateOf<String?>(null) }
     // 生成完是否要写进日程：默认不勾，必须用户主动确认
     var confirmed by remember { mutableStateOf(false) }
-
-    val now = remember { System.currentTimeMillis() }
-    val nowMinutes = remember(now) {
-        Calendar.getInstance().apply { timeInMillis = now }
-            .let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
-    }
-    val autoStart = remember(now) { ceilToQuarter(now + 5 * 60_000L) }
 
     fun addItem() {
         val text = draftText.trim()
@@ -159,7 +178,7 @@ fun AiPlanScreen(
         val content = items.joinToString("、")
 
         val result: List<PlanDraft> = when (val d = duration) {
-            is Duration.Hours, is Duration.Range -> {
+            is Duration.Range -> {
                 val (startAt, minutes) = d.window(now, autoStart)
                 if (useDemo) {
                     StudyPlanner.sampleShortPlan(content, startAt, minutes)
@@ -168,7 +187,7 @@ fun AiPlanScreen(
                         val r = AiClient.chat(
                             config = config,
                             system = StudyPlanner.shortSystemPrompt(),
-                            user = StudyPlanner.shortUserPrompt(content, startAt, minutes),
+                            user = StudyPlanner.shortUserPrompt(content, startAt, minutes, note),
                             maxTokens = 900
                         )
                     ) {
@@ -190,7 +209,9 @@ fun AiPlanScreen(
                         week = week,
                         todayDow = todayDow,
                         nowMinutes = nowMinutes,
-                        horizonDays = d.days
+                        horizonDays = d.days,
+                        // 多日模式放低门槛，两节课之间那 45 分钟也能排一轮复习
+                        minSlot = StudyPlanner.MULTI_MIN_SLOT
                     )
                     when (
                         val r = AiClient.chat(
@@ -203,7 +224,8 @@ fun AiPlanScreen(
                                 week = week,
                                 today = now,
                                 todayDow = todayDow,
-                                slots = slots
+                                slots = slots,
+                                note = note
                             ),
                             maxTokens = 1400
                         )
@@ -340,7 +362,7 @@ fun AiPlanScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = if (duration is Duration.Days) {
-                        "会按遗忘曲线排「学 + 复习」，并避开课表里的上课时间"
+                        "按遗忘曲线排「学 + 复习」，并顺着课表分配：课多的天少排，没课的天多排"
                     } else {
                         "把内容切成 30~60 分钟一段，中间留短休息，最后一段时间用来回顾"
                     },
@@ -350,7 +372,33 @@ fun AiPlanScreen(
                 )
             }
 
-            // ── 3. 未配置 Key 的提示 ──
+            Spacer(Modifier.height(metrics.cardGap))
+
+            // ── 3. 我的情况（长期偏好，可选） ──
+            // 和「要学什么」分开两张卡：上面是这一次的内容，每次都要重填；
+            // 这张存下来，以后每次生成都自动带上，用户不必反复描述自己
+            SectionCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Label("我的情况")
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "${note.length}/200",
+                        fontSize = 12.sp,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "可选。写下来会一直记着，比如「晚上 10 点后不学」「周三有社团」「高数期末 11-20」。",
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = colors.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                NoteField(value = note, onChange = { note = it.take(200) })
+            }
+
+            // ── 4. 未配置 Key 的提示 ──
             if (!config.configured) {
                 Spacer(Modifier.height(metrics.cardGap))
                 Row(
@@ -387,7 +435,7 @@ fun AiPlanScreen(
 
             Spacer(Modifier.height(14.dp))
 
-            // ── 4. 生成 ──
+            // ── 5. 生成 ──
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(
                     text = when {
@@ -455,7 +503,7 @@ fun AiPlanScreen(
                 }
             }
 
-            // ── 5. 结果 ──
+            // ── 6. 结果 ──
             if (drafts.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
 
@@ -521,7 +569,7 @@ fun AiPlanScreen(
 
                 Spacer(Modifier.height(14.dp))
 
-                // ── 6. 是否真的写进日程 ──
+                // ── 7. 是否真的写进日程 ──
                 // 单独一个勾选框：「挑了哪几条」和「要不要真写进课表」是两件事，
                 // 前面是挑内容，这一步是拍板，不勾就只是预览。
                 val isMultiDay = duration is Duration.Days
@@ -576,12 +624,8 @@ fun AiPlanScreen(
     // ── 自定义时间弹窗 ──
     if (rangeDialog) {
         CustomRangeDialog(
-            initial = duration as? Duration.Range ?: run {
-                // 默认「现在 + 5 分钟」到「+3 小时」，换算成当天的分钟数
-                val c = Calendar.getInstance().apply { timeInMillis = autoStart }
-                val from = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
-                Duration.Range(from, (from + 180).coerceAtMost(23 * 60 + 59))
-            },
+            // 从「几天内」切回来时没有现成的 Range，用默认值（现在 +5 分钟起 2 小时）
+            initial = duration as? Duration.Range ?: Duration.defaultRange(now, autoStart),
             onDismiss = { rangeDialog = false },
             onConfirm = {
                 duration = it
@@ -606,10 +650,8 @@ fun AiPlanScreen(
 // 时间跨度
 // ══════════════════════════════════════════════════════════════
 
-/** 三种跨度：从现在的若干小时 / 今天几点到几点 / 几天内 */
+/** 两种跨度：今天几点到几点（自己选） / 几天内 */
 private sealed interface Duration {
-
-    data class Hours(val hours: Int) : Duration
 
     /** 今天的时间段，分钟表示（14:00 → 840） */
     data class Range(val startMinutes: Int, val endMinutes: Int) : Duration
@@ -618,7 +660,6 @@ private sealed interface Duration {
 
     /** 算出「从哪一刻开始、一共多少分钟」；[autoStart] 是「现在 + 5 分钟」取整的结果 */
     fun window(now: Long, autoStart: Long): Pair<Long, Int> = when (this) {
-        is Hours -> autoStart to hours * 60
         is Range -> {
             val dayStart = StudyPlanner.startOfDay(now, 0)
             (dayStart + startMinutes * 60_000L) to (endMinutes - startMinutes).coerceAtLeast(30)
@@ -628,10 +669,6 @@ private sealed interface Duration {
     }
 
     fun summary(now: Long, autoStart: Long): String = when (this) {
-        is Hours -> "今天 ${PlanDraft.clockOf(autoStart)}–${
-            PlanDraft.clockOf(autoStart + hours * 60 * 60_000L)
-        } · $hours 小时"
-
         is Range -> "今天 ${clock(startMinutes)}–${clock(endMinutes)} · ${
             spanText(endMinutes - startMinutes)
         }"
@@ -643,7 +680,6 @@ private sealed interface Duration {
     }
 
     fun label(): String = when (this) {
-        is Hours -> "$hours 小时"
         is Range -> "${clock(startMinutes)}–${clock(endMinutes)}"
         is Days -> "$days 天"
     }
@@ -660,6 +696,21 @@ private sealed interface Duration {
                 h > 0 -> "$h 小时"
                 else -> "$m 分钟"
             }
+        }
+
+        /**
+         * 默认时间段：从「现在 + 5 分钟」取整到一刻钟起，往后 2 小时。
+         *
+         * 只作为**懒得改时的合理猜测**，不是预设档位 —— 用户随时点开两个时间轮自己调。
+         * 两处兜底：太晚（22:00 之后打开）就整段往前挪，保证至少 90 分钟；
+         * 再短的话窗口里排不下任何东西，默认值就没意义了。
+         */
+        fun defaultRange(now: Long, autoStart: Long): Range {
+            val c = Calendar.getInstance().apply { timeInMillis = autoStart }
+            val from = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+            val end = (from + 120).coerceAtMost(23 * 60 + 59)
+            val start = if (end - from < 90) (end - 90).coerceAtLeast(0) else from
+            return Range(start, end)
         }
     }
 }
@@ -686,7 +737,9 @@ private fun dayLabel(dayMillis: Long, todayMillis: Long): String {
  * 时长选择。
  *
  * 两行分开：上一行是「今天内」（切段问题），下一行是「跨几天」（复习节奏问题）。
- * 两组的「自定义」各管各的 —— 今天自定义是选几点到几点，跨天自定义是选几天。
+ * 上一行**只有一个胶囊**：点开就是开始/结束两个时间轮。这里曾经有「3 小时」「5 小时」
+ * 两个预设，用户 2026-11-04 明确要求去掉 —— 每天空档不一样，给固定档等于逼人将就。
+ * 下一行保留 1 / 3 / 7 天，是因为「跨几天」本身就是个整数直觉，不存在将就。
  */
 @Composable
 private fun DurationChips(
@@ -695,27 +748,26 @@ private fun DurationChips(
     onCustomRange: () -> Unit,
     onCustomDays: () -> Unit
 ) {
-    val shortPresets = listOf(Duration.Hours(3), Duration.Hours(5))
     val multiPresets = listOf(Duration.Days(1), Duration.Days(3), Duration.Days(7))
-    val customRangeSelected = current is Duration.Range
+    val rangeSelected = current is Duration.Range
     val customDaysSelected = current is Duration.Days && current.days !in listOf(1, 3, 7)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Caption("今天内")
-            shortPresets.forEach { preset ->
-                Chip(
-                    text = preset.label(),
-                    selected = preset == current,
-                    onClick = { onPick(preset) }
-                )
-                Spacer(Modifier.width(8.dp))
-            }
             Chip(
-                text = if (customRangeSelected) current.label() else "自定义",
-                selected = customRangeSelected,
+                text = if (rangeSelected) current.label() else "选择时段",
+                selected = rangeSelected,
                 onClick = onCustomRange
             )
+            if (!rangeSelected) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "点一下选开始和结束时间",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Caption("跨几天")
@@ -1048,6 +1100,42 @@ private fun CustomDaysDialog(
 // ══════════════════════════════════════════════════════════════
 // 小块件
 // ══════════════════════════════════════════════════════════════
+
+/**
+ * 多行自由输入（「我的情况」用）。
+ *
+ * 没用 OutlinedTextField：那套自带 label、边框和最小高度，和这一页其余分节卡
+ * 「浅底 + 无边框」不是一路。这里就是一块浅底区域。
+ */
+@Composable
+private fun NoteField(value: String, onChange: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val metrics = LocalUiMetrics.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(metrics.innerRadius * 0.7f))
+            .background(colors.onSurface.copy(alpha = 0.05f))
+            .padding(horizontal = 12.dp, vertical = 11.dp)
+    ) {
+        if (value.isEmpty()) {
+            Text(
+                text = "不填也行，写给自己看的",
+                fontSize = 13.sp,
+                color = colors.onSurfaceVariant.copy(alpha = 0.55f)
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            textStyle = TextStyle(fontSize = 13.sp, lineHeight = 19.sp, color = colors.onSurface),
+            cursorBrush = SolidColor(colors.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+        )
+    }
+}
 
 @Composable
 private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {

@@ -52,7 +52,14 @@ data class AppSettings(
     /** 接口根地址（OpenAI 兼容），见 [com.bistu.allthebistu.data.ai.AiConfig] */
     val aiBaseUrl: String = com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_BASE_URL,
     /** 模型名 */
-    val aiModel: String = com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL
+    val aiModel: String = com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL,
+    /**
+     * 用户的长期学习偏好，自由文本（如「晚上 10 点后不学」「周三有社团」）。
+     *
+     * 和「要学什么」区别开：那是**这一次**的内容，每次生成都要重填；
+     * 这条是**长期**的，存下来以后每次自动带上，用户不用反复描述自己。
+     */
+    val aiStudyNote: String = ""
 ) {
     /**
      * 当前生效的课程配色。
@@ -164,6 +171,9 @@ class SettingsStore(private val context: Context) {
         val AI_API_KEY = stringPreferencesKey("ai_api_key")
         val AI_BASE_URL = stringPreferencesKey("ai_base_url")
         val AI_MODEL = stringPreferencesKey("ai_model")
+
+        /** 用户的长期学习偏好（自由文本），每次生成计划都会拼进提示词 */
+        val AI_STUDY_NOTE = stringPreferencesKey("ai_study_note")
     }
 
     /** 读取设置流 */
@@ -184,7 +194,8 @@ class SettingsStore(private val context: Context) {
             ),
             aiApiKey = prefs[Keys.AI_API_KEY].orEmpty(),
             aiBaseUrl = prefs[Keys.AI_BASE_URL] ?: com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_BASE_URL,
-            aiModel = prefs[Keys.AI_MODEL] ?: com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL
+            aiModel = prefs[Keys.AI_MODEL] ?: com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL,
+            aiStudyNote = prefs[Keys.AI_STUDY_NOTE].orEmpty()
         )
     }
 
@@ -296,6 +307,20 @@ class SettingsStore(private val context: Context) {
     /** 只清 Key，地址和模型保留（换供应商时先清掉旧的，不用重填地址） */
     suspend fun clearAiKey() {
         context.dataStore.edit { it.remove(Keys.AI_API_KEY) }
+    }
+
+    /**
+     * 保存用户的长期学习偏好。
+     *
+     * 会 trim + 截到 200 字：这段文本每次生成都要塞进提示词，太长会把 token 预算吃光，
+     * 而且输入框本身也限制了 200 字，这里再兜一道，防止旧版本写进来的超长值继续传下去。
+     * 传空等于清除。
+     */
+    suspend fun setAiStudyNote(note: String) {
+        val text = note.trim().take(200)
+        context.dataStore.edit {
+            if (text.isEmpty()) it.remove(Keys.AI_STUDY_NOTE) else it[Keys.AI_STUDY_NOTE] = text
+        }
     }
 
     /**

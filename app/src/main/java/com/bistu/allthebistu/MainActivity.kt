@@ -373,6 +373,11 @@ private fun AppRoot(
                 week = aiWeek,
                 todayDow = DateUtils.todayDayOfWeek(),
                 config = settings.aiConfig,
+                studyNote = settings.aiStudyNote,
+                // 页内已经防抖过（停手 600ms 才回调），这里直接落库
+                onStudyNoteChange = { text ->
+                    scope.launch { settingsStore.setAiStudyNote(text) }
+                },
                 onOpenSettings = { showApiKeySheet = true },
                 onBack = { showAiPlan = false },
                 onSavePlan = { drafts -> savePlan(drafts) }
