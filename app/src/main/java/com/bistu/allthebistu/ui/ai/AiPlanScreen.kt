@@ -55,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -927,6 +929,10 @@ private fun AddingCapsule(
     onCancel: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    // 点「添加一项」就该能直接打字：胶囊一出现就把焦点要过来、弹起键盘，
+    // 否则用户看到一个输入框，敲字却没反应，还得再点一下
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     Row(
         modifier = Modifier
             .widthIn(max = 400.dp)
@@ -948,7 +954,10 @@ private fun AddingCapsule(
             cursorBrush = SolidColor(colors.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onConfirm() }),
-            modifier = Modifier.widthIn(min = 120.dp).weight(1f, fill = false),
+            modifier = Modifier
+                .widthIn(min = 120.dp)
+                .weight(1f, fill = false)
+                .focusRequester(focusRequester),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
