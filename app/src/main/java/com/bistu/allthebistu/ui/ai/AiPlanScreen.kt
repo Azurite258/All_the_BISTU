@@ -48,6 +48,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,9 +115,13 @@ fun AiPlanScreen(
     BackHandler(onBack = onBack)
 
     // ── 输入：一项一项加，加完是一条小胶囊 ──
-    var items by remember { mutableStateOf(listOf<String>()) }
-    var adding by remember { mutableStateOf(false) }
-    var draftText by remember { mutableStateOf("") }
+    // 用 rememberSaveable：Activity 被重建（旋转、切深色、系统回收）时，
+    // 用户已经敲进去的几项不该跟着没
+    var items by rememberSaveable(
+        stateSaver = listSaver(save = { it }, restore = { it })
+    ) { mutableStateOf(listOf<String>()) }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var draftText by rememberSaveable { mutableStateOf("") }
 
     val now = remember { System.currentTimeMillis() }
     val nowMinutes = remember(now) {
@@ -124,12 +131,14 @@ fun AiPlanScreen(
     val autoStart = remember(now) { ceilToQuarter(now + 5 * 60_000L) }
 
     // ── 时长：今天内只有一个「自选时段」，不再有固定几小时的预设 ──
-    var duration by remember { mutableStateOf<Duration>(Duration.defaultRange(now, autoStart)) }
-    var rangeDialog by remember { mutableStateOf(false) }
-    var daysDialog by remember { mutableStateOf(false) }
+    var duration by rememberSaveable(
+        stateSaver = DurationSaver
+    ) { mutableStateOf<Duration>(Duration.defaultRange(now, autoStart)) }
+    var rangeDialog by rememberSaveable { mutableStateOf(false) }
+    var daysDialog by rememberSaveable { mutableStateOf(false) }
 
     // ── 个人情况：长期偏好，跨次保留 ──
-    var note by remember { mutableStateOf(studyNote) }
+    var note by rememberSaveable { mutableStateOf(studyNote) }
     // 每敲一个字就写一次 DataStore 太浪费，停下来 600ms 再落盘
     LaunchedEffect(note) {
         if (note.trim() != studyNote.trim()) {
@@ -714,6 +723,33 @@ private sealed interface Duration {
         }
     }
 }
+
+/**
+ * [Duration] 的存档方式：`"R:555:615"`（今天 09:15–10:15）/ `"D:3"`（跨 3 天）。
+ *
+ * 为什么不用 Parcelable：这个 sealed interface 只有两个分支、四个 Int 字段，
+ * 编成一个短字符串最省事，也不用给 UI 层加 `@Parcelize` 依赖。
+ */
+private val DurationSaver: Saver<Duration, String> = Saver(
+    save = { d ->
+        when (d) {
+            is Duration.Range -> "R:${d.startMinutes}:${d.endMinutes}"
+            is Duration.Days -> "D:${d.days}"
+        }
+    },
+    restore = { raw ->
+        val parts = raw.split(":")
+        when (parts.getOrNull(0)) {
+            "R" -> Duration.Range(
+                parts.getOrNull(1)?.toIntOrNull() ?: 0,
+                parts.getOrNull(2)?.toIntOrNull() ?: 60
+            )
+
+            "D" -> Duration.Days(parts.getOrNull(1)?.toIntOrNull() ?: 3)
+            else -> null
+        }
+    }
+)
 
 private fun dateShort(millis: Long): String {
     val c = Calendar.getInstance().apply { timeInMillis = millis }

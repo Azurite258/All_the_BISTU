@@ -173,7 +173,9 @@ private fun AppRoot(
     // API Key 设置抽屉：AI 学习计划页和「我的」页两处入口共用一个
     var showApiKeySheet by remember { mutableStateOf(false) }
     // AI 学习计划二级页（学习页那张小卡片点进来）
-    var showAiPlan by remember { mutableStateOf(false) }
+    // 用 rememberSaveable：Activity 被重建（旋转、切深色、系统回收）时这一页不该自己退出去，
+    // 用户正在编辑的计划跟着一起没才最难受
+    var showAiPlan by rememberSaveable { mutableStateOf(false) }
     // 滑块去抖任务：拖动时每跨一档都会回调，不能每次都写库 + 重排闹钟
     var advanceJob by remember { mutableStateOf<Job?>(null) }
 
