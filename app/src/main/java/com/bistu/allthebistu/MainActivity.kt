@@ -47,6 +47,7 @@ import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
 import com.bistu.allthebistu.data.reminder.EventReminderScheduler
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import com.bistu.allthebistu.ui.LifeScreen
+import com.bistu.allthebistu.ui.ai.AiPlanScreen
 import com.bistu.allthebistu.ui.ai.ApiKeySheet
 import com.bistu.allthebistu.ui.event.EventEditorSheet
 import com.bistu.allthebistu.ui.profile.ProfileScreen
@@ -57,6 +58,7 @@ import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
 import com.bistu.allthebistu.ui.navigation.MainTab
 import com.bistu.allthebistu.ui.schedule.CourseActions
+import com.bistu.allthebistu.ui.schedule.DateUtils
 import com.bistu.allthebistu.ui.schedule.ScheduleScreen
 import com.bistu.allthebistu.ui.schedule.ScheduleViewModel
 import com.bistu.allthebistu.ui.theme.AppWallpaper
@@ -66,6 +68,7 @@ import com.bistu.allthebistu.ui.theme.Study1Theme
 import com.bistu.allthebistu.ui.theme.StyleGlow
 import com.bistu.allthebistu.ui.theme.opaqueSurface
 import com.bistu.allthebistu.ui.theme.WallpaperBackdrop
+import com.bistu.allthebistu.ui.schedule.TERM_START_DATE as TERM_START_OF_TERM
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -167,8 +170,10 @@ private fun AppRoot(
     val events by eventStore.events.collectAsState()
     var editorOpen by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<UserEvent?>(null) }
-    // API Key 设置抽屉：学习页 AI 卡片和「我的」页两处入口共用一个
+    // API Key 设置抽屉：AI 学习计划页和「我的」页两处入口共用一个
     var showApiKeySheet by remember { mutableStateOf(false) }
+    // AI 学习计划二级页（学习页那张小卡片点进来）
+    var showAiPlan by remember { mutableStateOf(false) }
     // 滑块去抖任务：拖动时每跨一档都会回调，不能每次都写库 + 重排闹钟
     var advanceJob by remember { mutableStateOf<Job?>(null) }
 
@@ -259,6 +264,10 @@ private fun AppRoot(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
+        // AI 计划二级页打开时**不渲染**底下这套：玻璃风格的页面背景是透明的
+        // （靠根部的 StyleGlow 铺色），留着底下那层就会两层糊在一起
+        if (!showAiPlan) {
+
         CompositionLocalProvider(LocalUiMetrics provides contentMetrics) {
             when (currentTab) {
                 MainTab.SCHEDULE -> ScheduleScreen(
@@ -293,9 +302,7 @@ private fun AppRoot(
                         editingEvent = event
                         editorOpen = true
                     },
-                    aiConfig = settings.aiConfig,
-                    onOpenAiSettings = { showApiKeySheet = true },
-                    onSavePlan = { drafts -> savePlan(drafts) }
+                    onOpenAiPlan = { showAiPlan = true }
                 )
 
                 MainTab.LIFE -> LifeScreen()
@@ -344,6 +351,33 @@ private fun AppRoot(
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.navigationBars)
         )
+
+        }
+
+        // AI 学习计划二级页：替代上面那一整套（含底栏），不是叠在上面
+        // 放在这里（而不是学 tab 内部）是因为学习页本身是可滚动的 Column，
+        // 在里面套一层全屏页还得处理滚动冲突和返回手势，不如在根层盖一页干净。
+        if (showAiPlan) {
+            val aiData = uiState.loadResult?.data
+            val aiWeek = remember(aiData) {
+                aiData?.let {
+                    DateUtils.displayWeek(
+                        termWeeks = it.termWeeks,
+                        termStartDate = TERM_START_OF_TERM,
+                        weekRange = it.displayWeekRange
+                    )
+                } ?: 1
+            }
+            AiPlanScreen(
+                courses = aiData?.courses.orEmpty(),
+                week = aiWeek,
+                todayDow = DateUtils.todayDayOfWeek(),
+                config = settings.aiConfig,
+                onOpenSettings = { showApiKeySheet = true },
+                onBack = { showAiPlan = false },
+                onSavePlan = { drafts -> savePlan(drafts) }
+            )
+        }
     }
 
     // ── 课程提醒设置 ──

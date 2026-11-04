@@ -1,11 +1,9 @@
 package com.bistu.allthebistu
 
 import com.bistu.allthebistu.data.Course
-import com.bistu.allthebistu.data.ai.PlanDraft
 import com.bistu.allthebistu.data.ai.StudyPlanner
 import com.bistu.allthebistu.data.event.EventTag
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,7 +13,7 @@ import java.util.Calendar
  * 学习计划的纯逻辑测试。
  *
  * 这一层不碰网络、不碰 Compose，所以能全离线跑。重点测**边界**：
- * 模型返回的 JSON 是外部输入，永远不能假设它规整。
+ * 模型返回的 JSON 是外部输入，永远不能假设它规整；时长切成段时也不能越界。
  */
 class StudyPlannerTest {
 
@@ -44,7 +42,7 @@ class StudyPlannerTest {
     fun `解析标准 JSON`() {
         val text = """
             {"items":[
-              {"day":0,"start":"19:00","end":"20:30","title":"复习高数","tag":"作业","note":""},
+              {"day":0,"start":"19:00","end":"20:30","title":"复习高数","tag":"作业","note":"先做例题"},
               {"day":1,"start":"09:00","end":"10:00","title":"写英语作文","tag":"考试","note":"注意字数"}
             ]}
         """.trimIndent()
@@ -63,7 +61,7 @@ class StudyPlannerTest {
     @Test
     fun `解析带 markdown 围栏和前后废话的回复`() {
         val text = """
-            好的，这是按你的课表排的计划：
+            好的，这是按你的时间排的计划：
             ```json
             {"items":[{"day":0,"start":"19:00","end":"20:00","title":"高数","tag":"作业"}]}
             ```
@@ -71,7 +69,6 @@ class StudyPlannerTest {
         """.trimIndent()
 
         val plan = StudyPlanner.parse(text, TODAY)
-
         assertEquals(1, plan.size)
         assertEquals("高数", plan[0].title)
     }
@@ -89,7 +86,6 @@ class StudyPlannerTest {
         """.trimIndent()
 
         val plan = StudyPlanner.parse(text, TODAY)
-
         assertEquals(1, plan.size)
         assertEquals("这条应该留下", plan[0].title)
     }
@@ -115,6 +111,38 @@ class StudyPlannerTest {
         assertEquals(expected, plan[0].startAt)
     }
 
+    // ── 提示词 ──
+
+    @Test
+    fun `短时提示词里带上了时间窗和内容`() {
+        val prompt = StudyPlanner.shortUserPrompt("高数、英语单词", START_1400, 180)
+        assertTrue(prompt.contains("高数、英语单词"))
+        assertTrue(prompt.contains("14:00"))
+        assertTrue(prompt.contains("17:00"))
+        assertTrue(prompt.contains("180 分钟"))
+    }
+
+    @Test
+    fun `多天提示词里带上了课表和跨度`() {
+        val courses = listOf(course("高等数学", dow = 3, begin = "08:00", end = "09:35"))
+        val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600)
+        val prompt = StudyPlanner.multiDayUserPrompt(
+            content = "线性代数 前三章",
+            days = 3,
+            courses = courses,
+            week = 8,
+            today = TODAY,
+            todayDow = 3,
+            slots = slots
+        )
+
+        assertTrue(prompt.contains("线性代数 前三章"))
+        assertTrue(prompt.contains("跨度 3 天"))
+        assertTrue(prompt.contains("高等数学"))
+        assertTrue(prompt.contains("不能占用"))
+        assertTrue(prompt.contains("可以安排的空闲时段"))
+    }
+
     // ── 空闲时段 ──
 
     @Test
@@ -124,7 +152,6 @@ class StudyPlannerTest {
             course("大学物理", dow = 3, begin = "13:30", end = "15:05")
         )
 
-        // 周三 10:00 起算，看今天还剩哪些整块空档
         val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600)
         val today = slots.filter { it.dayOffset == 0 }
 
@@ -132,7 +159,6 @@ class StudyPlannerTest {
         // 10:00 之后的课在 13:30 才开始，所以 10:30-13:30 这段应该是空的
         assertTrue(today.any { it.startMinutes == 630 && it.endMinutes == 810 })
 
-        // 任何一个空档都不能和上课区间重叠（08:00-09:35 / 13:30-15:05）
         val busy = listOf(480 to 575, 810 to 905)
         today.forEach { slot ->
             busy.forEach { (busyStart, busyEnd) ->
@@ -154,25 +180,23 @@ class StudyPlannerTest {
         )
         val today = slots.filter { it.dayOffset == 0 }
 
-        // 20:10 + 30 分钟，取整到 20:30；到 22:00 只剩 90 分钟，够一小时
         assertTrue(today.isNotEmpty())
         assertEquals(20 * 60 + 30, today.first().startMinutes)
-        assertEquals(22 * 60, today.first().endMinutes)
+        assertEquals(22 * 60 + 30, today.first().endMinutes)
     }
 
     @Test
     fun `不到一小时的空档不排`() {
-        // 课从 08:00 上到 21:30，只剩 21:30-22:00 这半小时
-        val courses = listOf(course("满课", dow = 1, begin = "08:00", end = "21:30"))
+        // 课从 08:00 上到 22:00，只剩半小时
+        val courses = listOf(course("满课", dow = 1, begin = "08:00", end = "22:00"))
         val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 1, nowMinutes = 0, horizonDays = 1)
         assertTrue(slots.isEmpty())
     }
 
     @Test
     fun `不是本教学周的课不占空档`() {
-        val courses = listOf(course("只在第 3 周", dow = 1, begin = "08:00", end = "21:30", weeks = setOf(3)))
+        val courses = listOf(course("只在第 3 周", dow = 1, begin = "08:00", end = "22:00", weeks = setOf(3)))
         val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 1, nowMinutes = 0, horizonDays = 1)
-        // 第 8 周没有这门课，周一一整天(08:00-22:00)都是空的
         assertEquals(1, slots.size)
         assertEquals(8 * 60, slots[0].startMinutes)
     }
@@ -180,43 +204,47 @@ class StudyPlannerTest {
     // ── 示例计划（没配 Key 时给用户看效果） ──
 
     @Test
-    fun `示例计划落在真实空档里且不超过四条`() {
-        val courses = listOf(course("高等数学", dow = 3, begin = "08:00", end = "09:35"))
-        val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600)
-        val plan = StudyPlanner.samplePlan(courses, slots, TODAY)
+    fun `短时示例不越界且切成多段`() {
+        val plan = StudyPlanner.sampleShortPlan("高数、英语单词、线代", START_1400, 180)
 
-        assertTrue(plan.isNotEmpty())
-        assertTrue(plan.size <= 4)
+        assertTrue(plan.size >= 2)
+        val end = START_1400 + 180 * 60_000L
         plan.forEach { draft ->
-            assertNotNull(draft.title)
+            assertTrue("起点越界: ${draft.title}", draft.startAt >= START_1400)
+            assertTrue("终点越界: ${draft.title}", draft.endAt <= end)
+            assertTrue(draft.durationMinutes >= 15)
             assertTrue(draft.title.isNotBlank())
-            assertTrue(draft.durationMinutes in 45..120)
-            assertTrue(draft.startAt >= TODAY)
         }
+        // 最后一段是回顾 —— 和提示词里对模型的要求一致
+        assertEquals(EventTag.EXAM, plan.last().tag)
+        assertTrue(plan.last().title.contains("回顾"))
     }
 
     @Test
-    fun `没有空档时示例计划为空`() {
-        assertTrue(StudyPlanner.samplePlan(emptyList(), emptyList(), TODAY).isEmpty())
+    fun `短时示例按内容拆出不同主题`() {
+        val plan = StudyPlanner.sampleShortPlan("高数、英语", START_1400, 300)
+        val titles = plan.joinToString { it.title }
+        assertTrue(titles.contains("高数"))
+        assertTrue(titles.contains("英语"))
     }
 
     @Test
-    fun `提示词里带上了周次课表和空档`() {
-        val courses = listOf(course("高等数学", dow = 3, begin = "08:00", end = "09:35"))
-        val slots = StudyPlanner.freeSlots(courses, week = 8, todayDow = 3, nowMinutes = 600)
-        val prompt = StudyPlanner.userPrompt(
-            courses = courses,
-            week = 8,
-            today = TODAY,
-            todayDow = 3,
-            slots = slots,
-            goal = "把作业写完"
-        )
+    fun `多天示例随天数裁剪复习节点`() {
+        val three = StudyPlanner.sampleMultiDayPlan("线代", days = 3, startMillis = TODAY)
+        // 3 天只有「当天学 + 次日复习」两个节点，第 4 天和第 7 天的节点应被裁掉
+        assertEquals(2, three.size)
 
-        assertTrue(prompt.contains("第 8 周"))
-        assertTrue(prompt.contains("高等数学"))
-        assertTrue(prompt.contains("周三"))
-        assertTrue(prompt.contains("可以安排的空闲时段"))
+        val seven = StudyPlanner.sampleMultiDayPlan("线代", days = 7, startMillis = TODAY)
+        assertEquals(4, seven.size)
+        assertTrue(seven.last().title.contains("回顾"))
+        assertTrue(seven.last().note.contains("第 4 遍"))
+    }
+
+    @Test
+    fun `空内容也能排出一条兜底计划`() {
+        val plan = StudyPlanner.sampleShortPlan("", START_1400, 120)
+        assertTrue(plan.isNotEmpty())
+        assertTrue(plan.all { it.title.isNotBlank() })
     }
 
     // ══════════════════════════════════════════════════════════
@@ -247,6 +275,12 @@ class StudyPlannerTest {
         /** 固定在 2026-11-04（周三）10:00，避免测试跟着运行时刻变 */
         private val TODAY: Long = Calendar.getInstance().apply {
             set(2026, Calendar.NOVEMBER, 4, 10, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        /** 同一天的 14:00，短时模式常用起点 */
+        private val START_1400: Long = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 4, 14, 0, 0)
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
