@@ -37,6 +37,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.prefs.AppFontScale
 import com.bistu.allthebistu.data.prefs.AppSettings
+import com.bistu.allthebistu.data.ai.PlanDraft
 import com.bistu.allthebistu.data.event.EventStore
 import com.bistu.allthebistu.data.event.UserEvent
 import com.bistu.allthebistu.data.prefs.SettingsStore
@@ -46,6 +47,7 @@ import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
 import com.bistu.allthebistu.data.reminder.EventReminderScheduler
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
 import com.bistu.allthebistu.ui.LifeScreen
+import com.bistu.allthebistu.ui.ai.ApiKeySheet
 import com.bistu.allthebistu.ui.event.EventEditorSheet
 import com.bistu.allthebistu.ui.profile.ProfileScreen
 import com.bistu.allthebistu.ui.reminder.ReminderSettingsSheet
@@ -165,6 +167,8 @@ private fun AppRoot(
     val events by eventStore.events.collectAsState()
     var editorOpen by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<UserEvent?>(null) }
+    // API Key 设置抽屉：学习页 AI 卡片和「我的」页两处入口共用一个
+    var showApiKeySheet by remember { mutableStateOf(false) }
     // 滑块去抖任务：拖动时每跨一档都会回调，不能每次都写库 + 重排闹钟
     var advanceJob by remember { mutableStateOf<Job?>(null) }
 
@@ -172,6 +176,32 @@ private fun AppRoot(
     fun openLogin() {
         viewModel.dismissLoginPrompt()
         context.startActivity(Intent(context, NativeLoginActivity::class.java))
+    }
+
+    /**
+     * 把 AI 生成、用户勾中的计划写进日程。
+     *
+     * 一条条 save 而不是批量写入：EventStore.save 内部有 Mutex + 原子落盘，
+     * 单条写入失败不会连带其他几条 —— 生成 6 条坏 1 条时，用户还能拿到 5 条。
+     */
+    fun savePlan(drafts: List<PlanDraft>) {
+        if (drafts.isEmpty()) return
+        scope.launch {
+            drafts.forEach { draft ->
+                eventStore.save(
+                    UserEvent(
+                        title = draft.title,
+                        startAt = draft.startAt,
+                        endAt = draft.endAt,
+                        tag = draft.tag,
+                        note = draft.note
+                    )
+                )
+            }
+            // 新日程要立刻排进提醒窗口，否则得等下次冷启动才生效
+            EventReminderScheduler.rescheduleAsync(context)
+            toast(context, "已加入 ${drafts.size} 条日程")
+        }
     }
 
     // AuthHolder.isLoggedIn 是 Compose 状态：从登录页返回后这里能立刻观察到变化
@@ -262,7 +292,10 @@ private fun AppRoot(
                     onEventClick = { event ->
                         editingEvent = event
                         editorOpen = true
-                    }
+                    },
+                    aiConfig = settings.aiConfig,
+                    onOpenAiSettings = { showApiKeySheet = true },
+                    onSavePlan = { drafts -> savePlan(drafts) }
                 )
 
                 MainTab.LIFE -> LifeScreen()
@@ -278,7 +311,8 @@ private fun AppRoot(
                         scope.launch { settingsStore.setWallpaperScrim(v) }
                     },
                     onLogin = { openLogin() },
-                    onLogout = { viewModel.logout() }
+                    onLogout = { viewModel.logout() },
+                    onOpenAiSettings = { showApiKeySheet = true }
                 )
             }
         }
@@ -366,6 +400,22 @@ private fun AppRoot(
                         toast(context, "已清掉日历里的 $cleared 条课程")
                     }
                 }
+            }
+        )
+    }
+
+    // ── API Key 设置 ──
+    // 学习页 AI 卡片的「去设置」和「我的 → API Key 设置」都落到这里
+    if (showApiKeySheet) {
+        ApiKeySheet(
+            initial = settings.aiConfig,
+            onDismiss = { showApiKeySheet = false },
+            onSave = { apiKey, baseUrl, model ->
+                scope.launch {
+                    settingsStore.setAiConfig(apiKey, baseUrl, model)
+                    toast(context, if (apiKey.isBlank()) "已清除密钥" else "已保存，可以去生成学习计划了")
+                }
+                showApiKeySheet = false
             }
         )
     }

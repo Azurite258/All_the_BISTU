@@ -113,6 +113,8 @@ fun ProfileScreen(
     onWallpaperScrimChange: (Int) -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
+    /** 打开 API Key 设置抽屉（学习页那张 AI 卡片的「去设置」也走这里） */
+    onOpenAiSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -217,11 +219,13 @@ fun ProfileScreen(
                 onClick = { showAbout = true }
             )
             Divider(tight = true)
+            // 以前这里是一行灰掉的「AI 学习助手 · 后续开放」，点了没反应。
+            // 现在 AI 学习计划已经能用了，这一行改成**密钥入口**：
+            // 开启状态（文字用 onSurface，浅色下就是黑色）+ 右侧显示配没配。
             ActionRow(
-                title = "AI 学习助手",
-                trailing = "后续开放",
-                enabled = false,
-                onClick = {}
+                title = "API Key 设置",
+                trailing = if (settings.hasAiKey) "已配置" else "未配置",
+                onClick = onOpenAiSettings
             )
             Divider(tight = true)
             // 登录出问题时不用连电脑：日志一直在 filesDir/logs 里滚，

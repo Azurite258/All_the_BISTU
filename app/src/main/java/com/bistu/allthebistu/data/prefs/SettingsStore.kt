@@ -41,7 +41,18 @@ data class AppSettings(
      * 壁纸蒙层强度 0..100：越大越遮、字越清楚；0 = 完全露出照片。
      * 只在设了壁纸时有意义，值本身始终保存，换壁纸时不用重设。
      */
-    val wallpaperScrim: Int = WallpaperTone.DEFAULT
+    val wallpaperScrim: Int = WallpaperTone.DEFAULT,
+    /**
+     * 大模型密钥。**只存本机**，不进仓库、不进日志。
+     *
+     * 之所以不在 [AppSettings] 之外单独放一个加密存储：DataStore 存在应用私有目录，
+     * 未 root 的设备上其他应用读不到；为了它引一个 androidx.security 依赖不划算。
+     */
+    val aiApiKey: String = "",
+    /** 接口根地址（OpenAI 兼容），见 [com.bistu.allthebistu.data.ai.AiConfig] */
+    val aiBaseUrl: String = com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_BASE_URL,
+    /** 模型名 */
+    val aiModel: String = com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL
 ) {
     /**
      * 当前生效的课程配色。
@@ -54,6 +65,17 @@ data class AppSettings(
 
     /** 有没有设过昵称 */
     val hasNickname: Boolean get() = nickname.isNotBlank()
+
+    /** 有没有配过 AI 密钥 —— 学习页那张卡片的「未配置 / 已配置」就看这个 */
+    val hasAiKey: Boolean get() = aiApiKey.isNotBlank()
+
+    /** 当前这套 AI 配置打包成一个对象，省得三处调用各拼一次 */
+    val aiConfig: com.bistu.allthebistu.data.ai.AiConfig
+        get() = com.bistu.allthebistu.data.ai.AiConfig(
+            apiKey = aiApiKey,
+            baseUrl = aiBaseUrl,
+            model = aiModel
+        )
 }
 
 /**
@@ -137,6 +159,11 @@ class SettingsStore(private val context: Context) {
         /** 生活页「电费说明」弹窗是否已经看过（只弹一次） */
         val ELECTRIC_NOTICE_SHOWN = booleanPreferencesKey("electric_notice_shown")
         val WALLPAPER_SCRIM = intPreferencesKey("wallpaper_scrim")
+
+        /** 大模型密钥 / 接口地址 / 模型名 */
+        val AI_API_KEY = stringPreferencesKey("ai_api_key")
+        val AI_BASE_URL = stringPreferencesKey("ai_base_url")
+        val AI_MODEL = stringPreferencesKey("ai_model")
     }
 
     /** 读取设置流 */
@@ -154,7 +181,10 @@ class SettingsStore(private val context: Context) {
             calendarSyncEnabled = prefs[Keys.CALENDAR_SYNC] ?: false,
             wallpaperScrim = WallpaperTone.sanitize(
                 prefs[Keys.WALLPAPER_SCRIM] ?: WallpaperTone.DEFAULT
-            )
+            ),
+            aiApiKey = prefs[Keys.AI_API_KEY].orEmpty(),
+            aiBaseUrl = prefs[Keys.AI_BASE_URL] ?: com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_BASE_URL,
+            aiModel = prefs[Keys.AI_MODEL] ?: com.bistu.allthebistu.data.ai.AiConfig.DEFAULT_MODEL
         )
     }
 
@@ -243,6 +273,29 @@ class SettingsStore(private val context: Context) {
     /** 清掉昵称（「不设置昵称」用这个） */
     suspend fun clearNickname() {
         context.dataStore.edit { it.remove(Keys.NICKNAME) }
+    }
+
+    /**
+     * 保存 AI 配置。
+     *
+     * 地址和模型都走一遍收敛（[com.bistu.allthebistu.data.ai.AiConfig.sanitizeBaseUrl]）：
+     * 用户粘 `.../v1/chat/completions` 这种完整路径是常态，替他裁掉比报错友好。
+     * Key 传空等于「清除」，键会被移除，[AppSettings.hasAiKey] 立刻变 false。
+     */
+    suspend fun setAiConfig(apiKey: String, baseUrl: String, model: String) {
+        val key = apiKey.trim()
+        val url = com.bistu.allthebistu.data.ai.AiConfig.sanitizeBaseUrl(baseUrl)
+        val name = com.bistu.allthebistu.data.ai.AiConfig.sanitizeModel(model)
+        context.dataStore.edit {
+            if (key.isEmpty()) it.remove(Keys.AI_API_KEY) else it[Keys.AI_API_KEY] = key
+            it[Keys.AI_BASE_URL] = url
+            it[Keys.AI_MODEL] = name
+        }
+    }
+
+    /** 只清 Key，地址和模型保留（换供应商时先清掉旧的，不用重填地址） */
+    suspend fun clearAiKey() {
+        context.dataStore.edit { it.remove(Keys.AI_API_KEY) }
     }
 
     /**

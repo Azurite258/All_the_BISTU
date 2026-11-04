@@ -26,8 +26,11 @@ import androidx.compose.ui.unit.sp
 import com.bistu.allthebistu.data.Course
 import com.bistu.allthebistu.data.Source
 import com.bistu.allthebistu.data.StudyReport
+import com.bistu.allthebistu.data.ai.AiConfig
+import com.bistu.allthebistu.data.ai.PlanDraft
 import com.bistu.allthebistu.data.event.EventTag
 import com.bistu.allthebistu.data.event.UserEvent
+import com.bistu.allthebistu.ui.ai.StudyPlanCard
 import com.bistu.allthebistu.ui.event.EventTags
 import com.bistu.allthebistu.ui.schedule.CourseColors
 import com.bistu.allthebistu.ui.schedule.DateUtils
@@ -59,6 +62,12 @@ fun StudyScreen(
     events: List<UserEvent> = emptyList(),
     /** 点某条日程 → 打开编辑面板 */
     onEventClick: (UserEvent) -> Unit = {},
+    /** AI 配置（Key / 地址 / 模型），只用来判断「配没配」和显示打码后的 Key */
+    aiConfig: AiConfig = AiConfig(),
+    /** 点「去设置 API Key」→ 打开密钥抽屉 */
+    onOpenAiSettings: () -> Unit = {},
+    /** AI 生成的学习计划被勾选后 → 转成日程落库 */
+    onSavePlan: (List<PlanDraft>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val data = uiState.loadResult?.data
@@ -221,6 +230,19 @@ fun StudyScreen(
                         }
                     }
                 }
+
+                Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
+
+                // AI 学习计划：产出的条目会直接落进上面这条时间线，
+                // 所以卡片紧跟在「今日日程」之后，生成完低头就能看到结果
+                StudyPlanCard(
+                    courses = data.courses,
+                    week = week,
+                    todayDow = todayDow,
+                    config = aiConfig,
+                    onOpenSettings = onOpenAiSettings,
+                    onSave = onSavePlan
+                )
             }
         }
 
