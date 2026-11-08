@@ -72,6 +72,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
 
     private static final String PREF = "ai";
     private static final int REQ_AUDIO = 1011;
+    private static final int REQ_NOTI = 1012;
 
     /** 说完之后多久判这一段结束。默认约 1000ms，太短会把句子切碎。 */
     private static final long SILENCE_COMPLETE_MS = 6000;
@@ -114,6 +115,8 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     private int lastErrorCode = 0;
     /** 连续快速失败的次数，用来触发指数退避。 */
     private int fastFailures = 0;
+    /** 权限回调时用来区分「这次要录音」还是「要开始识别」。 */
+    private boolean pendingRecordStart = false;
 
     /**
      * 两次 startListening 之间的最小间隔。
@@ -147,6 +150,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
 
     private TextView status;
     private TextView preview;
+    private TextView recordChip;
     private LinearLayout transcriptBox;
     private ScrollView transcriptScroll;
     private LinearLayout cardBox;
@@ -243,6 +247,12 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         TextView mic = chipButton("录音自检");
         mic.setOnClickListener(v -> startMicCheck());
         chips.addView(mic, weight());
+
+        // 整节课录音：前台服务常驻，和识别引擎完全解耦。
+        // 引擎被小米封死之后，这块是所有替代方案（云 ASR / 本地模型）的地基。
+        recordChip = chipButton("整课录音");
+        recordChip.setOnClickListener(v -> toggleLectureRecord());
+        chips.addView(recordChip, weight());
         root.addView(chips);
 
         // ---- 第三行：一键导出，全宽，是给人按的那种 ----
@@ -396,6 +406,59 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         bg.setColor(Color.parseColor(active ? "#FFF0B8" : "#EDEBE6"));
         bg.setCornerRadius(dp(10));
         t.setBackground(bg);
+    }
+
+    // ---------------------------------------------------------------- 整节课录音
+
+    /** 录音服务的回调：前台时挂上，界面能看到电平和时长。 */
+    private final RecordService.Listener recordListener = new RecordService.Listener() {
+        @Override
+        public void onLevel(int peak, long seconds) {
+            ui.post(() -> status.setText(String.format(Locale.CHINA,
+                    "录音中 %02d:%02d · 电平 %d%s",
+                    seconds / 60, seconds % 60, peak, peak < 20 ? "（很安静）" : "")));
+        }
+
+        @Override
+        public void onFinished(String path, long seconds, long bytes, String error) {
+            ui.post(() -> {
+                styleChip(recordChip, false);
+                String size = String.format(Locale.CHINA, "%.1f MB", bytes / 1048576.0);
+                String msg = String.join("\n",
+                        "时长：" + (seconds / 60) + " 分 " + (seconds % 60) + " 秒",
+                        "音频：" + size + "（16k / 16bit / 单声道）",
+                        "文件：",
+                        path == null ? "未生成" : path,
+                        error == null ? "" : "\n错误：" + error);
+                status.setText("录音已结束");
+                showSimple("整课录音", msg.trim());
+            });
+        }
+    };
+
+    private void toggleLectureRecord() {
+        if (RecordService.running) {
+            startService(new Intent(this, RecordService.class).setAction(RecordService.ACTION_STOP));
+        } else {
+            startLectureRecord();
+        }
+    }
+
+    private void startLectureRecord() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            // 记住这次要的是「录音」而不是「开始识别」，回调里别搞混
+            pendingRecordStart = true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_AUDIO);
+            return;
+        }
+        // Android 13+ 前台服务的通知要显式申请，否则通知栏不显示（服务仍在跑）
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTI);
+        }
+        RecordService.listener = recordListener;
+        startService(new Intent(this, RecordService.class).setAction(RecordService.ACTION_START));
+        styleChip(recordChip, true);
+        toast("开始整节课录音，可以锁屏放着");
     }
 
     // ---------------------------------------------------------------- 录音自检
@@ -1448,9 +1511,18 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // 回到界面就把回调挂上；服务可能在后台已经跑了一会儿
+        RecordService.listener = recordListener;
+        if (recordChip != null) styleChip(recordChip, RecordService.running);
+    }
+
+    @Override
     protected void onPause() {
-        // 亮屏前台是这个 demo 的可靠边界；切走就停，否则会被系统掐得莫名其妙
         super.onPause();
+        // 界面不在了就松开回调，避免泄漏。录音服务本身继续跑，锁屏也不停。
+        RecordService.listener = null;
     }
 
     @Override
@@ -1464,7 +1536,12 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     public void onRequestPermissionsResult(int code, String[] perms, int[] grant) {
         super.onRequestPermissionsResult(code, perms, grant);
         if (code == REQ_AUDIO && grant.length > 0 && grant[0] == PackageManager.PERMISSION_GRANTED) {
-            startListening();
+            if (pendingRecordStart) {
+                pendingRecordStart = false;
+                startLectureRecord();
+            } else {
+                startListening();
+            }
         }
     }
 }

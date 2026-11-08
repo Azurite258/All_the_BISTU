@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 息屏后 CPU 别睡，否则识别会断流 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 整节课录音要常驻，必须前台服务 + 麦克风类型（Android 14+ 强制） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android 11 起要显式声明，才能看到系统里注册的识别服务 -->
     <queries>
@@ -35,5 +39,11 @@
         <activity
             android:name=".ProbeActivity"
             android:exported="false" />
+
+        <!-- 整节课录音：前台服务，麦克风类型 -->
+        <service
+            android:name=".RecordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>
