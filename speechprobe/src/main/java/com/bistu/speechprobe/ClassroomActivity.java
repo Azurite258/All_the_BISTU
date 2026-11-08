@@ -150,6 +150,10 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
 
     private TextView status;
     private TextView preview;
+    /** 连续同一个转写错误合并成一行用。 */
+    private TextView lastAsrErrRow;
+    private String lastAsrErrKey;
+    private int lastAsrErrCount;
     private TextView recordChip;
     private LinearLayout transcriptBox;
     private ScrollView transcriptScroll;
@@ -424,14 +428,58 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
             ui.post(() -> {
                 styleChip(recordChip, false);
                 String size = String.format(Locale.CHINA, "%.1f MB", bytes / 1048576.0);
+                String cost = String.format(Locale.CHINA, "¥%.2f", RecordService.audioMsTotal / 3600000.0 * 0.5);
                 String msg = String.join("\n",
                         "时长：" + (seconds / 60) + " 分 " + (seconds % 60) + " 秒",
                         "音频：" + size + "（16k / 16bit / 单声道）",
+                        "转写：成功 " + RecordService.segDone + " 段 · 失败 " + RecordService.segFail
+                                + " 段 · " + RecordService.charTotal + " 字 · 约 " + cost,
                         "文件：",
                         path == null ? "未生成" : path,
+                        RecordService.textPath == null ? "" : "转写稿：\n" + RecordService.textPath,
+                        RecordService.lastAsrError == null ? "" : "\n最后错误：" + RecordService.lastAsrError,
                         error == null ? "" : "\n错误：" + error);
                 status.setText("录音已结束");
                 showSimple("整课录音", msg.trim());
+            });
+        }
+
+        @Override
+        public void onTranscript(int segIndex, long startSec, String text, String err, long costMs) {
+            ui.post(() -> {
+                if (err != null) {
+                    // 同一个错误会连续出现（比如没填 Key 时每 12 秒报一次），
+                    // 合并成一行并累加次数，否则转写区会被几十条同样的字刷满。
+                    if (err.equals(lastAsrErrKey) && lastAsrErrRow != null) {
+                        lastAsrErrCount++;
+                        lastAsrErrRow.setText(String.format(Locale.CHINA,
+                                "%02d:%02d  〔连续失败 ×%d〕%s",
+                                startSec / 60, startSec % 60, lastAsrErrCount, err));
+                    } else {
+                        lastAsrErrKey = err;
+                        lastAsrErrCount = 1;
+                        lastAsrErrRow = appendRow(startSec, "〔转写失败〕" + err, true);
+                    }
+                    status.setText("转写失败 · " + err);
+                    return;
+                }
+                // 成功就把失败统计清掉，下一次失败重新计
+                lastAsrErrKey = null;
+                lastAsrErrRow = null;
+                lastAsrErrCount = 0;
+                appendTranscriptAt(startSec, text, false);
+                status.setText(String.format(Locale.CHINA,
+                        "转写中 · 第 %d 段 · %d 字 · 用时 %dms",
+                        segIndex, RecordService.charTotal, costMs));
+            });
+        }
+
+        @Override
+        public void onHit(TriggerEngine.Hit hit, String text) {
+            ui.post(() -> {
+                String tag = hit.target == null ? "无近期问题" : "已锁定问题";
+                appendTranscript("▲ 点名「" + hit.word + "」（" + tag + "）", true);
+                generate(text, hit.target);
             });
         }
     };
@@ -577,12 +625,14 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                         path.isEmpty() ? "" : "\nWAV 已存：\n" + path);
 
                 final int peakOut = peak;
+                final byte[] pcmOut = pcm.toByteArray();
                 ui.post(() -> {
                     status.setText("录音自检完成 · 峰值 " + peakOut);
                     new android.app.AlertDialog.Builder(this)
                             .setTitle("录音自检结果")
                             .setMessage(msg)
-                            .setPositiveButton("再测一次", (d, w) -> startMicCheck())
+                            .setPositiveButton("用 MiMo 转写这段", (d, w) -> tryMimoTranscribe(pcmOut))
+                            .setNeutralButton("再测一次", (d, w) -> startMicCheck())
                             .setNegativeButton("知道了", null)
                             .show();
                 });
@@ -597,8 +647,57 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         }).start();
     }
 
-    /** 标准 44 字节 WAV 头，方便直接把文件发给别人听。 */
-    private static void writeWavHeader(java.io.OutputStream out, int pcmLen, int rate) throws java.io.IOException {
+    /**
+     * 拿刚采到的 PCM 直接调 MiMo 云端识别。
+     *
+     * <p>为什么复用在「录音自检」里而不是单开一个按钮：一次操作同时验证两件事——
+     * 麦克风采到的是不是真实声音、云端识别能不能拿到文本。如果这里能出字，
+     * 说明「录音 + 上传 + 识别 + 返回」整条链路全通，后面只差把它接到实时上。
+     */
+    private void tryMimoTranscribe(byte[] pcm) {
+        String key = prefs().getString("mimoKey", "");
+        if (key.trim().isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("还没填 MiMo API Key")
+                    .setMessage("去「设置」里的「语音识别（小米 MiMo 云端）」填上。\n\n"
+                            + "Key 在 platform.xiaomimimo.com 注册后创建，形如 mimo_...\n"
+                            + "计费 ¥0.5/小时，一节课 45 分钟约 ¥0.38。")
+                    .setPositiveButton("去填", (d, w) -> showSettings())
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+
+        status.setText("正在上传到 MiMo 识别…");
+        new Thread(() -> {
+            MimoAsrClient client = new MimoAsrClient();
+            MimoAsrClient.Result r = client.transcribe(pcm,
+                    prefs().getString("mimoBase", MimoAsrClient.DEFAULT_BASE),
+                    key,
+                    prefs().getString("mimoModel", MimoAsrClient.DEFAULT_MODEL));
+
+            ui.post(() -> {
+                if (!r.ok) {
+                    status.setText("MiMo 识别失败");
+                    showSimple("MiMo 识别失败",
+                            "原因：" + r.error
+                                    + "\n\n音频 " + r.audioMs + "ms，耗时 " + r.costMs + "ms"
+                                    + "\n\n常见原因：Key 无效、余额为 0、网络到不了 api.xiaomimimo.com");
+                    return;
+                }
+                status.setText("MiMo 识别成功 · " + r.text.length() + " 字 · " + r.costMs + "ms");
+                appendTranscript(r.text, false);
+                showSimple("MiMo 识别成功",
+                        "文本：\n" + r.text
+                                + "\n\n音频 " + r.audioMs + "ms"
+                                + " · 耗时 " + r.costMs + "ms"
+                                + String.format(Locale.CHINA, " · 费用约 ¥%.4f",
+                                r.audioMs / 3600000.0 * 0.5));
+            });
+        }, "mimo-test").start();
+    }
+
+    /** 标准 44 字节 WAV 头，方便直接把文件发给别人听。 */    private static void writeWavHeader(java.io.OutputStream out, int pcmLen, int rate) throws java.io.IOException {
         int channels = 1, bits = 16;
         int byteRate = rate * channels * bits / 8;
         java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN);
@@ -710,6 +809,27 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                         == PackageManager.PERMISSION_GRANTED ? "已授权" : "未授权").append("\n");
         sb.append("AI 配置：").append(prefs().getString("apiKey", "").isEmpty() ? "未填 Key" : "已填 Key")
                 .append("  ·  模型 ").append(prefs().getString("model", "deepseek-chat")).append("\n");
+
+        sb.append("\n--- 语音识别（MiMo 云端）---\n");
+        String mimoKey = prefs().getString("mimoKey", "");
+        sb.append("MiMo Key：").append(mimoKey.trim().isEmpty() ? "未填（无法转写）"
+                : "已填（" + (mimoKey.length() > 8 ? mimoKey.substring(0, 6) + "…" + mimoKey.substring(mimoKey.length() - 4) : "***") + "）").append("\n");
+        sb.append("接口地址：").append(prefs().getString("mimoBase", MimoAsrClient.DEFAULT_BASE)).append("\n");
+        sb.append("模型：").append(prefs().getString("mimoModel", MimoAsrClient.DEFAULT_MODEL)).append("\n");
+        sb.append("分段长度：12 秒（单请求上限 10MB，12 秒只占约 0.5MB）\n");
+        sb.append("整课录音：成功 ").append(RecordService.segDone)
+                .append(" 段 · 失败 ").append(RecordService.segFail)
+                .append(" 段 · 积压丢弃 ").append(RecordService.droppedTotal)
+                .append(" 段 · 累计 ").append(RecordService.charTotal).append(" 字\n");
+        sb.append("累计音频：").append(RecordService.audioMsTotal / 1000).append(" 秒")
+                .append(String.format(Locale.CHINA, "（约 ¥%.2f）", RecordService.audioMsTotal / 3600000.0 * 0.5))
+                .append("\n");
+        if (RecordService.lastAsrError != null) {
+            sb.append("最近转写错误：").append(RecordService.lastAsrError).append("\n");
+        }
+        if (RecordService.textPath != null) {
+            sb.append("转写稿：").append(RecordService.textPath).append("\n");
+        }
 
         sb.append("\n--- 最近转写（").append(recent.size()).append(" 条）---\n");
         if (recent.isEmpty()) sb.append("（空）\n");
@@ -1120,8 +1240,19 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     }
 
     private void appendTranscript(String text, boolean hit) {
+        appendRow((SystemClock.elapsedRealtime() - sessionStart) / 1000, text, hit);
+    }
+
+    /**
+     * 整课录音的转写用这个：时间戳取「这段音频在录音里的起点」，
+     * 而不是「文字回来的时刻」。否则课后回看时，日志时间跟录音播放位置对不上。
+     */
+    private void appendTranscriptAt(long startSec, String text, boolean hit) {
+        appendRow(startSec, text, hit);
+    }
+
+    private TextView appendRow(long s, String text, boolean hit) {
         TextView t = new TextView(this);
-        long s = (SystemClock.elapsedRealtime() - sessionStart) / 1000;
         t.setText(String.format(Locale.CHINA, "%02d:%02d  %s", s / 60, s % 60, text));
         t.setTextSize(13);
         t.setLineSpacing(0, 1.4f);
@@ -1134,6 +1265,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         }
         transcriptBox.addView(t);
         transcriptScroll.post(() -> transcriptScroll.fullScroll(View.FOCUS_DOWN));
+        return t;
     }
 
     private void appendTranscript(String text) {
@@ -1426,6 +1558,15 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 "停顿判定：" + SILENCE_COMPLETE_MS + "ms（默认约 1000ms）",
                 "识别服务：" + (SpeechRecognizer.isRecognitionAvailable(this) ? "可用" : "不可用"),
                 "",
+                "--- MiMo 云端转写 ---",
+                "MiMo Key：" + (prefs().getString("mimoKey", "").trim().isEmpty() ? "未填（整课录音拿不到文字）" : "已填"),
+                "整课录音：成功 " + RecordService.segDone + " 段 · 失败 " + RecordService.segFail
+                        + " 段 · 积压丢弃 " + RecordService.droppedTotal + " 段",
+                "累计 " + RecordService.charTotal + " 字 · " + (RecordService.audioMsTotal / 1000) + " 秒"
+                        + String.format(Locale.CHINA, "（约 ¥%.2f）", RecordService.audioMsTotal / 3600000.0 * 0.5),
+                RecordService.lastAsrError == null ? "转写暂无报错"
+                        : "最近转写错误：" + RecordService.lastAsrError,
+                "",
                 "平均每段越接近 6 秒说明静音超时调对了；",
                 "空洞占比超过 15% 就该考虑换流式 ASR。");
 
@@ -1458,13 +1599,16 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     }
 
     private void showSettings() {
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(20), dp(12), dp(20), dp(4));
 
+        // ---- 接话用的对话模型 ----
         EditText base = field("接口地址", prefs().getString("baseUrl", "https://api.deepseek.com/v1"));
         EditText key = field("API Key", prefs().getString("apiKey", ""));
         EditText model = field("模型", prefs().getString("model", "deepseek-chat"));
+        box.addView(sectionTitle("接话（对话模型）"));
         box.addView(label("接口地址（OpenAI 兼容）"));
         box.addView(base);
         box.addView(label("API Key"));
@@ -1472,19 +1616,48 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         box.addView(label("模型"));
         box.addView(model);
 
+        // ---- MiMo 语音识别 ----
+        EditText mBase = field(MimoAsrClient.DEFAULT_BASE, prefs().getString("mimoBase", MimoAsrClient.DEFAULT_BASE));
+        EditText mKey = field("MiMo API Key（mimo_...）", prefs().getString("mimoKey", ""));
+        EditText mModel = field(MimoAsrClient.DEFAULT_MODEL, prefs().getString("mimoModel", MimoAsrClient.DEFAULT_MODEL));
+        box.addView(sectionTitle("语音识别（小米 MiMo 云端）"));
+        box.addView(label("接口地址"));
+        box.addView(mBase);
+        box.addView(label("MiMo API Key"));
+        box.addView(mKey);
+        box.addView(label("模型"));
+        box.addView(mModel);
+        box.addView(label("计费 ¥0.5/小时 · 一节课约 ¥0.38 · 密钥在 platform.xiaomimimo.com 申请"));
+
+        scroll.addView(box);
+
         new android.app.AlertDialog.Builder(this)
-                .setTitle("AI 设置")
-                .setView(box)
+                .setTitle("设置")
+                .setView(scroll)
                 .setPositiveButton("保存", (d, w) -> {
                     prefs().edit()
                             .putString("baseUrl", base.getText().toString().trim())
                             .putString("apiKey", key.getText().toString().trim())
                             .putString("model", model.getText().toString().trim())
+                            .putString("mimoBase", mBase.getText().toString().trim())
+                            .putString("mimoKey", mKey.getText().toString().trim())
+                            .putString("mimoModel", mModel.getText().toString().trim())
                             .apply();
                     toast("已保存");
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    /** 设置面板里的小节标题。 */
+    private TextView sectionTitle(String s) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(15);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(Color.parseColor("#1A1A1A"));
+        t.setPadding(0, dp(18), 0, dp(4));
+        return t;
     }
 
     private TextView label(String s) {
