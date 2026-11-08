@@ -117,6 +117,7 @@ fun ScheduleGrid(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
+    showHeader: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val base = LocalDensity.current
@@ -133,8 +134,69 @@ fun ScheduleGrid(
             fontLevel = fontLevel,
             paletteIndex = paletteIndex,
             onCourseClick = onCourseClick,
+            showHeader = showHeader,
             modifier = modifier
         )
+    }
+}
+
+/**
+ * 课表**固定表头**：左上角月份 + 七天（星期 + 日期）。
+ *
+ * 26.30 之前表头画在网格里、跟着课表一起滚，往下翻几屏就看不见星期了。
+ * 现在由 [ScheduleScreen] 把它提到滚动区域之外固定在卡片顶部，
+ * 网格用 `showHeader = false` 只画节次列和课块。
+ *
+ * 列宽必须和网格主体同一套算法（`总宽 - 时间列` ÷ 7），两边各自量自己的
+ * 容器宽，只要都在卡片这个约束下就严格对齐。
+ */
+@Composable
+fun ScheduleGridHeader(
+    data: ScheduleData,
+    weekNumber: Int,
+    todayDayOfWeek: Int = -1,
+    termStartDate: String? = null,
+    modifier: Modifier = Modifier
+) {
+    val base = LocalDensity.current
+    CompositionLocalProvider(
+        LocalDensity provides Density(density = base.density, fontScale = 1f)
+    ) {
+        BoxWithConstraints(modifier = modifier) {
+            val isBounded = constraints.maxWidth != androidx.compose.ui.unit.Constraints.Infinity
+            val totalWidth = if (isBounded) maxWidth else GridTotalWidth
+            val dayWidth = if (isBounded) {
+                ((totalWidth - TimeColumnWidth) / 7).coerceAtLeast(24.dp)
+            } else {
+                DayColumnWidth
+            }
+            val weekDates = remember(weekNumber, termStartDate, data.termWeeks) {
+                weekDatesOf(data, weekNumber, termStartDate)
+            }
+            GridHeaderRow(
+                totalWidth = totalWidth,
+                dayWidth = dayWidth,
+                weekDates = weekDates,
+                todayDayOfWeek = todayDayOfWeek
+            )
+        }
+    }
+}
+
+/** 本周 7 天日期：优先用教务系统的教学周，其次用学期起始日推算 */
+private fun weekDatesOf(
+    data: ScheduleData,
+    weekNumber: Int,
+    termStartDate: String?
+): List<String>? {
+    val tw = data.termWeekOf(weekNumber)
+    return if (tw != null) {
+        // 教学周只给了起止日期，按周一~周日展开 7 天
+        runCatching { DateUtils.weekDates(tw.startDate, 1) }.getOrNull()
+    } else if (termStartDate.isNullOrBlank()) {
+        null
+    } else {
+        runCatching { DateUtils.weekDates(termStartDate, weekNumber) }.getOrNull()
     }
 }
 
@@ -149,6 +211,7 @@ private fun ScheduleGridBody(
     fontLevel: Int = FontLevel.MEDIUM,
     paletteIndex: Map<String, Int> = emptyMap(),
     onCourseClick: ((Course) -> Unit)? = null,
+    showHeader: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     // 表格的骨架色跟随界面风格，不再写死灰阶：
@@ -180,15 +243,7 @@ private fun ScheduleGridBody(
 
     // 本周 7 天日期：优先用教务系统的教学周，其次用学期起始日推算
     val weekDates = remember(weekNumber, termStartDate, data.termWeeks) {
-        val tw = data.termWeekOf(weekNumber)
-        if (tw != null) {
-            // 教学周只给了起止日期，按周一~周日展开 7 天
-            runCatching { DateUtils.weekDates(tw.startDate, 1) }.getOrNull()
-        } else if (termStartDate.isNullOrBlank()) {
-            null
-        } else {
-            runCatching { DateUtils.weekDates(termStartDate, weekNumber) }.getOrNull()
-        }
+        weekDatesOf(data, weekNumber, termStartDate)
     }
 
     // 自适应宽度：父容器有确定宽度时按比例分配，否则用固定宽度
@@ -217,73 +272,15 @@ private fun ScheduleGridBody(
 
         Column(modifier = Modifier.width(totalWidth)) {
             // ══════ 表头：月份 + 星期 + 日期 ══════
-            Row(modifier = Modifier.width(totalWidth)) {
-                // 左上角：显示月份（无边框无背景）
-                Box(
-                    modifier = Modifier
-                        .size(width = TimeColumnWidth, height = HeaderHeight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
-                    if (monthLabel != null) {
-                        // 「10」与「月」同属一个 Column，靠 horizontalAlignment 居中对齐，
-                        // 两者的中轴天然重合。**横向偏移必须加在 Column 上、或者干脆不加**——
-                        // 只给「10」加 offset 会把「月」甩到左边去（0.19-g 就是这个毛病）。
-                        // 这里横向不偏移，让它和下方节次数字（1 / 2 / 08:00）落在同一条竖轴上。
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.offset(y = 4.dp)
-                        ) {
-                            Text(
-                                text = monthLabel,
-                                fontSize = HeaderMonthSize,
-                                lineHeight = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = timeTextColor
-                            )
-                            Text(
-                                text = "月",
-                                fontSize = 9.sp,
-                                lineHeight = 10.sp,
-                                color = timeTextColor,
-                                modifier = Modifier.offset(y = (-1).dp)
-                            )
-                        }
-                    }
-                }
-
-                // 7 天：星期 + 日期（今天只加黑，不改变背景）
-                DayLabels.forEachIndexed { index, label ->
-                    val dayNum = index + 1
-                    val isToday = dayNum == todayDayOfWeek
-                    val dateText = weekDates?.getOrNull(index)?.let { DateUtils.dayOfMonth(it) }
-
-                    Column(
-                        modifier = Modifier
-                            .size(width = dayWidth, height = HeaderHeight)
-                            // 星期这一整排也往下挪 2dp，和「10 月」一起离开卡片上沿
-                            .offset(y = 2.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = HeaderWeekdaySize,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isToday) MaterialTheme.colorScheme.onSurface
-                            else timeTextColor
-                        )
-                        if (dateText != null) {
-                            Text(
-                                text = dateText,
-                                fontSize = HeaderDateSize,
-                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isToday) MaterialTheme.colorScheme.onSurface
-                                else timeTextColor
-                            )
-                        }
-                    }
-                }
+            // 26.30：表头提到滚动区域外固定显示时由 ScheduleGridHeader 画，
+            // 网格自身只在 showHeader=true（旧布局）时画
+            if (showHeader) {
+                GridHeaderRow(
+                    totalWidth = totalWidth,
+                    dayWidth = dayWidth,
+                    weekDates = weekDates,
+                    todayDayOfWeek = todayDayOfWeek
+                )
             }
 
             // ══════ 主体 ══════
@@ -372,6 +369,90 @@ private fun ScheduleGridBody(
             // 现在整张表比卡片高、靠滚动看晚课，滑到底时给最后一行留一点余量，
             // 免得第 14 节正好贴在卡片下沿上
             Spacer(Modifier.height(PeriodRowHeight * 0.35f))
+        }
+    }
+}
+
+/**
+ * 表头行：左上角月份 + 七天（星期 + 日期）。
+ *
+ * 被 [ScheduleGridHeader]（固定在卡片顶部）和 [ScheduleGridBody]
+ * （showHeader = true 的旧布局）共用，两边传的列宽必须同源。
+ */
+@Composable
+private fun GridHeaderRow(
+    totalWidth: Dp,
+    dayWidth: Dp,
+    weekDates: List<String>?,
+    todayDayOfWeek: Int
+) {
+    val timeTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(modifier = Modifier.width(totalWidth)) {
+        // 左上角：显示月份（无边框无背景）
+        Box(
+            modifier = Modifier
+                .size(width = TimeColumnWidth, height = HeaderHeight),
+            contentAlignment = Alignment.Center
+        ) {
+            val monthLabel = weekDates?.firstOrNull()?.let { DateUtils.monthOf(it) }
+            if (monthLabel != null) {
+                // 「10」与「月」同属一个 Column，靠 horizontalAlignment 居中对齐，
+                // 两者的中轴天然重合。**横向偏移必须加在 Column 上、或者干脆不加**——
+                // 只给「10」加 offset 会把「月」甩到左边去（0.19-g 就是这个毛病）。
+                // 这里横向不偏移，让它和下方节次数字（1 / 2 / 08:00）落在同一条竖轴上。
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.offset(y = 4.dp)
+                ) {
+                    Text(
+                        text = monthLabel,
+                        fontSize = HeaderMonthSize,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = timeTextColor
+                    )
+                    Text(
+                        text = "月",
+                        fontSize = 9.sp,
+                        lineHeight = 10.sp,
+                        color = timeTextColor,
+                        modifier = Modifier.offset(y = (-1).dp)
+                    )
+                }
+            }
+        }
+
+        // 7 天：星期 + 日期（今天只加黑，不改变背景）
+        DayLabels.forEachIndexed { index, label ->
+            val dayNum = index + 1
+            val isToday = dayNum == todayDayOfWeek
+            val dateText = weekDates?.getOrNull(index)?.let { DateUtils.dayOfMonth(it) }
+
+            Column(
+                modifier = Modifier
+                    .size(width = dayWidth, height = HeaderHeight)
+                    // 星期这一整排也往下挪 2dp，和「10 月」一起离开卡片上沿
+                    .offset(y = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = HeaderWeekdaySize,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isToday) MaterialTheme.colorScheme.onSurface
+                    else timeTextColor
+                )
+                if (dateText != null) {
+                    Text(
+                        text = dateText,
+                        fontSize = HeaderDateSize,
+                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isToday) MaterialTheme.colorScheme.onSurface
+                        else timeTextColor
+                    )
+                }
+            }
         }
     }
 }

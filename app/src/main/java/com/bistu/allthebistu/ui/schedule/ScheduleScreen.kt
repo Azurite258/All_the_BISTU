@@ -297,6 +297,14 @@ private fun ScheduleContent(
                     courseCount = data.coursesInWeek(currentWeek).count { it.isArranged },
                     termStartDate = TERM_START_DATE,
                     termWeek = data.termWeekOf(currentWeek),
+                    // 今天实际所在的教学周（displayWeek 与 currentWeek 初值同一算法）
+                    isCurrentWeek = currentWeek == remember(data) {
+                        DateUtils.displayWeek(
+                            termWeeks = data.termWeeks,
+                            termStartDate = TERM_START_DATE,
+                            weekRange = weekRange
+                        )
+                    },
                     onWeekChange = { currentWeek = it }
                 )
 
@@ -373,26 +381,37 @@ private fun ScheduleContent(
                             )
                         }
                     } else {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            // 边界不回弹，避免误以为还能继续滑
-                            overscrollEffect = null
-                        ) { page ->
-                            val weekNumber = weeks.getOrNull(page) ?: return@HorizontalPager
-                            Box(modifier = Modifier.verticalScroll(vScroll)) {
-                                ScheduleGrid(
-                                    data = data,
-                                    weekNumber = weekNumber,
-                                    todayDayOfWeek = DateUtils.todayDayOfWeek(),
-                                    colorScheme = settings.colorScheme,
-                                    isDark = isDark,
-                                    termStartDate = TERM_START_DATE,
-                                    fontLevel = settings.fontLevel,
-                                    paletteIndex = paletteIndex,
-                                    onCourseClick = { selectedCourse = it }
-                                    // 高度不再往下传：表格固定画满 14 节，超出的靠滚动
-                                )
+                        // 表头（月份 + 星期 + 日期）固定在卡片顶部，不随课表滚动——
+                        // 往下翻到第 10 节也能看见「周三是几号」（26.30 用户要求）
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            ScheduleGridHeader(
+                                data = data,
+                                weekNumber = currentWeek,
+                                todayDayOfWeek = DateUtils.todayDayOfWeek(),
+                                termStartDate = TERM_START_DATE
+                            )
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize(),
+                                // 边界不回弹，避免误以为还能继续滑
+                                overscrollEffect = null
+                            ) { page ->
+                                val weekNumber = weeks.getOrNull(page) ?: return@HorizontalPager
+                                Box(modifier = Modifier.verticalScroll(vScroll)) {
+                                    ScheduleGrid(
+                                        data = data,
+                                        weekNumber = weekNumber,
+                                        todayDayOfWeek = DateUtils.todayDayOfWeek(),
+                                        colorScheme = settings.colorScheme,
+                                        isDark = isDark,
+                                        termStartDate = TERM_START_DATE,
+                                        fontLevel = settings.fontLevel,
+                                        paletteIndex = paletteIndex,
+                                        onCourseClick = { selectedCourse = it },
+                                        showHeader = false
+                                        // 高度不再往下传：表格固定画满 14 节，超出的靠滚动
+                                    )
+                                }
                             }
                         }
                     }
@@ -565,6 +584,7 @@ private fun WeekSelector(
     courseCount: Int,
     termStartDate: String?,
     termWeek: TermWeek? = null,
+    isCurrentWeek: Boolean = true,
     onWeekChange: (Int) -> Unit
 ) {
     // 日期显示优先级：教务系统给的教学周 > 用学期起始日推算
@@ -658,6 +678,15 @@ private fun WeekSelector(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                // 翻到别的周时提醒一句，不然忘了切回来会把今天误看成那一周的
+                if (!isCurrentWeek) {
+                    Text(
+                        text = "（非本周）",
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 1.dp, bottom = 1.dp)
+                    )
+                }
                 Text(
                     text = " · $courseCount 节课",
                     fontSize = 14.sp,
