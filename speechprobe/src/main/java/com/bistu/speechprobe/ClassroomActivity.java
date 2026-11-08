@@ -98,13 +98,27 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
      */
     private final java.util.Map<String, String> answerCache = new java.util.HashMap<>();
 
-    /** 指定的识别引擎；null 表示用系统默认。 */
+    /** 当前使用的识别引擎；null 表示用系统默认。 */
     private ComponentName engineComponent;
+    /** 所有候选引擎，按优先级排好。失败时轮换，而不是退回一个可能为空不存在的「默认」。 */
+    private final List<ComponentName> candidates = new ArrayList<>();
+    private int candidateIndex = 0;
+
     /**
-     * 用指定引擎连续起不来的次数。到 2 次就把 engineComponent 清空退回系统默认，
-     * 否则一个坏引擎会让整节课都在「销毁—重建—再失败」里打转。
+     * 最近一次错误码。没有它就没法判断是「引擎不认中文」「没权限」还是「服务压根起不来」，
+     * 只能瞎猜。
      */
-    private int engineFailures = 0;
+    private int lastErrorCode = 0;
+    /** 连续快速失败的次数，用来触发指数退避。 */
+    private int fastFailures = 0;
+
+    /**
+     * 两次 startListening 之间的最小间隔。
+     *
+     * <p>之前出过大事：某个引擎起手就失败，而「无匹配」那条分支用的是零延迟重启，
+     * 于是 12 秒里重启了 1022 次，字一个没收到，电倒是烧了。这个下限就是防那个的。
+     */
+    private static final long MIN_RESTART_MS = 260;
     /** 暗屏模式：屏幕压到接近全黑，只在触发出卡时短暂提亮。省电，也防老师路过看见。 */
     private boolean dimMode = false;
     /** 暗屏模式下，卡片亮多久再变暗。 */
@@ -145,14 +159,16 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         buildUi();
-        String saved = prefs().getString("engine", "");
+        // 候选列表每次都建：它同时是「失败轮换」的备选池和报告里的诊断依据，
+        // 只在首次运行时建会让下次启动显示「0 个候选」。
+        buildCandidates();
         if (prefs().getBoolean("engineSet", false)) {
             // 用户手动选过（包括显式选「系统默认」），尊重他的选择
+            String saved = prefs().getString("engine", "");
             ComponentName cn = ComponentName.unflattenFromString(saved);
-            if (cn != null) engineComponent = cn;
-        } else {
-            // 第一次跑：自动挑一个能用的。小米真机上「系统默认」是空的，不能指望它。
-            autoPickEngine();
+            engineComponent = cn; // null 表示显式跟随系统默认
+            int idx = cn == null ? -1 : candidates.indexOf(cn);
+            if (idx >= 0) candidateIndex = idx;
         }
         status.setText("未开始 · 当前引擎：" + engineName() + " · 亮屏前台运行");
         ui.post(tick);
@@ -428,6 +444,11 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         sb.append("系统默认引擎：").append(def == null ? "未设置" : def).append("\n");
         sb.append("本应用指定：").append(engineComponent == null ? "跟随系统默认" : engineComponent.flattenToString())
                 .append("（").append(engineName()).append("）\n");
+        sb.append("候选引擎：").append(candidates.size()).append(" 个（当前第 ")
+                .append(candidates.isEmpty() ? 0 : candidateIndex + 1).append(" 个）\n");
+        sb.append("最近错误：").append(lastErrorCode == 0 ? "无"
+                : errorName(lastErrorCode) + "(" + lastErrorCode + ")").append("\n");
+        sb.append("连续快速失败：").append(fastFailures).append(" 次\n");
 
         List<ResolveInfo> list = getPackageManager().queryIntentServices(
                 new Intent("android.speech.RecognitionService"), 0);
@@ -637,16 +658,26 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         return i;
     }
 
-    /** 优化点 3：重启零延迟。撞上 BUSY 才退避，别把 350ms 白扔在每次重启上。 */
+    /**
+     * 重启识别会话。
+     *
+     * <p>做过两次修正：一是加了 {@link #MIN_RESTART_MS} 下限，防止「失败—立刻重试—再失败」
+     * 变成每十几毫秒一次的死循环（真机上一度 12 秒重启 1022 次）；二是把重置滚动状态
+     * 放在这里，保证每次新会话都从干净状态开始。
+     */
     private void restart(long delay) {
         if (!running) return;
         waitingResult = false;
         rolling = "";
         checkedUpTo = 0;
-        if (delay <= 0) {
+
+        long since = SystemClock.elapsedRealtime() - lastStartAt;
+        long wait = Math.max(delay, MIN_RESTART_MS - since);
+        if (wait < 0) wait = 0;
+        if (wait == 0) {
             ui.post(this::startSession);
         } else {
-            ui.postDelayed(this::startSession, delay);
+            ui.postDelayed(this::startSession, wait);
         }
     }
 
@@ -708,6 +739,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
             }
         }
         restarts++;
+        fastFailures = 0;   // 收到结果说明引擎是活的，退避清零
         restart(0); // 优化点 3：立刻接上，不等
     }
 
@@ -716,40 +748,60 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         waitingResult = false;
         errors++;
         consecutiveErrors++;
+        lastErrorCode = error;
 
-        // 引擎卡死的几种：客户端错、服务端错、连续没结果。累计够多次就重建实例。
+        // 「启动后 400ms 内就报错」才算异常快速失败；正常听完一段（几秒）不算。
+        // 中间地带不动，避免把正常的静音超时也当成故障。
+        long since = SystemClock.elapsedRealtime() - lastStartAt;
+        if (since < 400) fastFailures++;
+        else if (since > 1500) fastFailures = 0;
+
+        long backoff = RETRY_BACKOFF_MS;
+        if (fastFailures >= 8) backoff = 8000;
+        else if (fastFailures >= 4) backoff = 3000;
+
+        // 这些错误代表「这个引擎没法用」：客户端错、服务端错、缺权限、不支持中文
         boolean dead = error == SpeechRecognizer.ERROR_CLIENT
                 || error == SpeechRecognizer.ERROR_SERVER
+                || error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+                || error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+                || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE
+                || error == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS
                 || consecutiveErrors >= WATCHDOG_ERRORS;
         if (dead) {
-            destroyRecognizer();
             consecutiveErrors = 0;
-            // 指定了引擎却连续起不来，就退回系统默认。别让一个坏引擎把整节课耗在重试上。
-            if (engineComponent != null) {
-                engineFailures++;
-                if (engineFailures >= 2) {
-                    engineComponent = null;
-                    engineFailures = 0;
-                    toast("指定的引擎起不来，已退回系统默认");
-                }
+            if (candidates.size() > 1) {
+                rotateCandidate(); // 内部会 destroy 并换下一个
+            } else if (error == SpeechRecognizer.ERROR_CLIENT
+                    || error == SpeechRecognizer.ERROR_SERVER
+                    || error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                // 这几类错误会让 SpeechRecognizer 对象彻底失效，必须重建，不能复用
+                destroyRecognizer();
             }
             restarts++;
-            restart(RETRY_BACKOFF_MS);
+            restart(backoff);
             return;
         }
 
-        // 7 = NO_MATCH（没人说话），属于正常静音，立刻重开
+        // 6/7 = 没听到人说话或没匹配上，属正常静音。正常情况下立即重开；
+        // 但如果它是在紧密失败（400ms 内反复报），就跟着退避，别烧电。
         if (error == SpeechRecognizer.ERROR_NO_MATCH
                 || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
             consecutiveErrors = 0;
             restarts++;
-            restart(0);
+            restart(fastFailures >= 8 ? 8000 : 0);
             return;
         }
 
-        // 8 = RECOGNIZER_BUSY，上一个会话还没释放完，稍等
+        // 8 = RECOGNIZER_BUSY，上一个会话还没释放完
+        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+            restarts++;
+            restart(BUSY_BACKOFF_MS);
+            return;
+        }
+
         restarts++;
-        restart(BUSY_BACKOFF_MS);
+        restart(backoff);
     }
 
     @Override
@@ -955,13 +1007,13 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
      *   <li>其余随便取第一个。</li>
      * </ol>
      */
-    private void autoPickEngine() {
+    private void buildCandidates() {
+        candidates.clear();
         List<ResolveInfo> list = getPackageManager().queryIntentServices(
                 new Intent("android.speech.RecognitionService"), 0);
-        if (list.isEmpty()) return;
 
-        ComponentName best = null;
-        int bestRank = Integer.MAX_VALUE;
+        List<int[]> ranks = new ArrayList<>();
+        List<ComponentName> names = new ArrayList<>();
         for (ResolveInfo ri : list) {
             ServiceInfo si = ri.serviceInfo;
             if (si == null) continue;
@@ -971,12 +1023,62 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
             } else if ("com.google.android.as".equals(si.packageName)) {
                 rank = 1;
             }
-            if (rank < bestRank) {
-                bestRank = rank;
-                best = new ComponentName(si.packageName, si.name);
-            }
+            ranks.add(new int[]{rank});
+            names.add(new ComponentName(si.packageName, si.name));
         }
-        engineComponent = best;
+
+        // 按 rank 升序排（简单插入排序，候选通常只有 1~3 个）
+        for (int i = 1; i < names.size(); i++) {
+            int j = i - 1;
+            ComponentName cn = names.get(i);
+            int rk = ranks.get(i)[0];
+            while (j >= 0 && ranks.get(j)[0] > rk) {
+                names.set(j + 1, names.get(j));
+                ranks.set(j + 1, ranks.get(j));
+                j--;
+            }
+            names.set(j + 1, cn);
+            ranks.set(j + 1, new int[]{rk});
+        }
+
+        candidates.addAll(names);
+        candidateIndex = 0;
+        engineComponent = candidates.isEmpty() ? null : candidates.get(0);
+    }
+
+    /**
+     * 引擎连续失败时换下一个，而不是退回「系统默认」。
+     *
+     * <p>教训：小米机上「系统默认」是空的，退回默认等于退回一个必然失败的状态，
+     * 结果就是 12 秒重启 1022 次、一个字都收不到。没得换时就保留当前引擎，
+     * 靠 {@link #restart} 的退避和最小间隔撑着。
+     */
+    private void rotateCandidate() {
+        if (candidates.size() <= 1) return;
+        candidateIndex = (candidateIndex + 1) % candidates.size();
+        engineComponent = candidates.get(candidateIndex);
+        destroyRecognizer();
+        toast("引擎连续失败，换到 " + engineName());
+    }
+
+    /** 错误码转可读名字，报告里靠它定位问题。 */
+    private static String errorName(int e) {
+        switch (e) {
+            case 1: return "NETWORK_TIMEOUT";
+            case 2: return "NETWORK";
+            case 3: return "AUDIO";
+            case 4: return "SERVER";
+            case 5: return "CLIENT";
+            case 6: return "SPEECH_TIMEOUT";
+            case 7: return "NO_MATCH";
+            case 8: return "RECOGNIZER_BUSY";
+            case 9: return "INSUFFICIENT_PERMISSIONS";
+            case 10: return "TOO_MANY_REQUESTS";
+            case 11: return "SERVER_DISCONNECTED";
+            case 12: return "LANGUAGE_NOT_SUPPORTED";
+            case 13: return "LANGUAGE_UNAVAILABLE";
+            default: return "CODE_" + e;
+        }
     }
 
     /** 当前引擎的短名，状态行上显示。 */
@@ -1031,8 +1133,13 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 .setTitle("选识别引擎（共 " + (labels.size() - 1) + " 个）")
                 .setItems(labels.toArray(new String[0]), (d, which) -> {
                     engineComponent = comps.get(which);
-                    engineFailures = 0;
+                    fastFailures = 0;
                     destroyRecognizer();
+                    // 手动选的引擎也要同步到候选序列，否则失败轮换会跳回原来的
+                    if (engineComponent != null) {
+                        int idx = candidates.indexOf(engineComponent);
+                        if (idx >= 0) candidateIndex = idx;
+                    }
                     prefs().edit()
                             .putString("engine", engineComponent == null ? "" : engineComponent.flattenToString())
                             .putBoolean("engineSet", true)
@@ -1061,6 +1168,10 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                         holeMs / 1000.0, total == 0 ? 0 : holeMs * 100.0 / (total * 1000)),
                 "",
                 "当前引擎：" + (engineComponent == null ? "系统默认" : engineComponent.getPackageName()),
+                "候选引擎：" + candidates.size() + " 个（当前第 "
+                        + (candidates.isEmpty() ? 0 : candidateIndex + 1) + " 个）",
+                "最近错误：" + (lastErrorCode == 0 ? "无" : errorName(lastErrorCode) + "(" + lastErrorCode + ")"),
+                "紧密失败：" + fastFailures + " 次",
                 "当前冷却：" + (engine.currentCooldown() / 1000) + " 秒（连续触发会自动拉长）",
                 "答案缓存：" + answerCache.size() + " 条",
                 "屏幕模式：" + (dimMode ? "暗屏（出卡亮 " + (FLASH_MS / 1000) + " 秒）" : "常亮"),
