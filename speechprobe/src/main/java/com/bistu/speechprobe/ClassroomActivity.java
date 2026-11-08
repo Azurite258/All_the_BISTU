@@ -11,6 +11,9 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -234,6 +237,12 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         });
         styleChip(dim, false);
         chips.addView(dim, weight());
+
+        // 录音自检：绕开所有引擎，直接用 AudioRecord 采 5 秒，证明麦克风这条链路是通的。
+        // 引擎全挂了的时候，这是唯一能判断「是麦克风的问题还是引擎的问题」的手段。
+        TextView mic = chipButton("录音自检");
+        mic.setOnClickListener(v -> startMicCheck());
+        chips.addView(mic, weight());
         root.addView(chips);
 
         // ---- 第三行：一键导出，全宽，是给人按的那种 ----
@@ -389,6 +398,137 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
         t.setBackground(bg);
     }
 
+    // ---------------------------------------------------------------- 录音自检
+
+    /**
+     * 录音自检：不经过任何识别引擎，直接用 {@link AudioRecord} 采 5 秒，存成 WAV。
+     *
+     * <p>存在的意义：现在所有引擎都报错，必须先分清是「麦克风拿不到音频」还是
+     * 「引擎不工作」。这一步跟引擎完全无关，能给出确定答案。
+     *
+     * <p>顺便算出 RMS 和峰值 —— 如果峰值是 0，说明采到的全是静音（权限或路由问题）；
+     * 如果有波形但很小，说明离得远或系统降噪压过头了。
+     */
+    private void startMicCheck() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_AUDIO);
+            return;
+        }
+        status.setText("录音自检中… 对着手机说几句话（5 秒）");
+        toast("开始录音 5 秒，请说话");
+
+        new Thread(() -> {
+            final int rate = 16000;
+            final int seconds = 5;
+            int minBuf = AudioRecord.getMinBufferSize(rate,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            if (minBuf <= 0) minBuf = 3200;
+            AudioRecord ar = null;
+            try {
+                ar = new AudioRecord(MediaRecorder.AudioSource.MIC, rate,
+                        AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 4);
+                if (ar.getState() != AudioRecord.STATE_INITIALIZED) {
+                    final String msg = "麦克风初始化失败（可能被别的 App 占用，或 MIUI 权限没给）";
+                    ui.post(() -> { status.setText("录音自检失败"); showSimple("录音自检", msg); });
+                    ar.release();
+                    return;
+                }
+                java.io.ByteArrayOutputStream pcm = new java.io.ByteArrayOutputStream(rate * seconds * 2);
+                short[] chunk = new short[1600];
+                long sumSq = 0;
+                int samples = 0;
+                int peak = 0;
+                long end = SystemClock.elapsedRealtime() + seconds * 1000L;
+
+                ar.startRecording();
+                while (SystemClock.elapsedRealtime() < end) {
+                    int r = ar.read(chunk, 0, chunk.length);
+                    if (r <= 0) continue;
+                    for (int i = 0; i < r; i++) {
+                        int v = chunk[i];
+                        int a = Math.abs(v);
+                        if (a > peak) peak = a;
+                        sumSq += (long) v * v;
+                        pcm.write(v & 0xFF);
+                        pcm.write((v >> 8) & 0xFF);
+                    }
+                    samples += r;
+                }
+                ar.stop();
+                ar.release();
+
+                double rms = samples == 0 ? 0 : Math.sqrt((double) sumSq / samples);
+                double rmsDbfs = rms <= 0 ? -120 : 20 * Math.log10(rms / 32768.0);
+                double sec = samples / (double) rate;
+
+                String path = "";
+                try {
+                    java.io.File dir = getExternalFilesDir(null);
+                    if (dir != null) {
+                        java.io.File f = new java.io.File(dir, "miccheck.wav");
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+                        writeWavHeader(fos, pcm.size(), rate);
+                        pcm.writeTo(fos);
+                        fos.close();
+                        path = f.getAbsolutePath();
+                    }
+                } catch (Exception ignored) {
+                }
+
+                // 峰值判定加个下限：麦克风底噪也能到 8~20，不能算「有声音」
+                final String verdict = peak < 20
+                        ? "▶ 采到的基本是静音（峰值 " + peak + "）：麦克风没把声音送进来，可能是权限或占用问题"
+                        : (rmsDbfs < -55
+                        ? "▶ 有声音但很弱（" + String.format(Locale.CHINA, "%.0f", rmsDbfs) + " dBFS）：离得远，或被系统降噪压掉了"
+                        : (peak > 32000
+                        ? "▶ 音量过大接近削顶，建议把手机放远一点"
+                        : "▶ 音频正常，问题不在麦克风，在识别引擎"));
+
+                final String msg = String.join("\n",
+                        "采集时长：" + String.format(Locale.CHINA, "%.1f", sec) + " 秒",
+                        "采样：" + rate + " Hz · 16bit · 单声道",
+                        "样本数：" + samples,
+                        "峰值：" + peak + " / 32767",
+                        String.format(Locale.CHINA, "平均音量：%.2f dBFS", rmsDbfs),
+                        "",
+                        verdict,
+                        path.isEmpty() ? "" : "\nWAV 已存：\n" + path);
+
+                final int peakOut = peak;
+                ui.post(() -> {
+                    status.setText("录音自检完成 · 峰值 " + peakOut);
+                    showSimple("录音自检结果", msg);
+                });
+
+            } catch (Exception e) {
+                if (ar != null) {
+                    try { ar.release(); } catch (Exception ignored) {}
+                }
+                final String msg = e.getClass().getSimpleName() + "：" + e.getMessage();
+                ui.post(() -> { status.setText("录音自检失败"); showSimple("录音自检", msg); });
+            }
+        }).start();
+    }
+
+    /** 标准 44 字节 WAV 头，方便直接把文件发给别人听。 */
+    private static void writeWavHeader(java.io.OutputStream out, int pcmLen, int rate) throws java.io.IOException {
+        int channels = 1, bits = 16;
+        int byteRate = rate * channels * bits / 8;
+        java.nio.ByteBuffer h = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        h.put("RIFF".getBytes()); h.putInt(36 + pcmLen); h.put("WAVE".getBytes());
+        h.put("fmt ".getBytes()); h.putInt(16); h.putShort((short) 1); h.putShort((short) channels);
+        h.putInt(rate); h.putInt(byteRate); h.putShort((short) (channels * bits / 8)); h.putShort((short) bits);
+        h.put("data".getBytes()); h.putInt(pcmLen);
+        out.write(h.array());
+    }
+
+    private void showSimple(String title, String msg) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(title).setMessage(msg)
+                .setPositiveButton("知道了", null)
+                .show();
+    }
+
     // ---------------------------------------------------------------- 一键导出诊断
 
     /**
@@ -448,6 +588,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 .append(candidates.isEmpty() ? 0 : candidateIndex + 1).append(" 个）\n");
         sb.append("最近错误：").append(lastErrorCode == 0 ? "无"
                 : errorName(lastErrorCode) + "(" + lastErrorCode + ")").append("\n");
+        sb.append("引擎权限：").append(enginePermission()).append("\n");
         sb.append("连续快速失败：").append(fastFailures).append(" 次\n");
 
         List<ResolveInfo> list = getPackageManager().queryIntentServices(
@@ -1092,6 +1233,24 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
     }
 
     /**
+     * 当前引擎要求的权限 + 是否导出。
+     *
+     * <p>报 {@code INSUFFICIENT_PERMISSIONS} 时，光知道「缺权限」没用，得知道缺的是
+     * 哪一个：如果是 {@code signature} / {@code signatureOrSystem} 级别，普通应用永远
+     * 拿不到，这条路直接判死；如果只是普通权限，还有办法申请。
+     */
+    private String enginePermission() {
+        if (engineComponent == null) return "—（跟随系统默认）";
+        try {
+            ServiceInfo si = getPackageManager().getServiceInfo(engineComponent, 0);
+            String perm = si.permission == null ? "无（那就不该报权限错）" : si.permission;
+            return perm + "  ·  exported=" + si.exported;
+        } catch (Exception e) {
+            return "读取失败（服务可能未导出）";
+        }
+    }
+
+    /**
      * 识别引擎选择器。
      *
      * <p>这是回答「能不能用上小米自家模型」的唯一靠谱办法：把系统里真正注册了
@@ -1171,6 +1330,7 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 "候选引擎：" + candidates.size() + " 个（当前第 "
                         + (candidates.isEmpty() ? 0 : candidateIndex + 1) + " 个）",
                 "最近错误：" + (lastErrorCode == 0 ? "无" : errorName(lastErrorCode) + "(" + lastErrorCode + ")"),
+                "引擎权限：" + enginePermission(),
                 "紧密失败：" + fastFailures + " 次",
                 "当前冷却：" + (engine.currentCooldown() / 1000) + " 秒（连续触发会自动拉长）",
                 "答案缓存：" + answerCache.size() + " 条",
