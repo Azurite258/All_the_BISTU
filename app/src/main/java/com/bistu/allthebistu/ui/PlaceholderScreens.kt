@@ -556,7 +556,7 @@ private fun CardDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = LocalUiMetrics.current.pagePadding)
-                .styleCard(shape = RoundedCornerShape(LocalUiMetrics.current.innerRadius))
+                .styleCard(shape = RoundedCornerShape(LocalUiMetrics.current.cardRadius))
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

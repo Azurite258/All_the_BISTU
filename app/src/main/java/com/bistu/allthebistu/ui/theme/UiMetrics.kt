@@ -49,14 +49,19 @@ object DockPill {
  *
  * | 风格 | r-card | r-inner | r-course | pad | cardpad | gap | title | dock 高 |
  * |---|---|---|---|---|---|---|---|---|
- * | 原版 | 20 | 14 | 14 | 20 | 16 | 12 | 30 | 60 |
- * | HyperOS | 26 | 18 | 12 | 20 | 16 | 12 | 29 | 60 |
- * | Linear | 10 | 7 | 6 | 18 | 13 | 9 | 24 | 60 |
- * | 极简 | 12 | 8 | 8 | 18 | 14 | 10 | 23 | 60 |
- * | M3 | 16 | 12 | 12 | 20 | 16 | 12 | 24 | 60 |
- * | iOS | 28 | 18 | 12 | 18 | 16 | 14 | 31 | 64 |
+ * | 原版 | 22 | 14 | 14 | 20 | 16 | 12 | 30 | 60 |
+ * | HyperOS | 22 | 18 | 12 | 20 | 16 | 12 | 29 | 60 |
+ * | Linear | 22 | 7 | 6 | 18 | 13 | 9 | 24 | 60 |
+ * | 极简 | 22 | 8 | 8 | 18 | 14 | 10 | 23 | 60 |
+ * | M3 | 22 | 12 | 12 | 20 | 16 | 12 | 24 | 60 |
+ * | iOS | 22 | 18 | 12 | 18 | 16 | 14 | 31 | 64 |
  *
  * 底栏圆角 = `--r-card`，只有 iOS 是 `999px` 胶囊 —— 这一条之前做错了（六套都当成了胶囊）。
+ *
+ * **r-card 六套统一 22dp（26.29）**：用户要求所有卡片圆角「不管单行多行」全部和
+ * 小米设置界面一模一样。实测小米设置截图（1200px 宽 / 2.75x 密度）：卡片圆角弧线
+ * 跨度 58~60px ≈ 22dp，且单行卡和多行分组卡半径相同。六套风格只保留配色 / 阴影 /
+ * 描边 / 底栏形态差异，卡片圆角不再随风格变。
  */
 data class UiMetrics(
     /** 卡片圆角 `--r-card` */
@@ -144,7 +149,7 @@ val LocalUiMetrics = staticCompositionLocalOf { UiStyle.metrics(UiStyle.ORIGINAL
 /** 六套风格的形态取值，数字逐项对应方向稿的 CSS 变量 */
 internal fun metricsOf(style: Int): UiMetrics = when (style) {
     UiStyle.HYPEROS -> UiMetrics(
-        cardRadius = 26.dp,
+        cardRadius = 22.dp,
         innerRadius = 18.dp,
         courseRadius = 12.dp,
         pagePadding = 20.dp,
@@ -152,7 +157,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardGap = 12.dp,
         titleSize = 29.sp,
         rowHeight = 38.dp,
-        dockRadius = 26.dp,
+        dockRadius = 22.dp,
         dockHeight = 60.dp,
         dockMarginH = 12.dp,
         dockMarginBottom = 14.dp,
@@ -172,7 +177,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
     )
 
     UiStyle.LINEAR -> UiMetrics(
-        cardRadius = 10.dp,
+        cardRadius = 22.dp,
         innerRadius = 7.dp,
         courseRadius = 6.dp,
         pagePadding = 18.dp,
@@ -180,7 +185,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardGap = 9.dp,
         titleSize = 24.sp,
         rowHeight = 38.dp,
-        dockRadius = 10.dp,
+        dockRadius = 22.dp,
         dockHeight = 60.dp,
         dockMarginH = 12.dp,
         dockMarginBottom = 14.dp,
@@ -194,7 +199,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
     )
 
     UiStyle.MINIMAL -> UiMetrics(
-        cardRadius = 12.dp,
+        cardRadius = 22.dp,
         innerRadius = 8.dp,
         courseRadius = 8.dp,
         pagePadding = 18.dp,
@@ -202,7 +207,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardGap = 10.dp,
         titleSize = 23.sp,
         rowHeight = 38.dp,
-        dockRadius = 12.dp,
+        dockRadius = 22.dp,
         dockHeight = 60.dp,
         dockMarginH = 12.dp,
         dockMarginBottom = 14.dp,
@@ -216,7 +221,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
     )
 
     UiStyle.MATERIAL3 -> UiMetrics(
-        cardRadius = 16.dp,
+        cardRadius = 22.dp,
         innerRadius = 12.dp,
         courseRadius = 12.dp,
         pagePadding = 20.dp,
@@ -224,7 +229,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardGap = 12.dp,
         titleSize = 24.sp,
         rowHeight = 38.dp,
-        dockRadius = 16.dp,
+        dockRadius = 22.dp,
         dockHeight = 60.dp,
         dockMarginH = 12.dp,
         dockMarginBottom = 14.dp,
@@ -238,7 +243,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
     )
 
     UiStyle.IOS -> UiMetrics(
-        cardRadius = 28.dp,
+        cardRadius = 22.dp,
         innerRadius = 18.dp,
         courseRadius = 12.dp,
         pagePadding = 18.dp,
@@ -261,7 +266,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
     )
 
     else -> UiMetrics(
-        cardRadius = 20.dp,
+        cardRadius = 22.dp,
         innerRadius = 14.dp,
         courseRadius = 14.dp,
         pagePadding = 20.dp,
@@ -269,7 +274,7 @@ internal fun metricsOf(style: Int): UiMetrics = when (style) {
         cardGap = 12.dp,
         titleSize = 30.sp,
         rowHeight = 38.dp,
-        dockRadius = 20.dp,
+        dockRadius = 22.dp,
         dockHeight = 60.dp,
         dockMarginH = 12.dp,
         dockMarginBottom = 14.dp,

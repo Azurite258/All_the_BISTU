@@ -330,7 +330,7 @@ private fun AccountCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(LocalUiMetrics.current.cardRadius))
             .background(if (isLoggedIn) primary else MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(horizontal = 15.dp, vertical = 14.dp),

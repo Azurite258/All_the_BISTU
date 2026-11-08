@@ -521,7 +521,8 @@ private fun LoginPromptBar(
     onDismiss: () -> Unit,
     onHeightChange: (Int) -> Unit = {}
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    // 圆角跟卡片令牌走（26.29）：所有卡片一律 22dp，和小米设置一致
+    val shape = RoundedCornerShape(LocalUiMetrics.current.cardRadius)
     Row(
         modifier = Modifier
             .fillMaxWidth()
