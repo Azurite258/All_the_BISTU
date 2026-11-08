@@ -62,6 +62,8 @@ fun StudyScreen(
     onEventClick: (UserEvent) -> Unit = {},
     /** 点「AI 学习计划」小卡片 → 进二级页 */
     onOpenAiPlan: () -> Unit = {},
+    /** 点「AI 水课助手」小卡片 → 进独立页（开发中） */
+    onOpenClassroom: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val data = uiState.loadResult?.data
@@ -231,6 +233,13 @@ fun StudyScreen(
                 // 上一版把键盘、按钮、结果列表全塞进来，把学习页撑得老长，
                 // 还和「学期进度」「今日日程」抢注意力（2026-11-04 用户改稿）。
                 AiPlanEntryCard(onClick = onOpenAiPlan)
+
+                Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
+
+                // AI 水课助手（开发中）：同样只放一张两行小卡。
+                // 它和上面的 AI 学习计划是两个独立功能，别合并——一个排计划，
+                // 一个是上课录音听点名，用的人、用的时机都不一样。
+                ClassroomEntryCard(onClick = onOpenClassroom)
             }
         }
 

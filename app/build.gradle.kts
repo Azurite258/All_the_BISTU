@@ -15,8 +15,8 @@ android {
         applicationId = "com.bistu.allthebistu"
         minSdk = 33
         targetSdk = 37
-        versionCode = 53
-        versionName = "0.20-e"
+        versionCode = 54
+        versionName = "0.20-f"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

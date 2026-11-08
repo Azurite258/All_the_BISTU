@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import com.bistu.allthebistu.data.Source
+import com.bistu.allthebistu.classroom.ClassroomAssistActivity
 import com.bistu.allthebistu.data.prefs.AppFontScale
 import com.bistu.allthebistu.data.prefs.AppSettings
 import com.bistu.allthebistu.data.ai.PlanDraft
@@ -304,7 +305,14 @@ private fun AppRoot(
                         editingEvent = event
                         editorOpen = true
                     },
-                    onOpenAiPlan = { showAiPlan = true }
+                    onOpenAiPlan = { showAiPlan = true },
+                    // AI 水课助手是独立 Activity：它要跑前台服务和持续性 UI 刷新，
+                    // 塞进主界面的 Compose 树里会让返回栈和生命周期都变复杂。
+                    onOpenClassroom = {
+                        context.startActivity(
+                            Intent(context, ClassroomAssistActivity::class.java)
+                        )
+                    }
                 )
 
                 MainTab.LIFE -> LifeScreen()
