@@ -238,7 +238,7 @@ private fun AppRoot(
         AlertDialog(
             onDismissRequest = { pendingFeature = null },
             title = { Text(feature) },
-            text = { Text("这个功能还在开发中，敬请期待。") },
+            text = { Text("这个功能还在开发中。") },
             confirmButton = {
                 TextButton(onClick = { pendingFeature = null }) { Text("知道了") }
             }

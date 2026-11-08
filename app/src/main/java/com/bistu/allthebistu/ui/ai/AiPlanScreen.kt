@@ -317,7 +317,7 @@ fun AiPlanScreen(
                 if (items.isEmpty() && !adding) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "一项一项加，比如「高数 极限与导数」「英语四级 Unit 3」，AI 会按项分配时间。",
+                        text = "一次加一项，比如「高数 极限与导数」「英语四级 Unit 3」，AI 按项分配时间。",
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
                         color = colors.onSurfaceVariant
@@ -400,7 +400,7 @@ fun AiPlanScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "可选。写下来会一直记着，比如「晚上 10 点后不学」「周三有社团」「高数期末 11-20」。",
+                    text = "可不填。存下来以后每次生成都会带上，比如「晚上 10 点后不学」「周三有社团」「高数期末 11-20」。",
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                     color = colors.onSurfaceVariant
@@ -491,7 +491,7 @@ fun AiPlanScreen(
             if (drafts.isEmpty() && !loading && error == null) {
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    text = "生成后计划会按天列在这里。勾选要的条目，再勾上「加入日程」并确认，才会写进「今日日程」。",
+                    text = "生成后按天列在这里。先勾选条目，再勾「加入日程」确认，才会写进今日日程。",
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                     color = colors.onSurfaceVariant.copy(alpha = 0.75f)

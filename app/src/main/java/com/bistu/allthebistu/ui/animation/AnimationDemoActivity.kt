@@ -108,8 +108,7 @@ fun AnimationDemoScreen() {
 
             Spacer(Modifier.height(32.dp))
             Text(
-                text = "以上 5 种动画全部用 Compose 内置 API 实现，" +
-                        "不需要任何第三方库，也不需要额外依赖。",
+                text = "以上 5 种动画都用 Compose 内置 API 实现，没有引入第三方库。",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

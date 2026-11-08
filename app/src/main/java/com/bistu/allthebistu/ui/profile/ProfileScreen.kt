@@ -859,7 +859,7 @@ private fun UiStyleScreen(
             }
 
             Text(
-                text = "切换后立刻生效。课块颜色会跟着换成这套风格配套的一版；" +
+                text = "切换后立刻生效，课块颜色也跟着换成这套风格配好的那份；" +
                     "如果你在「外观 → 课程配色」里自己改过，那套选择会按风格记住，切回来还在。",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

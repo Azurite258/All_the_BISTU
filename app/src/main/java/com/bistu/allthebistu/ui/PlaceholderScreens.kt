@@ -202,7 +202,7 @@ fun LifeScreen(modifier: Modifier = Modifier) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "本月消费和消费流水来自信息门户（只覆盖当月），需要先登录一次。",
+                        text = "消费数据来自信息门户，只覆盖当月，需要先登录一次。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -607,7 +607,7 @@ private fun CardDetailScreen(
             modifier = Modifier.padding(horizontal = LocalUiMetrics.current.pagePadding)
         )
         Text(
-            text = "每笔下面的余额是那笔交易后的卡内余额；实时余额请到微信企业号「信息科大E卡通」查看。",
+            text = "每笔下面显示的是交易后的卡内余额；实时余额请到微信企业号「信息科大E卡通」查看。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             modifier = Modifier.padding(
