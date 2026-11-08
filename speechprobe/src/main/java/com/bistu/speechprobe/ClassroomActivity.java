@@ -438,7 +438,11 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 long sumSq = 0;
                 int samples = 0;
                 int peak = 0;
+                int nonZero = 0;
+                int minVal = 0;
+                int maxVal = 0;
                 long end = SystemClock.elapsedRealtime() + seconds * 1000L;
+                long nextUi = 0;
 
                 ar.startRecording();
                 while (SystemClock.elapsedRealtime() < end) {
@@ -448,11 +452,22 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                         int v = chunk[i];
                         int a = Math.abs(v);
                         if (a > peak) peak = a;
+                        if (v != 0) nonZero++;
+                        if (v < minVal) minVal = v;
+                        if (v > maxVal) maxVal = v;
                         sumSq += (long) v * v;
                         pcm.write(v & 0xFF);
                         pcm.write((v >> 8) & 0xFF);
                     }
                     samples += r;
+
+                    // 实时电平：图书馆里也能看着它随环境音跳动，确认麦克风是活的
+                    long now = SystemClock.elapsedRealtime();
+                    if (now >= nextUi) {
+                        nextUi = now + 400;
+                        final int p = peak;
+                        ui.post(() -> status.setText("录音中… 峰值 " + p + " / 32767"));
+                    }
                 }
                 ar.stop();
                 ar.release();
@@ -475,20 +490,24 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 } catch (Exception ignored) {
                 }
 
-                // 峰值判定加个下限：麦克风底噪也能到 8~20，不能算「有声音」
-                final String verdict = peak < 20
-                        ? "▶ 采到的基本是静音（峰值 " + peak + "）：麦克风没把声音送进来，可能是权限或占用问题"
-                        : (rmsDbfs < -55
-                        ? "▶ 有声音但很弱（" + String.format(Locale.CHINA, "%.0f", rmsDbfs) + " dBFS）：离得远，或被系统降噪压掉了"
-                        : (peak > 32000
-                        ? "▶ 音量过大接近削顶，建议把手机放远一点"
-                        : "▶ 音频正常，问题不在麦克风，在识别引擎"));
+                // 判定改成「有没有波动」，而不是「声音够不够大」。
+                // 图书馆里不用说话也能验证：只要采到的电平在变，就说明麦克风在收环境声。
+                final int swing = maxVal - minVal;
+                final String verdict;
+                if (nonZero == 0) {
+                    verdict = "▶ 完全没信号：样本全是 0，麦克风没工作（权限被拒 / 被占用 / 硬件问题）";
+                } else if (swing >= 3) {
+                    verdict = "▶ 麦克风是活的：采到环境声，波动幅度 " + swing
+                            + (peak < 100 ? "。现在环境很安静，说话时会明显变大。" : "。");
+                } else {
+                    verdict = "▶ 电平平直、没有波动（波动 0~2）：麦克风可能没真正打开";
+                }
 
                 final String msg = String.join("\n",
                         "采集时长：" + String.format(Locale.CHINA, "%.1f", sec) + " 秒",
                         "采样：" + rate + " Hz · 16bit · 单声道",
-                        "样本数：" + samples,
-                        "峰值：" + peak + " / 32767",
+                        "样本数：" + samples + "（非零 " + nonZero + "）",
+                        "峰值：" + peak + "  ·  最小 " + minVal + "  ·  波动 " + swing,
                         String.format(Locale.CHINA, "平均音量：%.2f dBFS", rmsDbfs),
                         "",
                         verdict,
@@ -497,7 +516,12 @@ public class ClassroomActivity extends Activity implements RecognitionListener {
                 final int peakOut = peak;
                 ui.post(() -> {
                     status.setText("录音自检完成 · 峰值 " + peakOut);
-                    showSimple("录音自检结果", msg);
+                    new android.app.AlertDialog.Builder(this)
+                            .setTitle("录音自检结果")
+                            .setMessage(msg)
+                            .setPositiveButton("再测一次", (d, w) -> startMicCheck())
+                            .setNegativeButton("知道了", null)
+                            .show();
                 });
 
             } catch (Exception e) {
