@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 息屏后 CPU 别睡，否则识别会断流 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Android 11 起要显式声明，才能看到系统里注册的识别服务 -->
     <queries>
@@ -12,17 +16,24 @@
 
     <application
         android:allowBackup="false"
-        android:label="语音识别探针"
+        android:label="课堂助手测试台"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
+        <!-- 主入口：触发 + 接话 -->
         <activity
-            android:name=".ProbeActivity"
-            android:exported="true">
+            android:name=".ClassroomActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 老的引擎探针，留着查「这台机器有哪些识别服务」 -->
+        <activity
+            android:name=".ProbeActivity"
+            android:exported="false" />
     </application>
 </manifest>
