@@ -201,7 +201,6 @@ fun ProfileScreen(
                 trailing = "壁纸 · 字体",
                 onClick = { showAppearance = true }
             )
-            Divider(tight = true)
             UiStyleEntryRow(
                 style = settings.uiStyle,
                 isDark = isDark,
@@ -218,7 +217,6 @@ fun ProfileScreen(
                 trailing = versionName(context),
                 onClick = { showAbout = true }
             )
-            Divider(tight = true)
             // 以前这里是一行灰掉的「AI 学习助手 · 后续开放」，点了没反应。
             // 现在 AI 学习计划已经能用了，这一行改成**密钥入口**：
             // 开启状态（文字用 onSurface，浅色下就是黑色）+ 右侧显示配没配。
@@ -227,7 +225,6 @@ fun ProfileScreen(
                 trailing = if (settings.hasAiKey) "已配置" else "未配置",
                 onClick = onOpenAiSettings
             )
-            Divider(tight = true)
             // 登录出问题时不用连电脑：日志一直在 filesDir/logs 里滚，
             // 点这里把最近两份打包分享出去，直接发给我就能定位
             ActionRow(
@@ -848,7 +845,6 @@ private fun UiStyleScreen(
                 fixedPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 UiStyle.all.forEachIndexed { index, style ->
-                    if (index > 0) Divider(tight = true)
                     UiStyleOptionRow(
                         style = style,
                         selected = current == style,
@@ -1004,7 +1000,7 @@ private fun AppearanceScreen(
                     onChange = onThemeModeChange
                 )
 
-                Divider()
+                Spacer(Modifier.height(18.dp))
 
                 SettingRowTitle("课程配色")
                 Spacer(Modifier.height(8.dp))
@@ -1014,7 +1010,7 @@ private fun AppearanceScreen(
                     onChange = onColorSchemeChange
                 )
 
-                Divider()
+                Spacer(Modifier.height(18.dp))
 
                 FontLevelBlock(
                     level = settings.fontLevel,
@@ -1380,24 +1376,6 @@ private fun SettingRowTitle(text: String) {
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun Divider(tight: Boolean = false) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = if (tight) 2.dp else 12.dp)
-            // 高度必须是 1dp：0.5dp 在 2.75x 密度下是 1.375 物理像素，
-            // 落在两个像素之间会被抗锯齿摊成「一条灰线 + 两侧白边」。
-            .height(1.dp)
-            // ⚠️ 颜色不能用 outline。iOS 的 outline 本身就是 `#0B0B0F @ 10%`，
-            // 再 `.copy(alpha = 0.42f)` 会把透明度**覆盖**成 42%（不是相乘），
-            // 一条本该若有若无的线就变成实打实的深灰；其它风格下 outline 又不带 alpha，
-            // 同一条线在六套风格里深浅完全对不上。
-            // 统一改用文字色的 8%：浅色=淡灰、深色=淡白，六套都成立。
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
     )
 }
 

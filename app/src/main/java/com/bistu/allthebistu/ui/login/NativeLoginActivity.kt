@@ -545,7 +545,7 @@ fun NativeLoginScreen(
 
             // ── 日志 ──
             if (logs.isNotEmpty()) {
-                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
                 Text("执行日志", fontSize = 13.sp)
                 Card(
                     modifier = Modifier.fillMaxWidth(),

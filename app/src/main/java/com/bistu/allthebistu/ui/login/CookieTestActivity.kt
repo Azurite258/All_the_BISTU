@@ -100,7 +100,7 @@ class CookieTestActivity : ComponentActivity() {
                 }
 
                 result?.let {
-                    HorizontalDivider()
+                    Spacer(Modifier.height(8.dp))
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = it,

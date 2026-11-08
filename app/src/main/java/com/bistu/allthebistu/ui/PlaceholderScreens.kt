@@ -679,9 +679,6 @@ private fun CardDetailScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)
-                    )
                 }
             }
         }

@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -146,7 +145,7 @@ fun ApiKeySheet(
                 color = colors.onSurfaceVariant.copy(alpha = 0.85f)
             )
 
-            Hairline()
+            Spacer(Modifier.height(22.dp))
 
             // ── 密钥 ──
             H2("API Key")
@@ -193,7 +192,7 @@ fun ApiKeySheet(
                 }
             }
 
-            Hairline()
+            Spacer(Modifier.height(22.dp))
 
             // ── 地址 ──
             H2("接口地址")
@@ -220,7 +219,7 @@ fun ApiKeySheet(
                 color = colors.onSurfaceVariant.copy(alpha = 0.85f)
             )
 
-            Hairline()
+            Spacer(Modifier.height(22.dp))
 
             // ── 模型 ──
             H2("模型")
@@ -337,15 +336,6 @@ private fun H2(text: String) {
         fontSize = 15.sp,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface
-    )
-}
-
-@Composable
-private fun Hairline() {
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 14.dp),
-        thickness = 0.7.dp,
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
     )
 }
 

@@ -23,7 +23,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -174,8 +173,7 @@ fun EventEditorSheet(
                     inner()
                 }
             )
-            Spacer(Modifier.height(8.dp))
-            Hairline()
+            Spacer(Modifier.height(14.dp))
 
             // ── 开始 / 结束 ──
             SettingRow(label = "开始") {
@@ -183,7 +181,6 @@ fun EventEditorSheet(
                 Spacer(Modifier.width(6.dp))
                 ValueChip(text = UserEvent.clockOf(startAt)) { timeTarget = 1 }
             }
-            Hairline()
             SettingRow(label = "结束") {
                 ValueChip(text = dateText(endAt)) { dateTarget = 2 }
                 Spacer(Modifier.width(6.dp))
@@ -259,8 +256,7 @@ fun EventEditorSheet(
                 )
             }
 
-            Hairline()
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 text = "日程只保存在本机，不同步到教务系统；开着「课前提醒」时，日程会按同样的提前量响铃。",
                 fontSize = 12.sp,
@@ -406,12 +402,6 @@ private fun SheetHandle() {
             .clip(RoundedCornerShape(2.dp))
             .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
     )
-}
-
-/** 分隔线：和提醒设置页同一种淡度 */
-@Composable
-private fun Hairline() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
 }
 
 /**
