@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 只在 debug 包里存在：用来查这台机器上第三方能用哪些语音识别引擎 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application>
+        <activity
+            android:name=".SpeechProbeActivity"
+            android:exported="true"
+            android:label="语音识别探针" />
+    </application>
+</manifest>

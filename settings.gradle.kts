@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "All the BISTU"
 include(":app")
+include(":speechprobe")
