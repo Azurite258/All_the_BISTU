@@ -1,6 +1,7 @@
 package com.bistu.allthebistu
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,6 +48,9 @@ import com.bistu.allthebistu.data.reminder.CourseCalendarSync
 import com.bistu.allthebistu.data.reminder.CourseReminderScheduler
 import com.bistu.allthebistu.data.reminder.EventReminderScheduler
 import com.bistu.allthebistu.data.reminder.ReminderPlanner
+import com.bistu.allthebistu.data.textbook.Textbook
+import com.bistu.allthebistu.data.textbook.TextbookImporter
+import com.bistu.allthebistu.data.textbook.TextbookStore
 import com.bistu.allthebistu.ui.LifeScreen
 import com.bistu.allthebistu.ui.ai.AiPlanScreen
 import com.bistu.allthebistu.ui.ai.ApiKeySheet
@@ -54,6 +58,8 @@ import com.bistu.allthebistu.ui.event.EventEditorSheet
 import com.bistu.allthebistu.ui.profile.ProfileScreen
 import com.bistu.allthebistu.ui.reminder.ReminderSettingsSheet
 import com.bistu.allthebistu.ui.study.StudyScreen
+import com.bistu.allthebistu.ui.textbook.TextbookLibraryScreen
+import com.bistu.allthebistu.ui.textbook.TextbookReaderScreen
 import com.bistu.allthebistu.ui.login.AuthHolder
 import com.bistu.allthebistu.ui.login.NativeLoginActivity
 import com.bistu.allthebistu.ui.navigation.FloatingBottomBar
@@ -73,6 +79,7 @@ import com.bistu.allthebistu.ui.schedule.TERM_START_DATE as TERM_START_OF_TERM
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * 应用唯一入口。
@@ -169,6 +176,17 @@ private fun AppRoot(
     // 自定义日程：存储 + 编辑面板
     val eventStore = remember { EventStore(context) }
     val events by eventStore.events.collectAsState()
+
+    // ── 电子课本：教材库 + 阅读器 ──
+    // 书文件放私有目录 files/textbooks/，JSON 只存索引（见 TextbookStore 注释）
+    val textbookStore = remember { TextbookStore(File(context.filesDir, "textbooks")) }
+    val textbooks by textbookStore.textbooks.collectAsState()
+    val textbookImporter = remember { TextbookImporter(context, textbookStore) }
+    var showTextbooks by rememberSaveable { mutableStateOf(false) }
+    var readingTextbook by remember { mutableStateOf<Textbook?>(null) }
+    var importingName by remember { mutableStateOf("") }
+    var importDone by remember { mutableStateOf(0) }
+    var importTotal by remember { mutableStateOf(0) }
     var editorOpen by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<UserEvent?>(null) }
     // API Key 设置抽屉：AI 学习计划页和「我的」页两处入口共用一个
@@ -212,10 +230,47 @@ private fun AppRoot(
         }
     }
 
+    /**
+     * 导入教材。
+     *
+     * 逐本处理、单本失败不影响其它：一批 5 本坏 1 本，用户还能拿到 4 本。
+     * 课程名从课表里取，用来按文件名自动归类（匹配不上就进"未分类"）。
+     */
+    fun importTextbooks(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        scope.launch {
+            val courses = uiState.loadResult?.data?.courses
+                ?.map { it.name }?.distinct().orEmpty()
+            importTotal = uris.size
+            importDone = 0
+            var okCount = 0
+            val failures = mutableListOf<String>()
+
+            uris.forEachIndexed { index, uri ->
+                importingName = "第 ${index + 1} / ${uris.size} 本"
+                when (val result = textbookImporter.import(uri, courses)) {
+                    is TextbookImporter.Result.Success -> {
+                        textbookStore.save(result.textbook)
+                        okCount++
+                    }
+                    is TextbookImporter.Result.Failure -> failures += "${result.name}（${result.reason}）"
+                }
+                importDone = index + 1
+            }
+
+            importingName = ""
+            toast(context, if (failures.isEmpty()) "已导入 $okCount 本教材" else "导入 $okCount 本，失败 ${failures.size} 本")
+            if (failures.isNotEmpty()) toast(context, failures.first())
+            // 进度条留 2.5 秒再收，一闪而过会让人以为没执行
+            delay(2500)
+            importTotal = 0
+            importDone = 0
+        }
+    }
+
     // AuthHolder.isLoggedIn 是 Compose 状态：从登录页返回后这里能立刻观察到变化
     val authLoggedIn = AuthHolder.isLoggedIn
     LaunchedEffect(authLoggedIn) { viewModel.onAuthChanged(authLoggedIn) }
-
     // 课表从网络刷新成功 → 把系统日历那份也跟着更新。
     // 不更新的话，用户改了课、换了教室，日历里还是开学时那份 —— 比不同步更糟。
     // 只在 NETWORK 来源时触发：缓存命中、示例数据都不算「课表变了」。
@@ -267,9 +322,9 @@ private fun AppRoot(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // AI 计划二级页打开时**不渲染**底下这套：玻璃风格的页面背景是透明的
+        // AI 计划二级页 / 教材库 / 阅读器打开时**不渲染**底下这套：玻璃风格的页面背景是透明的
         // （靠根部的 StyleGlow 铺色），留着底下那层就会两层糊在一起
-        if (!showAiPlan) {
+        if (!showAiPlan && !showTextbooks && readingTextbook == null) {
 
         CompositionLocalProvider(LocalUiMetrics provides contentMetrics) {
             when (currentTab) {
@@ -312,7 +367,9 @@ private fun AppRoot(
                         context.startActivity(
                             Intent(context, ClassroomAssistActivity::class.java)
                         )
-                    }
+                    },
+                    onOpenTextbooks = { showTextbooks = true },
+                    textbookCount = textbooks.size
                 )
 
                 MainTab.LIFE -> LifeScreen()
@@ -391,6 +448,32 @@ private fun AppRoot(
                 onOpenSettings = { showApiKeySheet = true },
                 onBack = { showAiPlan = false },
                 onSavePlan = { drafts -> savePlan(drafts) }
+            )
+        }
+
+        // ── 电子课本：教材库（列表）──
+        if (showTextbooks && readingTextbook == null) {
+            TextbookLibraryScreen(
+                textbooks = textbooks,
+                importingName = importingName,
+                importDone = importDone,
+                importTotal = importTotal,
+                onImport = { uris -> importTextbooks(uris) },
+                onOpen = { book -> readingTextbook = book },
+                onDelete = { book -> scope.launch { textbookStore.delete(book.id) } },
+                onBack = { showTextbooks = false }
+            )
+        }
+
+        // ── 电子课本：阅读器（全屏，盖住教材库）──
+        readingTextbook?.let { book ->
+            TextbookReaderScreen(
+                textbook = book,
+                file = textbookStore.fileOf(book),
+                onBack = { readingTextbook = null },
+                onProgress = { page ->
+                    scope.launch { textbookStore.updateProgress(book.id, page) }
+                }
             )
         }
     }

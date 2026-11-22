@@ -64,6 +64,10 @@ fun StudyScreen(
     onOpenAiPlan: () -> Unit = {},
     /** 点「AI 水课助手」小卡片 → 进独立页（开发中） */
     onOpenClassroom: () -> Unit = {},
+    /** 点「电子课本」小卡片 → 进教材库 */
+    onOpenTextbooks: () -> Unit = {},
+    /** 教材库里有几本，用来在入口卡上显示 */
+    textbookCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val data = uiState.loadResult?.data
@@ -240,6 +244,11 @@ fun StudyScreen(
                 // 它和上面的 AI 学习计划是两个独立功能，别合并——一个排计划，
                 // 一个是上课录音听点名，用的人、用的时机都不一样。
                 ClassroomEntryCard(onClick = onOpenClassroom)
+
+                Spacer(Modifier.height(LocalUiMetrics.current.cardGap))
+
+                // 电子课本：教材是"上课忘带书"的兜底，也放在学习页
+                TextbookEntryCard(count = textbookCount, onClick = onOpenTextbooks)
             }
         }
 
