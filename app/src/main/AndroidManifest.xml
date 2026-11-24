@@ -27,19 +27,6 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
-    <!-- ══════ AI 水课助手（ui/classroom）══════
-      录音：整节课采集 16k 单声道，分段送云端识别。只在用户点「开始」时申请，
-            不点永远不碰麦克风。
-      前台服务 + microphone 类型：Android 14 起，后台持续录音必须走这个形态，
-            否则锁屏就被系统掐断。类型不声明会直接抛 SecurityException。
-      唤醒锁：息屏后 CPU 不能睡，否则音频流断掉。
-      震动：检测到点名时震两下，比响铃隐蔽。 -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-
     <!--
       Android 11+ 包可见性：不声明这个，代码里查不到微信装没装，
       weixin:// 的 resolveActivity 也会返回 null。只查微信，不查别的。
@@ -121,21 +108,6 @@
             android:exported="false"
             android:label="Cookie验证"
             android:theme="@style/Theme.Study1" />
-
-        <!-- AI 水课助手（开发中）：录音 → 云端转写 → 点名提醒 → 接话草稿。
-             用的是普通 View 而非 Compose，和主界面互不影响。 -->
-        <activity
-            android:name=".classroom.ClassroomAssistActivity"
-            android:exported="false"
-            android:label="AI 水课助手"
-            android:theme="@style/Theme.Study1"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- 整节课录音 + 分段转写。必须带 microphone 类型，否则锁屏就被掐。 -->
-        <service
-            android:name=".classroom.RecordService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
 
         <!-- 课程提醒铃声：AlarmManager 只负责叫醒，发通知和「响完立刻排下一批」在这里 -->
         <receiver

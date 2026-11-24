@@ -21,7 +21,7 @@ import com.bistu.allthebistu.ui.theme.styleCard
 /**
  * 学习页上的「电子课本」入口卡。
  *
- * 和 [AiPlanEntryCard]、[ClassroomEntryCard] 同一套版式：两行、矮卡、只负责跳转。
+ * 和 [AiPlanEntryCard] 同一套版式：两行、矮卡、只负责跳转。
  * 副标题带书名数量——用户能一眼知道"里面有没有书"，不用点进去看。
  */
 @Composable
